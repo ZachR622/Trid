@@ -50,9 +50,32 @@ With yaw and pitch at 0, the camera looks down +Z. `DEFAULT_FOV` and `DEFAULT_NE
   - The sphere is made of latitude and longitude lines, with a single vertex at each pole.
 - `scaleMesh` scales a mesh's vertices in place.
 
+**Frame loop** (`loop.js`)
+
+- `loop(update, { maxDt })` calls `update(dt, time)` every frame with `requestAnimationFrame`. `dt` is the seconds since the last frame (0 on the first, capped at `maxDt`, default 0.1 s) and `time` is the seconds since the loop started.
+- It returns a `stop()` function.
+
+### Scene (`simple3d/scene.js`)
+
+`Scene` holds a canvas, a camera and a list of objects, and runs the frame loop for you.
+
+```js
+const scene = new Scene(canvas, { width: 800, height: 800, background: "#141414" });
+const box = scene.add({ mesh: makeShape("cube"), color: "#E9806E" });
+scene.start((dt) => { box.rot.y += dt; });
+```
+
+- `new Scene(canvas, opts)`. The options are `width`, `height`, `background`, a default `color` and `lineWidth`, and `camera` (default `{ z: -1 }`).
+- `scene.add(obj)` fills in a missing `pos`, `rot` or `scale` with defaults and returns the object. Each object can set its own `color` and `lineWidth`.
+- `scene.remove(obj)` takes an object out of the scene.
+- `scene.render()` clears the canvas and draws every object once.
+- `scene.start(update)` runs `update(dt, time, scene)` and then `render()` every frame. Calling it again replaces `update`.
+- `scene.stop()` stops the loop, and `scene.running` says whether it's running.
+- `scene.camera` and `scene.objects` can be changed at any time.
+
 ### Demo (`main.js`)
 
-A sphere and a box spinning, driven by `requestAnimationFrame` with the real elapsed time (`dt`, capped at 0.1 s).
+A sphere and a box spinning, built with `Scene`.
 
 ## 2. Is the code solid for a library?
 
@@ -67,12 +90,13 @@ The base is good. The files are cleanly separated into math and render, the JSDo
 Roughly in order of value:
 
 1. **Cleanup and packaging:** an `index.js` that re-exports the public API, `package.json`, a README with examples, and git.
-2. **A renderer or scene helper:** something like `new Scene(canvas)`, `scene.add(obj)` and `scene.start(update)` that wraps the `requestAnimationFrame` loop and `dt`.
-3. **Mouse orbit controls:** drag to rotate and scroll to zoom, built on the camera's position, `yaw` and `pitch`.
-4. **More shapes:** cylinder, cone, torus, plane or grid, pyramid, and an axes helper.
-5. **Filled faces:** add `faces` to meshes, sort them back to front (painter's algorithm), skip faces turned away from the camera (backface culling) and add simple flat shading. This turns it from a wireframe viewer into a small 3D engine.
-6. **OBJ file loading** for real models.
-7. **Per-instance style:** color and line width stored on the object, plus fading lines with depth.
-8. **Parent/child transforms**, such as a moon orbiting a planet.
-9. **4×4 matrices** in place of chained function calls. They're faster and make the camera and hierarchy straightforward.
-10. **Tests** (for example with Vitest) for the math functions, which are pure and easy to test.
+2. **Scene drag tools:** simple mouse tools that plug into a `Scene`:
+   - **Camera drag:** drag to move or turn the camera around the scene (pan, and orbit with `yaw`/`pitch`), and scroll to zoom.
+   - **Object drag:** click an object to pick it, then drag to move it around the scene.
+3. **More shapes:** cylinder, cone, torus, plane or grid, pyramid, and an axes helper.
+4. **Filled faces:** add `faces` to meshes, sort them back to front (painter's algorithm), skip faces turned away from the camera (backface culling) and add simple flat shading. This turns it from a wireframe viewer into a small 3D engine.
+5. **OBJ file loading** for real models.
+6. **Depth fading:** lines that fade or get thinner with distance. (Per-object `color` and `lineWidth` already work through `Scene`.)
+7. **Parent/child transforms**, such as a moon orbiting a planet.
+8. **4×4 matrices** in place of chained function calls. They're faster and make the camera and hierarchy straightforward.
+9. **Tests** (for example with Vitest) for the math functions, which are pure and easy to test.
