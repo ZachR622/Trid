@@ -1,5 +1,6 @@
 import { Scene } from "./simple3d/scene.js";
 import { makeShape } from "./simple3d/render/shapes.js";
+import { OrbitCamera, DragObject, HoverHighlight, FpsMeter } from "./simple3d/tools/index.js";
 
 // Colors
 const BG = "#141414"
@@ -26,6 +27,14 @@ const shape2 = scene.add({
     scale: { x: 0.5, y: 1.5, z: 0.5 },
     color: FG2,
 })
+
+// Tools: later ones get clicks first, so dragging an object wins over orbiting
+// - Left drag empty space: orbit | Right drag / Shift + drag: pan | Scroll: zoom
+// - Left drag an object: move it | Shift + drag an object: push / pull it
+scene.use(new OrbitCamera())
+scene.use(new DragObject())
+scene.use(new HoverHighlight({ color: "#ffffff" }))
+scene.use(new FpsMeter({ color: "#888888" }))
 
 scene.start((dt) => {
     shape1.rot.y += Math.PI*dt/4;

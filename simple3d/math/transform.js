@@ -109,6 +109,53 @@ export function worldToScreen(pWorld, camera, w, h) {
 }
 
 /**
+ * Direction the camera looks at, in world space (unit vector).
+ *
+ * @param {Camera} camera - Camera object
+ * @returns {{x:number,y:number,z:number}} Forward vector
+ */
+export function cameraForward(camera) {
+  const yaw = camera.yaw ?? 0;
+  const pitch = camera.pitch ?? 0;
+  return {
+    x: Math.sin(yaw) * Math.cos(pitch),
+    y: Math.sin(pitch),
+    z: Math.cos(yaw) * Math.cos(pitch),
+  };
+}
+
+/**
+ * Direction of the screen's right side, in world space (unit vector).
+ *
+ * @param {Camera} camera - Camera object
+ * @returns {{x:number,y:number,z:number}} Right vector
+ */
+export function cameraRight(camera) {
+  const yaw = camera.yaw ?? 0;
+  return {
+    x: Math.cos(yaw),
+    y: 0,
+    z: -Math.sin(yaw),
+  };
+}
+
+/**
+ * Direction of the screen's top side, in world space (unit vector).
+ *
+ * @param {Camera} camera - Camera object
+ * @returns {{x:number,y:number,z:number}} Up vector
+ */
+export function cameraUp(camera) {
+  const yaw = camera.yaw ?? 0;
+  const pitch = camera.pitch ?? 0;
+  return {
+    x: -Math.sin(pitch) * Math.sin(yaw),
+    y: Math.cos(pitch),
+    z: -Math.sin(pitch) * Math.cos(yaw),
+  };
+}
+
+/**
  * Clips a camera-space segment against the near plane (z = near).
  *
  * - Both ends in front: segment returned unchanged

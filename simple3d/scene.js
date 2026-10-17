@@ -1,5 +1,6 @@
 import { clear, drawInstance } from "./render/draw.js";
 import { loop } from "./render/loop.js";
+import { ToolManager } from "./tools/manager.js";
 
 /**
  * Holds a canvas, a camera and a list of objects, and draws them.
@@ -12,6 +13,9 @@ import { loop } from "./render/loop.js";
  *
  * Each object can also set its own `color` and `lineWidth`;
  * otherwise the scene's defaults are used.
+ *
+ * Tools (camera controls, dragging, overlays...) are added with
+ * `use`. See `simple3d/tools/`.
  *
  * Typical usage:
  *   const scene = new Scene(canvas, { width: 800, height: 800 });
@@ -47,6 +51,7 @@ export class Scene {
     this.lineWidth = lineWidth;
     this.camera = camera;
     this.objects = [];
+    this.tools = new ToolManager(this);
 
     this._stop = null;
   }
@@ -76,7 +81,30 @@ export class Scene {
   }
 
   /**
-   * Clears the canvas and draws every object once.
+   * Adds a tool to the scene. Tools added later get the first chance
+   * at mouse clicks and scrolls, so add camera tools first and
+   * object tools (like `DragObject`) after them.
+   *
+   * @param {import("./tools/manager.js").Tool} tool - Tool to add
+   * @returns The same tool
+   */
+  use(tool) {
+    this.tools.add(tool);
+    return tool;
+  }
+
+  /**
+   * Removes a tool from the scene. Does nothing if it isn't in it.
+   *
+   * @param {import("./tools/manager.js").Tool} tool - Tool previously passed to `use`
+   */
+  unuse(tool) {
+    this.tools.remove(tool);
+  }
+
+  /**
+   * Clears the canvas, draws every object once, then lets tools
+   * draw on top.
    */
   render() {
     const { ctx, canvas } = this;
@@ -88,10 +116,13 @@ export class Scene {
         obj.color ?? this.color, obj.lineWidth ?? this.lineWidth
       );
     }
+
+    this.tools.draw(ctx);
   }
 
   /**
-   * Starts the frame loop: each frame calls `update` and then `render`.
+   * Starts the frame loop: each frame updates the tools, calls
+   * `update`, then calls `render`.
    * Calling `start` while running restarts the loop with the new `update`.
    *
    * @param {(dt:number, time:number, scene:Scene) => void} [update] - Per-frame logic
@@ -100,6 +131,7 @@ export class Scene {
   start(update) {
     this.stop();
     this._stop = loop((dt, time) => {
+      this.tools.update(dt);
       update?.(dt, time, this);
       this.render();
     });
@@ -112,6 +144,15 @@ export class Scene {
   stop() {
     this._stop?.();
     this._stop = null;
+  }
+
+  /**
+   * Stops the loop and removes every tool (and its event listeners).
+   * Use it when the scene is no longer needed.
+   */
+  destroy() {
+    this.stop();
+    this.tools.clear();
   }
 
   /** Whether the frame loop is running. */
