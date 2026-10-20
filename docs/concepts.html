@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Core concepts · Trid</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try{const t=localStorage.getItem("trid-docs-theme");if(t)document.documentElement.dataset.theme=t}catch{}</script>
+  <script type="module" src="assets/docs.js"></script>
+</head>
+<body>
+<main class="content">
+
+<h1>Core concepts</h1>
+<p class="lead">Five ideas cover the whole library: the coordinate system, meshes, objects, the camera and the frame loop.</p>
+
+<h2 id="coordinates">Coordinate system</h2>
+<p>Trid uses a <strong>left-handed</strong> system, as seen from the default camera:</p>
+<ul>
+  <li><strong>+X</strong> points right</li>
+  <li><strong>+Y</strong> points up</li>
+  <li><strong>+Z</strong> points forward, into the screen</li>
+</ul>
+<p>Units are arbitrary. Angles are always in <strong>radians</strong> (<code>Math.PI</code> is half a turn).</p>
+
+<div class="demo" data-hint="X red · Y green · Z blue — drag to orbit">
+  <canvas id="demo-axes"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera } from "./trid/tools/index.js";
+
+const scene = new Scene(document.getElementById("demo-axes"), {
+  width: 800, height: 360, lineWidth: 2,
+  camera: { x: 1.2, y: 1, z: -1.6 },
+});
+
+// A custom mesh: one line from the origin along an axis
+const axis = (x, y, z) => ({
+  vertices: [{ x: 0, y: 0, z: 0 }, { x, y, z }],
+  edges: [[0, 1]],
+});
+
+scene.add({ mesh: axis(1, 0, 0), color: "#ff6b6b", lineWidth: 4 });
+scene.add({ mesh: axis(0, 1, 0), color: "#7ae96e", lineWidth: 4 });
+scene.add({ mesh: axis(0, 0, 1), color: "#6ba8ff", lineWidth: 4 });
+scene.add({ mesh: makeShape("cube", { size: 0.3 }), color: "#666" });
+
+scene.use(new OrbitCamera({ yaw: -0.6, pitch: -0.45 }));
+scene.start();</code></pre>
+</div>
+
+<h2 id="meshes">Meshes</h2>
+<p>A mesh is a plain object with two arrays:</p>
+<ul>
+  <li><code>vertices</code> — points in the mesh's own (local) space: <code>{ x, y, z }</code></li>
+  <li><code>edges</code> — lines to draw, as arrays of <em>vertex indices</em></li>
+</ul>
+<p>An edge with <strong>2 indices</strong> is a single segment. An edge with <strong>3 or more</strong> is a closed loop: the last index connects back to the first.</p>
+<pre><code class="language-js">// A square in the XY plane, drawn as one closed loop
+const square = {
+  vertices: [
+    { x: -0.5, y: -0.5, z: 0 },
+    { x:  0.5, y: -0.5, z: 0 },
+    { x:  0.5, y:  0.5, z: 0 },
+    { x: -0.5, y:  0.5, z: 0 },
+  ],
+  edges: [[0, 1, 2, 3]],   // same as [0,1], [1,2], [2,3], [3,0]
+};</code></pre>
+<p>You rarely write meshes by hand: <a href="shapes.html"><code>makeShape</code></a> builds cubes, boxes and spheres.</p>
+
+<h2 id="objects">Objects (mesh instances)</h2>
+<p>An <strong>object</strong> places a mesh in the world. It's a plain object too:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Field</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>mesh</code></td><td>required</td><td>The mesh to draw</td></tr>
+    <tr><td><code>pos</code></td><td><code>{ x: 0, y: 0, z: 0 }</code></td><td>Position in world space</td></tr>
+    <tr><td><code>rot</code></td><td><code>{ x: 0, y: 0, z: 0 }</code></td><td>Rotation around each axis, in radians</td></tr>
+    <tr><td><code>scale</code></td><td><code>{ x: 1, y: 1, z: 1 }</code></td><td>Scale along each axis</td></tr>
+    <tr><td><code>color</code></td><td>scene's color</td><td>Any CSS color</td></tr>
+    <tr><td><code>lineWidth</code></td><td>scene's lineWidth</td><td>Line thickness in pixels</td></tr>
+    <tr><td><code>draggable</code></td><td><code>true</code></td><td>Set <code>false</code> to ignore <a href="tools.html#drag-object"><code>DragObject</code></a></td></tr>
+    <tr><td><code>hoverable</code></td><td><code>true</code></td><td>Set <code>false</code> to ignore <a href="tools.html#hover-highlight"><code>HoverHighlight</code></a></td></tr>
+  </tbody>
+</table></div>
+<p><code>scene.add()</code> fills in missing <code>pos</code>, <code>rot</code> and <code>scale</code>. Many objects can share one mesh — the mesh is never modified when drawing.</p>
+
+<h3 id="transform-order">Transform order</h3>
+<p>Each vertex goes from local space to world space in this order:</p>
+<ol>
+  <li><strong>Scale</strong> by <code>scale</code></li>
+  <li><strong>Rotate</strong> around X, then Y, then Z by <code>rot</code></li>
+  <li><strong>Translate</strong> by <code>pos</code></li>
+</ol>
+<p>So an object always spins around its own center, wherever it sits.</p>
+
+<h2 id="camera">The camera</h2>
+<p>The camera is a plain object where every field is optional:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Field</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>x, y, z</code></td><td><code>0</code></td><td>Position in world space</td></tr>
+    <tr><td><code>yaw</code></td><td><code>0</code></td><td>Turn around Y in radians (&gt; 0 turns right)</td></tr>
+    <tr><td><code>pitch</code></td><td><code>0</code></td><td>Tilt around X in radians (&gt; 0 looks up)</td></tr>
+    <tr><td><code>fov</code></td><td><code>Math.PI / 2</code></td><td>Vertical field of view (90°)</td></tr>
+    <tr><td><code>near</code></td><td><code>0.01</code></td><td>Near plane: anything closer is clipped</td></tr>
+  </tbody>
+</table></div>
+<p>With yaw and pitch at 0, the camera looks down <strong>+Z</strong>. That's why <code>Scene</code>'s default camera is <code>{ z: -1 }</code>: one unit back from the origin, looking at it.</p>
+<p>The camera has no roll. Lines that cross behind the camera are cut at the near plane, so you can fly through objects safely.</p>
+
+<h2 id="pipeline">How a frame is drawn</h2>
+<p>For every object, every vertex goes through:</p>
+<ol>
+  <li><strong>Local → world</strong>: the object's scale, rotation and position (<code>localToWorld</code>)</li>
+  <li><strong>World → camera</strong>: move relative to the camera, undo its yaw and pitch (<code>worldToCamera</code>)</li>
+  <li><strong>Near clipping</strong>: each edge is clipped against <code>z = near</code> (<code>clipNear</code>)</li>
+  <li><strong>Camera → screen</strong>: perspective projection with the camera's fov and the canvas aspect ratio, then conversion to pixels (<code>cameraToScreen</code>)</li>
+</ol>
+<p>All edges of an object go into one canvas path and are stroked once. Each step is an exported function — see the <a href="api.html#math">API reference</a>.</p>
+
+<h2 id="loop">The frame loop</h2>
+<p><code>scene.start(update)</code> calls your <code>update(dt, time, scene)</code> every animation frame, then redraws:</p>
+<ul>
+  <li><code>dt</code> — seconds since the last frame. It's <code>0</code> on the first frame and capped at <code>0.1</code>, so switching tabs doesn't make objects jump.</li>
+  <li><code>time</code> — seconds since the loop started.</li>
+</ul>
+<p>Multiply speeds by <code>dt</code> so motion is the same at 30 or 144 FPS:</p>
+<pre><code class="language-js">scene.start((dt, time) => {
+  cube.rot.y += Math.PI * dt;          // half a turn per second
+  cube.pos.y = Math.sin(time) * 0.3;   // bob up and down
+});</code></pre>
+
+</main>
+</body>
+</html>

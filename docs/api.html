@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API reference · Trid</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try{const t=localStorage.getItem("trid-docs-theme");if(t)document.documentElement.dataset.theme=t}catch{}</script>
+  <script type="module" src="assets/docs.js"></script>
+</head>
+<body>
+<main class="content">
+
+<h1>API reference</h1>
+<p class="lead">Everything the library exports, module by module. Points are plain <code>{ x, y, z }</code> objects (or <code>{ x, y }</code> on screen); no function changes its inputs unless it says so.</p>
+
+<h2 id="modules">Modules</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Module</th><th>Exports</th></tr></thead>
+  <tbody>
+    <tr><td><code>trid/scene.js</code></td><td><a href="scene.html"><code>Scene</code></a></td></tr>
+    <tr><td><code>trid/math/transform.js</code></td><td><a href="#transform"><code>localToWorld</code>, <code>worldToCamera</code>, <code>cameraToScreen</code>, <code>worldToScreen</code>, <code>clipNear</code>, <code>cameraForward</code>, <code>cameraRight</code>, <code>cameraUp</code>, <code>scale</code>, <code>translate</code>, <code>rotateX</code>, <code>rotateY</code>, <code>rotateZ</code>, <code>rotateXYZ</code>, <code>DEFAULT_FOV</code>, <code>DEFAULT_NEAR</code></a></td></tr>
+    <tr><td><code>trid/math/projection.js</code></td><td><a href="#projection"><code>project</code>, <code>screen</code></a></td></tr>
+    <tr><td><code>trid/render/draw.js</code></td><td><a href="#draw"><code>clear</code>, <code>point</code>, <code>line</code>, <code>drawWireframe</code>, <code>drawInstance</code></a></td></tr>
+    <tr><td><code>trid/render/loop.js</code></td><td><a href="#loop"><code>loop</code></a></td></tr>
+    <tr><td><code>trid/render/shapes.js</code></td><td><a href="shapes.html"><code>makeShape</code>, <code>scaleMesh</code></a></td></tr>
+    <tr><td><code>trid/tools/index.js</code></td><td><a href="tools.html"><code>OrbitCamera</code>, <code>FlyCamera</code>, <code>DragObject</code>, <code>HoverHighlight</code>, <code>FpsMeter</code></a>, <a href="#helpers"><code>pick</code>, <code>screenBounds</code>, <code>worldPerPixel</code></a>, <a href="#tool-manager"><code>ToolManager</code></a></td></tr>
+  </tbody>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="math">Math</h2>
+
+<h3 id="transform">Pipeline — <code>math/transform.js</code></h3>
+
+<div class="signature">localToWorld(v, inst) → point</div>
+<p>Moves a mesh vertex into world space using an object's transform: scale, then rotate (X → Y → Z), then translate by <code>pos</code>. <code>inst</code> needs <code>pos</code>, <code>rot</code> and <code>scale</code>.</p>
+
+<div class="signature">worldToCamera(p, camera) → point</div>
+<p>Moves a world point into camera space: subtracts the camera position, then undoes its yaw and pitch. In camera space the camera sits at the origin looking down +Z, so <code>z</code> is the distance in front of it.</p>
+
+<div class="signature">cameraToScreen(p, camera, w, h) → { x, y }</div>
+<p>Projects a camera-space point to canvas pixels, using <code>camera.fov</code> and the aspect ratio <code>w / h</code>. <code>p.z</code> must be &gt; 0 — clip segments with <code>clipNear</code> first if they can cross behind the camera.</p>
+
+<div class="signature">worldToScreen(p, camera, w, h) → { x, y }</div>
+<p><code>worldToCamera</code> followed by <code>cameraToScreen</code>. Handy for placing labels on top of 3D points.</p>
+
+<div class="signature">clipNear(a, b, near) → [a, b] | null</div>
+<p>Clips a camera-space segment against the plane <code>z = near</code>. Returns the segment unchanged if both ends are in front, <code>null</code> if both are behind, or a shortened segment with the hidden end moved onto the plane.</p>
+
+<h3 id="camera-directions">Camera directions</h3>
+<div class="signature">cameraForward(camera) → point
+cameraRight(camera)   → point
+cameraUp(camera)      → point</div>
+<p>Unit vectors in world space for where the camera looks, the screen's right side and the screen's top side. Use them to move things relative to the view.</p>
+
+<h3 id="constants">Constants</h3>
+<div class="table-wrap"><table>
+  <tbody>
+    <tr><td><code>DEFAULT_FOV</code></td><td><code>Math.PI / 2</code> — 90° vertical field of view</td></tr>
+    <tr><td><code>DEFAULT_NEAR</code></td><td><code>0.01</code> — near plane distance</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="basic-transforms">Basic transforms</h3>
+<div class="signature">scale(p, sx, sy, sz)        → point
+translate(p, dx, dy, dz)    → point
+rotateX(p, angle)           → point   // pitch, YZ plane
+rotateY(p, angle)           → point   // yaw, XZ plane
+rotateZ(p, angle)           → point   // roll, XY plane
+rotateXYZ(p, { x, y, z })   → point   // X, then Y, then Z</div>
+<p>Each returns a new point. Angles are in radians. Rotation order matters: <code>rotateXYZ</code> always applies X first, then Y, then Z.</p>
+
+<h3 id="projection">Projection — <code>math/projection.js</code></h3>
+<div class="signature">project(p, fov = Math.PI / 2, aspect = 1) → { x, y }</div>
+<p>Perspective projection of a camera-space point to normalized coordinates (−1 to +1). X is divided by <code>aspect</code> so shapes don't stretch on wide canvases. <code>p.z</code> must be &gt; 0.</p>
+
+<div class="signature">screen(p, w, h) → { x, y }</div>
+<p>Converts normalized coordinates to canvas pixels. Y is flipped: +1 is the top of the canvas.</p>
+
+<!-- ============================================================ -->
+<h2 id="render">Rendering</h2>
+
+<h3 id="draw">Drawing — <code>render/draw.js</code></h3>
+
+<div class="signature">clear(ctx, w, h, color)</div>
+<p>Fills the whole canvas with <code>color</code>.</p>
+
+<div class="signature">point(ctx, p, color, size = 20)</div>
+<p>Draws a filled square centered on screen point <code>p</code>. Useful for debugging vertices.</p>
+
+<div class="signature">line(ctx, p1, p2, color, width = 4)</div>
+<p>Draws one line between two screen points.</p>
+
+<div class="signature">drawWireframe(ctx, points2, edges, color, width = 4)</div>
+<p>Connects already-projected screen points using index edges (2 indices = segment, 3+ = closed loop). Everything is stroked as one path. No clipping is done.</p>
+
+<div class="signature">drawInstance(ctx, inst, camera, w, h, color, lineWidth = 3)</div>
+<p>The main drawing call: transforms an object's mesh, clips every edge against the camera's near plane, projects it and strokes it as one path. This is what <code>Scene.render</code> uses for each object.</p>
+
+<h3 id="loop">Frame loop — <code>render/loop.js</code></h3>
+<div class="signature">loop(update, { maxDt = 0.1 } = {}) → stop()</div>
+<p>Calls <code>update(dt, time)</code> every animation frame with <code>requestAnimationFrame</code>. <code>dt</code> is the seconds since the last frame (0 on the first, capped at <code>maxDt</code>) and <code>time</code> is the seconds since the loop started. Call the returned function to stop.</p>
+
+<h3 id="without-scene">Using the pipeline without Scene</h3>
+<p><code>Scene</code> is a thin layer over these functions. You can drive them yourself:</p>
+<div class="demo">
+  <canvas id="demo-raw" width="800" height="300"></canvas>
+<pre><code class="language-js">import { clear, drawInstance, point } from "./trid/render/draw.js";
+import { loop } from "./trid/render/loop.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { worldToScreen } from "./trid/math/transform.js";
+
+const canvas = document.getElementById("demo-raw");
+const ctx = canvas.getContext("2d");
+const { width: w, height: h } = canvas;
+
+const camera = { z: -1.5, fov: Math.PI / 3 };
+const box = {
+  mesh: makeShape("box", { w: 0.8, h: 0.4, d: 0.4 }),
+  pos: { x: 0, y: 0, z: 0 },
+  rot: { x: 0.4, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+};
+
+loop((dt, time) => {
+  box.rot.y = time * 0.8;
+  clear(ctx, w, h, "#141414");
+  drawInstance(ctx, box, camera, w, h, "#e5c07b", 2);
+
+  // A dot circling the box, projected by hand
+  const p = { x: Math.cos(time) * 0.7, y: 0, z: Math.sin(time) * 0.7 };
+  point(ctx, worldToScreen(p, camera, w, h), "#E9806E", 8);
+});</code></pre>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="helpers">Helpers — <code>tools/helpers.js</code></h2>
+
+<h3 id="pick"><code>pick</code></h3>
+<div class="signature">pick(scene, x, y, { filter, padding = 4 } = {}) → object | null</div>
+<p>Returns the object under canvas pixel (<code>x</code>, <code>y</code>). An object is hit when the point is inside its screen-space bounding box, grown by <code>padding</code> pixels. If several are hit, the one whose center is closest to the camera wins. <code>filter(obj)</code> can exclude objects.</p>
+<div class="note"><p>Bounding boxes are approximate: clicking the empty corner around a sphere still picks it.</p></div>
+
+<h3 id="screen-bounds"><code>screenBounds</code></h3>
+<div class="signature">screenBounds(scene, obj) → { minX, minY, maxX, maxY } | null</div>
+<p>An object's bounding box on screen, in canvas pixels. Only vertices in front of the near plane count; returns <code>null</code> if the whole object is behind the camera.</p>
+
+<h3 id="world-per-pixel"><code>worldPerPixel</code></h3>
+<div class="signature">worldPerPixel(scene, depth) → number</div>
+<p>How many world units one canvas pixel covers at <code>depth</code> units in front of the camera. Multiply pointer <code>dx</code>/<code>dy</code> by it to make something follow the cursor exactly.</p>
+
+<!-- ============================================================ -->
+<h2 id="tool-manager">ToolManager — <code>tools/manager.js</code></h2>
+<p>Each scene creates one as <code>scene.tools</code>. It keeps the tool list and turns canvas pointer events into <a href="custom-tools.html#events">tool events</a>. Canvas listeners are only added while at least one tool is in the list. You normally go through <code>scene.use</code> / <code>scene.unuse</code> instead.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Member</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>new ToolManager(scene)</code></td><td>Creates a manager for a scene's canvas</td></tr>
+    <tr><td><code>add(tool)</code></td><td>Adds a tool and calls its <code>attach</code>. Adding the same tool twice does nothing.</td></tr>
+    <tr><td><code>remove(tool)</code></td><td>Removes a tool (ending its drag if it holds one) and calls its <code>detach</code></td></tr>
+    <tr><td><code>clear()</code></td><td>Removes every tool</td></tr>
+    <tr><td><code>update(dt)</code></td><td>Calls every tool's <code>update</code></td></tr>
+    <tr><td><code>draw(ctx)</code></td><td>Calls every tool's <code>draw</code></td></tr>
+    <tr><td><code>list</code></td><td>The tools, in the order they were added</td></tr>
+  </tbody>
+</table></div>
+
+</main>
+</body>
+</html>

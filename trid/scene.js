@@ -15,7 +15,7 @@ import { ToolManager } from "./tools/manager.js";
  * otherwise the scene's defaults are used.
  *
  * Tools (camera controls, dragging, overlays...) are added with
- * `use`. See `simple3d/tools/`.
+ * `use`. See `trid/tools/`.
  *
  * Typical usage:
  *   const scene = new Scene(canvas, { width: 800, height: 800 });

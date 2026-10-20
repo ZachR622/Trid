@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shapes &amp; meshes · Trid</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try{const t=localStorage.getItem("trid-docs-theme");if(t)document.documentElement.dataset.theme=t}catch{}</script>
+  <script type="module" src="assets/docs.js"></script>
+</head>
+<body>
+<main class="content">
+
+<h1>Shapes &amp; meshes</h1>
+<p class="lead">Build meshes with <code>makeShape</code>, reshape them with <code>scaleMesh</code>, or write your own from vertices and edges.</p>
+
+<pre><code class="language-js">import { makeShape, scaleMesh } from "./trid/render/shapes.js";</code></pre>
+
+<div class="demo" data-hint="cube · box · sphere · custom pyramid — drag to orbit">
+  <canvas id="demo-shapes"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera } from "./trid/tools/index.js";
+
+const scene = new Scene(document.getElementById("demo-shapes"), {
+  width: 800, height: 300, lineWidth: 2, camera: { z: -2.4 },
+});
+
+const pyramid = {
+  vertices: [
+    { x: -0.25, y: -0.25, z: -0.25 }, { x: 0.25, y: -0.25, z: -0.25 },
+    { x:  0.25, y: -0.25, z:  0.25 }, { x: -0.25, y: -0.25, z: 0.25 },
+    { x: 0, y: 0.3, z: 0 },
+  ],
+  edges: [[0, 1, 2, 3], [0, 4], [1, 4], [2, 4], [3, 4]],
+};
+
+const shapes = [
+  makeShape("cube", { size: 0.45 }),
+  makeShape("box", { w: 0.6, h: 0.3, d: 0.3 }),
+  makeShape("sphere", { r: 0.3, rings: 8, segments: 14 }),
+  pyramid,
+];
+const colors = ["#E9806E", "#e5c07b", "#7ae96e", "#8ab4f8"];
+
+const objs = shapes.map((mesh, i) => scene.add({
+  mesh, color: colors[i], pos: { x: (i - 1.5) * 0.75, y: 0, z: 0 },
+}));
+
+scene.use(new OrbitCamera({ pitch: -0.3 }));
+scene.start((dt) => objs.forEach(o => (o.rot.y += dt * 0.5)));</code></pre>
+</div>
+
+<h2 id="make-shape"><code>makeShape(kind, opts?)</code></h2>
+<p>Returns a new mesh centered on the origin. <code>kind</code> is not case-sensitive. An unknown kind throws an <code>Error</code>.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Kind</th><th>Options (defaults)</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td><code>"cube"</code></td><td><code>size</code> (0.5)</td><td>Cube with sides of <code>size</code></td></tr>
+    <tr><td><code>"box"</code></td><td><code>w</code> (0.6), <code>h</code> (0.6), <code>d</code> (0.6)</td><td>Box of width (X), height (Y), depth (Z)</td></tr>
+    <tr><td><code>"sphere"</code></td><td><code>r</code> (0.45), <code>rings</code> (12), <code>segments</code> (24)</td><td>Sphere of latitude and longitude lines</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="sphere-details">Sphere details</h3>
+<ul>
+  <li><code>rings</code> is the number of latitude <em>bands</em> from pole to pole (minimum 2), so it draws <code>rings - 1</code> circles.</li>
+  <li><code>segments</code> is the number of points on each circle, and the number of meridian lines.</li>
+  <li>Each pole is a single vertex. Fewer rings and segments draw faster and look more stylized.</li>
+</ul>
+
+<h2 id="scale-mesh"><code>scaleMesh(mesh, sx = 1, sy = 1, sz = 1)</code></h2>
+<p>Multiplies every vertex by the given factors and returns the same mesh.</p>
+<pre><code class="language-js">// An egg: a sphere stretched along Y
+const egg = scaleMesh(makeShape("sphere", { r: 0.3 }), 1, 1.4, 1);</code></pre>
+<div class="warn">
+  <p><strong>It changes the mesh in place.</strong> Every object sharing that mesh changes too. To stretch a single object, change its <code>scale</code> instead — that's cheaper and reversible.</p>
+</div>
+
+<h2 id="custom-meshes">Custom meshes</h2>
+<p>A mesh is just <code>{ vertices, edges }</code>. Edges with 2 indices are segments; edges with 3 or more are closed loops. See <a href="concepts.html#meshes">Meshes</a>.</p>
+
+<h3 id="grid-example">Example: a floor grid</h3>
+<pre><code class="language-js">function makeGrid(size = 2, divisions = 10) {
+  const vertices = [];
+  const edges = [];
+  const half = size / 2;
+
+  for (let i = 0; i &lt;= divisions; i++) {
+    const t = -half + (i / divisions) * size;
+    const a = vertices.push({ x: t, y: 0, z: -half }, { x: t, y: 0, z: half }) - 2;
+    edges.push([a, a + 1]);           // line along Z
+    const b = vertices.push({ x: -half, y: 0, z: t }, { x: half, y: 0, z: t }) - 2;
+    edges.push([b, b + 1]);           // line along X
+  }
+  return { vertices, edges };
+}
+
+scene.add({ mesh: makeGrid(), pos: { x: 0, y: -0.5, z: 0 }, color: "#333" });</code></pre>
+
+<h3 id="tips">Tips</h3>
+<ul>
+  <li>Center meshes on the origin: objects rotate around their local origin.</li>
+  <li>Share meshes between objects. Drawing never modifies a mesh, so one sphere mesh can back a hundred objects.</li>
+  <li>Prefer loops over many 2-index edges where you can: <code>[0, 1, 2, 3]</code> is shorter than four segments and draws the same.</li>
+</ul>
+
+</main>
+</body>
+</html>

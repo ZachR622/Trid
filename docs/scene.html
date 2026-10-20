@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scene · Trid</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try{const t=localStorage.getItem("trid-docs-theme");if(t)document.documentElement.dataset.theme=t}catch{}</script>
+  <script type="module" src="assets/docs.js"></script>
+</head>
+<body>
+<main class="content">
+
+<h1>Scene</h1>
+<p class="lead"><code>Scene</code> holds a canvas, a camera and a list of objects, and runs the frame loop for you. Most programs only need this class, <code>makeShape</code> and a tool or two.</p>
+
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";</code></pre>
+
+<h2 id="constructor">Creating a scene</h2>
+<div class="signature">new Scene(canvas, options?)</div>
+<div class="table-wrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>width</code></td><td>canvas's current width</td><td>Sets <code>canvas.width</code> (drawing resolution in pixels)</td></tr>
+    <tr><td><code>height</code></td><td>canvas's current height</td><td>Sets <code>canvas.height</code></td></tr>
+    <tr><td><code>background</code></td><td><code>"#141414"</code></td><td>Color the canvas is cleared with each frame</td></tr>
+    <tr><td><code>color</code></td><td><code>"#ffffff"</code></td><td>Default wireframe color</td></tr>
+    <tr><td><code>lineWidth</code></td><td><code>3</code></td><td>Default wireframe thickness</td></tr>
+    <tr><td><code>camera</code></td><td><code>{ z: -1 }</code></td><td>The <a href="concepts.html#camera">camera</a> object</td></tr>
+  </tbody>
+</table></div>
+<p>The canvas can be resized with CSS (for example <code>width: 100%</code>). Drawing stays at <code>width</code> × <code>height</code>, and tools still get pointer positions in canvas pixels.</p>
+
+<h2 id="objects">Adding and removing objects</h2>
+
+<h3 id="add"><code>scene.add(obj)</code></h3>
+<p>Adds an <a href="concepts.html#objects">object</a>, fills in a missing <code>pos</code>, <code>rot</code> or <code>scale</code>, and returns the <strong>same object</strong> so you can keep it and animate it.</p>
+<pre><code class="language-js">const ball = scene.add({
+  mesh: makeShape("sphere"),
+  pos: { x: 0, y: 0.5, z: 0 },   // rot and scale get defaults
+  color: "tomato",
+});
+ball.rot.y = Math.PI / 4;</code></pre>
+
+<h3 id="remove"><code>scene.remove(obj)</code></h3>
+<p>Takes an object out of the scene. Does nothing if it isn't in it.</p>
+
+<h3 id="objects-array"><code>scene.objects</code></h3>
+<p>The array of objects, drawn in order. You can read it or change it directly.</p>
+
+<h2 id="loop">Running the loop</h2>
+
+<h3 id="start"><code>scene.start(update?)</code></h3>
+<p>Starts the frame loop. Each frame:</p>
+<ol>
+  <li>every tool's <code>update(dt)</code> runs,</li>
+  <li>your <code>update(dt, time, scene)</code> runs,</li>
+  <li><code>scene.render()</code> redraws everything.</li>
+</ol>
+<p>Calling <code>start</code> again restarts the loop with the new <code>update</code>. Returns the scene.</p>
+
+<h3 id="stop"><code>scene.stop()</code></h3>
+<p>Stops the loop. The last frame stays on the canvas.</p>
+
+<h3 id="running"><code>scene.running</code></h3>
+<p>Read-only: <code>true</code> while the loop is running.</p>
+
+<h3 id="render"><code>scene.render()</code></h3>
+<p>Draws a single frame: clears the canvas, draws every object, then lets tools draw on top. Use it without <code>start</code> for static images, or to redraw only when something changes.</p>
+
+<div class="demo" data-hint="Click to pause / resume">
+  <canvas id="demo-loop"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+
+const canvas = document.getElementById("demo-loop");
+const scene = new Scene(canvas, { width: 800, height: 300, camera: { z: -2 } });
+
+// One mesh, shared by five objects
+const mesh = makeShape("cube", { size: 0.3 });
+const cubes = [-2, -1, 0, 1, 2].map(i => scene.add({
+  mesh,
+  pos: { x: i * 0.5, y: 0, z: 0 },
+  color: `hsl(${10 + i * 25}, 75%, 65%)`,
+}));
+
+const update = (dt, time) => {
+  cubes.forEach((c, i) => {
+    c.pos.y = Math.sin(time * 2 + i) * 0.25;
+    c.rot.y += dt * (1 + i * 0.3);
+  });
+};
+
+scene.start(update);
+canvas.addEventListener("click", () => {
+  if (scene.running) scene.stop();
+  else scene.start(update);
+});</code></pre>
+</div>
+
+<h2 id="tools">Tools</h2>
+
+<h3 id="use"><code>scene.use(tool)</code></h3>
+<p>Adds a <a href="tools.html">tool</a> and returns it. <strong>Tools added later get the first chance at clicks and scrolls</strong>, so add camera tools first and object tools after.</p>
+<pre><code class="language-js">const orbit = scene.use(new OrbitCamera());
+scene.use(new DragObject());</code></pre>
+
+<h3 id="unuse"><code>scene.unuse(tool)</code></h3>
+<p>Removes a tool and its event listeners. Does nothing if it isn't added.</p>
+
+<h3 id="tools-prop"><code>scene.tools</code></h3>
+<p>The scene's <a href="api.html#tool-manager"><code>ToolManager</code></a>. You don't usually need it directly.</p>
+
+<h2 id="destroy">Cleaning up</h2>
+<h3 id="destroy-method"><code>scene.destroy()</code></h3>
+<p>Stops the loop and removes every tool along with its canvas and keyboard listeners. Call it when the scene is no longer needed, for example before removing the canvas from the page.</p>
+
+<h2 id="properties">Other properties</h2>
+<p>These can all be changed at any time and take effect on the next frame:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Property</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>camera</code></td><td>The camera object (tools like <code>OrbitCamera</code> move it for you)</td></tr>
+    <tr><td><code>background</code></td><td>Clear color</td></tr>
+    <tr><td><code>color</code></td><td>Default wireframe color</td></tr>
+    <tr><td><code>lineWidth</code></td><td>Default wireframe thickness</td></tr>
+    <tr><td><code>canvas</code>, <code>ctx</code></td><td>The canvas and its 2D context (read them, don't replace them)</td></tr>
+  </tbody>
+</table></div>
+
+</main>
+</body>
+</html>

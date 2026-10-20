@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Writing a tool · Trid</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try{const t=localStorage.getItem("trid-docs-theme");if(t)document.documentElement.dataset.theme=t}catch{}</script>
+  <script type="module" src="assets/docs.js"></script>
+</head>
+<body>
+<main class="content">
+
+<h1>Writing a tool</h1>
+<p class="lead">A tool is any object with some of a few optional methods. There's no base class to extend — a plain object works, and so does a class.</p>
+
+<h2 id="smallest">The smallest tool</h2>
+<pre><code class="language-js">// Draws a crosshair in the middle of the canvas
+scene.use({
+  draw(ctx, scene) {
+    const { width, height } = scene.canvas;
+    ctx.strokeStyle = "#888";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(width / 2 - 8, height / 2);
+    ctx.lineTo(width / 2 + 8, height / 2);
+    ctx.moveTo(width / 2, height / 2 - 8);
+    ctx.lineTo(width / 2, height / 2 + 8);
+    ctx.stroke();
+  },
+});</code></pre>
+
+<h2 id="interface">The tool interface</h2>
+<p>Every method is optional. Each one receives the scene as its last argument.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Method</th><th>When it's called</th></tr></thead>
+  <tbody>
+    <tr><td><code>attach(scene)</code></td><td>When the tool is added with <code>scene.use</code></td></tr>
+    <tr><td><code>detach(scene)</code></td><td>When it's removed with <code>scene.unuse</code> or <code>scene.destroy</code>. Remove your own listeners here.</td></tr>
+    <tr><td><code>pointerDown(e, scene)</code></td><td>A button is pressed on the canvas. <strong>Return <code>true</code> to take the drag.</strong></td></tr>
+    <tr><td><code>pointerMove(e, scene)</code></td><td>The pointer moves. During a drag, only the tool holding it is called; otherwise every tool is (for hover effects).</td></tr>
+    <tr><td><code>pointerUp(e, scene)</code></td><td>The drag this tool took is released</td></tr>
+    <tr><td><code>pointerLeave(scene)</code></td><td>The pointer left the canvas (not called during a drag)</td></tr>
+    <tr><td><code>wheel(e, scene)</code></td><td>Scroll over the canvas. <strong>Return <code>true</code> to use it</strong> (stops the page from scrolling).</td></tr>
+    <tr><td><code>update(dt, scene)</code></td><td>Every frame, before your own <code>update</code> (only while <code>scene.start</code> is running)</td></tr>
+    <tr><td><code>draw(ctx, scene)</code></td><td>Every render, after the objects are drawn</td></tr>
+  </tbody>
+</table></div>
+<p>One property is also read:</p>
+<ul>
+  <li><code>blockContextMenu: true</code> — disables the right-click menu on the canvas while the tool is added.</li>
+</ul>
+
+<h3 id="order">Who gets the click</h3>
+<p><code>pointerDown</code> and <code>wheel</code> go to tools from the <strong>last added to the first</strong>. The first tool that returns <code>true</code> stops the search. If your tool returns <code>false</code> (or nothing), the click falls through to the tools below it.</p>
+
+<h2 id="events">Event objects</h2>
+<h3 id="pointer-event">Pointer events</h3>
+<p>Received by <code>pointerDown</code>, <code>pointerMove</code> and <code>pointerUp</code>. Mouse, pen and touch all produce them.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>x</code>, <code>y</code></td><td>Pointer position in <strong>canvas pixels</strong>, even if the canvas is scaled with CSS</td></tr>
+    <tr><td><code>dx</code>, <code>dy</code></td><td>Movement since the last event, in canvas pixels (0 on <code>pointerDown</code>)</td></tr>
+    <tr><td><code>button</code></td><td>Button that changed: 0 left, 1 middle, 2 right</td></tr>
+    <tr><td><code>shiftKey</code>, <code>ctrlKey</code>, <code>altKey</code></td><td>Modifier keys</td></tr>
+    <tr><td><code>original</code></td><td>The DOM <code>PointerEvent</code></td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="wheel-event">Wheel events</h3>
+<div class="table-wrap"><table>
+  <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>x</code>, <code>y</code></td><td>Pointer position in canvas pixels</td></tr>
+    <tr><td><code>deltaY</code></td><td>Scroll amount (&gt; 0 scrolls down)</td></tr>
+    <tr><td><code>original</code></td><td>The DOM <code>WheelEvent</code></td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="example">Example: click to select</h2>
+<p>This tool selects the clicked object and draws a dashed box around it. It returns <code>false</code> from <code>pointerDown</code>, so the click still reaches <code>OrbitCamera</code> below it and you can select and orbit in one gesture. The <a href="api.html#helpers">helpers</a> <code>pick</code> and <code>screenBounds</code> do the hard part.</p>
+
+<div class="demo" data-hint="Click a shape to select it · drag to orbit · Delete key removes it">
+  <canvas id="demo-select"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera, pick, screenBounds } from "./trid/tools/index.js";
+
+class SelectTool {
+  constructor({ color = "#ffd166", onSelect } = {}) {
+    this.color = color;
+    this.onSelect = onSelect;
+    this.selected = null;
+    this._onKey = this._onKey.bind(this);
+  }
+
+  attach(scene) {
+    this.scene = scene;
+    window.addEventListener("keydown", this._onKey);
+  }
+
+  detach() {
+    window.removeEventListener("keydown", this._onKey);
+    this.selected = null;
+  }
+
+  pointerDown(e, scene) {
+    if (e.button !== 0) return false;
+    this.selected = pick(scene, e.x, e.y);
+    this.onSelect?.(this.selected);
+    return false;   // let the camera tool below use the drag too
+  }
+
+  draw(ctx, scene) {
+    if (!this.selected) return;
+    const box = screenBounds(scene, this.selected);
+    if (!box) return;
+    const pad = 6;
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = this.color;
+    ctx.strokeRect(box.minX - pad, box.minY - pad,
+                   box.maxX - box.minX + pad * 2, box.maxY - box.minY + pad * 2);
+    ctx.restore();
+  }
+
+  _onKey(e) {
+    if (e.key === "Delete" &amp;&amp; this.selected) {
+      this.scene.remove(this.selected);
+      this.selected = null;
+    }
+  }
+}
+
+const scene = new Scene(document.getElementById("demo-select"), {
+  width: 800, height: 320, lineWidth: 2, camera: { z: -2.2 },
+});
+["cube", "sphere", "box"].forEach((kind, i) => scene.add({
+  mesh: makeShape(kind, { size: 0.4, r: 0.25, w: 0.5, h: 0.25, d: 0.3, rings: 8, segments: 12 }),
+  pos: { x: (i - 1) * 0.7, y: 0, z: 0 },
+  color: ["#E9806E", "#7ae96e", "#8ab4f8"][i],
+}));
+
+scene.use(new OrbitCamera());
+scene.use(new SelectTool());   // added last, so it sees clicks first
+scene.start();</code></pre>
+</div>
+
+<h2 id="tips">Tips</h2>
+<ul>
+  <li><strong>Clean up in <code>detach</code>.</strong> Anything you add to <code>window</code> or <code>document</code> in <code>attach</code> should be removed there. The scene already handles canvas listeners for you.</li>
+  <li><strong>Use <code>dt</code> in <code>update</code></strong> so movement doesn't depend on frame rate.</li>
+  <li><strong>Restore canvas state in <code>draw</code></strong> with <code>ctx.save()</code> / <code>ctx.restore()</code> if you change things like line dashes or transforms.</li>
+  <li><strong>Make following the cursor exact</strong> with <a href="api.html#world-per-pixel"><code>worldPerPixel</code></a>, plus <code>cameraRight</code> / <code>cameraUp</code> to turn pixel movement into world movement — that's how <code>DragObject</code> works.</li>
+  <li><strong>Keyboard tools</strong> should ignore keys while the user types in an input (check <code>e.target.tagName</code>), like <code>FlyCamera</code> does.</li>
+</ul>
+
+</main>
+</body>
+</html>

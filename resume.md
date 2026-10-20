@@ -1,10 +1,10 @@
-# js3Dsimple — Overview
+# Trid — Overview
 
 A small **wireframe 3D renderer** that draws on an HTML `<canvas>` using the 2D context (no WebGL).
 
 ## 1. Current features
 
-### Math (`simple3d/math/`)
+### Math (`trid/math/`)
 
 **Transforms** (`transform.js`)
 
@@ -35,7 +35,7 @@ With yaw and pitch at 0, the camera looks down +Z. `DEFAULT_FOV` and `DEFAULT_NE
 - `project(p, fov, aspect)` is the perspective projection. X is divided by the aspect ratio, so shapes don't stretch on non-square canvases.
 - `screen(p, w, h)` converts normalized coordinates (−1..1) to canvas pixels, with Y flipped.
 
-### Rendering (`simple3d/render/`)
+### Rendering (`trid/render/`)
 
 **Drawing** (`draw.js`)
 
@@ -56,7 +56,7 @@ With yaw and pitch at 0, the camera looks down +Z. `DEFAULT_FOV` and `DEFAULT_NE
 - `loop(update, { maxDt })` calls `update(dt, time)` every frame with `requestAnimationFrame`. `dt` is the seconds since the last frame (0 on the first, capped at `maxDt`, default 0.1 s) and `time` is the seconds since the loop started.
 - It returns a `stop()` function.
 
-### Scene (`simple3d/scene.js`)
+### Scene (`trid/scene.js`)
 
 `Scene` holds a canvas, a camera and a list of objects, and runs the frame loop for you.
 
@@ -76,9 +76,9 @@ scene.start((dt) => { box.rot.y += dt; });
 - `scene.destroy()` stops the loop and removes every tool and its event listeners.
 - `scene.camera` and `scene.objects` can be changed at any time.
 
-### Tools (`simple3d/tools/`)
+### Tools (`trid/tools/`)
 
-Tools plug into a `Scene` with `scene.use(tool)`. Everything can be imported from `simple3d/tools/index.js`.
+Tools plug into a `Scene` with `scene.use(tool)`. Everything can be imported from `trid/tools/index.js`.
 
 ```js
 scene.use(new OrbitCamera());     // camera tools first

@@ -1,6 +1,6 @@
-import { Scene } from "./simple3d/scene.js";
-import { makeShape } from "./simple3d/render/shapes.js";
-import { OrbitCamera, DragObject, HoverHighlight, FpsMeter } from "./simple3d/tools/index.js";
+import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera, DragObject, HoverHighlight, FpsMeter } from "./trid/tools/index.js";
 
 // Colors
 const BG = "#141414"

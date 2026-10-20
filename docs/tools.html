@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tools · Trid</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try{const t=localStorage.getItem("trid-docs-theme");if(t)document.documentElement.dataset.theme=t}catch{}</script>
+  <script type="module" src="assets/docs.js"></script>
+</head>
+<body>
+<main class="content">
+
+<h1>Tools</h1>
+<p class="lead">Tools add interaction and overlays to a scene: camera controls, dragging, hover effects, an FPS counter. Add one with <code>scene.use(tool)</code>.</p>
+
+<pre><code class="language-js">import {
+  OrbitCamera, FlyCamera, DragObject, HoverHighlight, FpsMeter,
+} from "./trid/tools/index.js";
+
+scene.use(new OrbitCamera());      // camera tools first
+scene.use(new DragObject());       // object tools after, so they get clicks first
+scene.use(new HoverHighlight());
+scene.use(new FpsMeter());</code></pre>
+
+<h2 id="how-tools-work">How tools share the mouse</h2>
+<p>The scene owns the canvas's mouse, touch and scroll listeners and passes events on to its tools. Tools are stacked like layers:</p>
+<ul>
+  <li><strong>The last tool added gets the first chance</strong> at a click or a scroll.</li>
+  <li>The first tool that accepts a click gets the <strong>whole drag</strong>, until the button is released.</li>
+  <li>While nothing is being dragged, every tool sees pointer moves (for hover effects).</li>
+</ul>
+<p>That's why the order above works: clicking an object starts a <code>DragObject</code> drag, and clicking empty space falls through to <code>OrbitCamera</code>.</p>
+<div class="note"><p>Use <strong>one camera tool at a time</strong>. Two tools moving the same camera will fight over it.</p></div>
+
+<h2 id="orbit-camera">OrbitCamera</h2>
+<p>Turns the camera around a target point. It starts from wherever the camera currently is.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Input</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td>Left drag</td><td>Orbit around the target</td></tr>
+    <tr><td>Right drag, middle drag, or <kbd>Shift</kbd> + left drag</td><td>Pan (moves the target with the cursor)</td></tr>
+    <tr><td>Scroll</td><td>Zoom in and out</td></tr>
+  </tbody>
+</table></div>
+
+<div class="table-wrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>target</code></td><td><code>{ x: 0, y: 0, z: 0 }</code></td><td>Point to orbit around</td></tr>
+    <tr><td><code>distance</code></td><td>camera's distance to target</td><td>Starting distance</td></tr>
+    <tr><td><code>yaw</code>, <code>pitch</code></td><td>camera's yaw / pitch</td><td>Starting angles</td></tr>
+    <tr><td><code>rotateSpeed</code></td><td><code>0.005</code></td><td>Radians per dragged pixel</td></tr>
+    <tr><td><code>zoomSpeed</code></td><td><code>0.001</code></td><td>Zoom amount per scroll unit</td></tr>
+    <tr><td><code>minDistance</code></td><td><code>0.1</code></td><td>Closest zoom</td></tr>
+    <tr><td><code>maxDistance</code></td><td><code>100</code></td><td>Farthest zoom</td></tr>
+    <tr><td><code>rotate</code>, <code>pan</code>, <code>zoom</code></td><td><code>true</code></td><td>Turn each control off with <code>false</code></td></tr>
+  </tbody>
+</table></div>
+<p><code>target</code>, <code>distance</code>, <code>yaw</code> and <code>pitch</code> are public properties you can change at any time. Pitch is kept just under ±90° so the view never flips.</p>
+<div class="warn"><p>OrbitCamera places the camera <strong>every frame</strong>. To move the view in code, change the tool's properties (e.g. <code>orbit.yaw += dt</code>), not <code>scene.camera</code> — direct camera changes are overwritten.</p></div>
+
+<div class="demo" data-hint="Drag to orbit · right drag to pan · scroll to zoom · it auto-rotates">
+  <canvas id="demo-orbit"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera } from "./trid/tools/index.js";
+
+const scene = new Scene(document.getElementById("demo-orbit"), {
+  width: 800, height: 320, lineWidth: 2, camera: { z: -2 },
+});
+scene.add({ mesh: makeShape("sphere", { r: 0.5 }), color: "#8ab4f8" });
+
+const orbit = scene.use(new OrbitCamera({ pitch: -0.3, minDistance: 0.8, maxDistance: 5 }));
+
+let idle = 0;
+scene.canvas.addEventListener("pointerdown", () => (idle = 0));
+scene.start((dt) => {
+  idle += dt;
+  if (idle > 2) orbit.yaw += dt * 0.3;   // spin slowly when nobody touches it
+});</code></pre>
+</div>
+
+<h2 id="fly-camera">FlyCamera</h2>
+<p>A free-flying camera driven by the keyboard and mouse.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Input</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>W</kbd> / <kbd>S</kbd></td><td>Forward / back</td></tr>
+    <tr><td><kbd>A</kbd> / <kbd>D</kbd></td><td>Left / right</td></tr>
+    <tr><td><kbd>E</kbd> / <kbd>Q</kbd></td><td>Up / down</td></tr>
+    <tr><td>Arrow keys</td><td>Turn</td></tr>
+    <tr><td>Left drag</td><td>Look around</td></tr>
+    <tr><td>Hold <kbd>Shift</kbd></td><td>Move faster</td></tr>
+  </tbody>
+</table></div>
+<p>Keys use physical positions (<code>KeyboardEvent.code</code>), so on an AZERTY keyboard the same keys are <kbd>Z</kbd> <kbd>Q</kbd> <kbd>S</kbd> <kbd>D</kbd>. Keys are ignored while typing in an input.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>speed</code></td><td><code>1</code></td><td>Units per second</td></tr>
+    <tr><td><code>fastMultiplier</code></td><td><code>3</code></td><td>Speed multiplier while <kbd>Shift</kbd> is held</td></tr>
+    <tr><td><code>turnSpeed</code></td><td><code>1.5</code></td><td>Radians per second with the arrow keys</td></tr>
+    <tr><td><code>lookSpeed</code></td><td><code>0.005</code></td><td>Radians per dragged pixel</td></tr>
+  </tbody>
+</table></div>
+<div class="note"><p>FlyCamera listens to the keyboard on the <strong>whole window</strong> and stops the arrow keys from scrolling the page. On a page with other content, add it only while the canvas is in use — the demo below does exactly that.</p></div>
+
+<div class="demo" data-hint="Click the canvas, then W A S D / Q E / arrows · click outside to release">
+  <canvas id="demo-fly"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { FlyCamera } from "./trid/tools/index.js";
+
+const canvas = document.getElementById("demo-fly");
+const scene = new Scene(canvas, {
+  width: 800, height: 320, lineWidth: 2, camera: { y: 0.3, z: -3 },
+});
+
+// A field of cubes to fly through
+const cube = makeShape("cube", { size: 0.3 });
+for (let x = -3; x &lt;= 3; x++) {
+  for (let z = 0; z &lt;= 6; z++) {
+    scene.add({ mesh: cube, pos: { x, y: 0, z }, color: `hsl(${(x + z) * 25}, 70%, 65%)` });
+  }
+}
+
+// Only take the keyboard while the canvas is being used
+const fly = new FlyCamera({ speed: 2 });
+canvas.addEventListener("pointerdown", () => scene.use(fly));
+document.addEventListener("pointerdown", (e) => {
+  if (e.target !== canvas) scene.unuse(fly);
+});
+
+scene.start();</code></pre>
+</div>
+
+<h2 id="drag-object">DragObject</h2>
+<p>Click an object to pick it, then drag to move it. The object follows the cursor exactly, parallel to the screen. Hold <kbd>Shift</kbd> while dragging to push it away (drag up) or pull it closer (drag down).</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>button</code></td><td><code>0</code></td><td>Mouse button that drags (0 left, 1 middle, 2 right)</td></tr>
+    <tr><td><code>filter</code></td><td>objects without <code>draggable: false</code></td><td><code>(obj) =&gt; boolean</code>: which objects can be dragged</td></tr>
+    <tr><td><code>onPick</code></td><td>—</td><td><code>(obj) =&gt; void</code>: called when an object is picked</td></tr>
+    <tr><td><code>onMove</code></td><td>—</td><td><code>(obj) =&gt; void</code>: called each time it moves</td></tr>
+    <tr><td><code>onDrop</code></td><td>—</td><td><code>(obj) =&gt; void</code>: called when it's released</td></tr>
+  </tbody>
+</table></div>
+<p><code>tool.dragging</code> is the object being dragged, or <code>null</code>. Objects are found with <a href="api.html#pick"><code>pick</code></a>, which uses screen-space bounding boxes.</p>
+
+<h2 id="hover-highlight">HoverHighlight</h2>
+<p>Recolors the object under the pointer, and puts its own color back when the pointer leaves it, leaves the canvas, or the tool is removed.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>color</code></td><td><code>"#ffffff"</code></td><td>Highlight color</td></tr>
+    <tr><td><code>filter</code></td><td>objects without <code>hoverable: false</code></td><td><code>(obj) =&gt; boolean</code>: which objects can be highlighted</td></tr>
+    <tr><td><code>onChange</code></td><td>—</td><td><code>(obj | null) =&gt; void</code>: called when the hovered object changes</td></tr>
+  </tbody>
+</table></div>
+<p><code>tool.hovered</code> is the object under the pointer, or <code>null</code>.</p>
+
+<h2 id="fps-meter">FpsMeter</h2>
+<p>Draws the frames per second in a corner of the canvas. The value is averaged and refreshed every <code>interval</code> seconds so it stays readable.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>color</code></td><td><code>"#ffffff"</code></td><td>Text color</td></tr>
+    <tr><td><code>font</code></td><td><code>"14px monospace"</code></td><td>CSS font</td></tr>
+    <tr><td><code>corner</code></td><td><code>"top-left"</code></td><td><code>"top-left"</code>, <code>"top-right"</code>, <code>"bottom-left"</code> or <code>"bottom-right"</code></td></tr>
+    <tr><td><code>interval</code></td><td><code>0.5</code></td><td>Seconds between refreshes</td></tr>
+  </tbody>
+</table></div>
+<p><code>tool.fps</code> holds the last reading. It only counts while the scene is running.</p>
+
+<h2 id="together">All together</h2>
+<div class="demo" data-hint="Hover a shape · drag it · Shift + drag to push / pull · drag empty space to orbit">
+  <canvas id="demo-tools"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera, DragObject, HoverHighlight, FpsMeter } from "./trid/tools/index.js";
+
+const scene = new Scene(document.getElementById("demo-tools"), {
+  width: 800, height: 360, lineWidth: 2, camera: { y: 0.6, z: -2.5 },
+});
+
+for (let i = 0; i &lt; 5; i++) {
+  scene.add({
+    mesh: makeShape(i % 2 ? "cube" : "sphere", { size: 0.35, r: 0.2, rings: 6, segments: 10 }),
+    pos: { x: (i - 2) * 0.55, y: 0, z: 0 },
+    color: `hsl(${i * 60 + 10}, 75%, 65%)`,
+  });
+}
+// A floor that can't be dragged or highlighted
+scene.add({
+  mesh: makeShape("box", { w: 3, h: 0.01, d: 1.5 }),
+  pos: { x: 0, y: -0.3, z: 0 },
+  color: "#444", draggable: false, hoverable: false,
+});
+
+scene.use(new OrbitCamera());
+scene.use(new HoverHighlight());
+// Lift a shape slightly while it's held
+scene.use(new DragObject({
+  onPick: (obj) => (obj.lineWidth = 4),
+  onDrop: (obj) => delete obj.lineWidth,
+}));
+scene.use(new FpsMeter({ color: "#888", corner: "top-right" }));
+scene.start();</code></pre>
+</div>
+
+</main>
+</body>
+</html>

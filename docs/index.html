@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Introduction · Trid</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try{const t=localStorage.getItem("trid-docs-theme");if(t)document.documentElement.dataset.theme=t}catch{}</script>
+  <script type="module" src="assets/docs.js"></script>
+</head>
+<body>
+<main class="content">
+
+<h1>Trid</h1>
+<p class="lead"><strong>Trid</strong> (Tri + 3D) is a small wireframe 3D renderer for the HTML <code>&lt;canvas&gt;</code>. It uses only the 2D context — no WebGL, no dependencies, no build step.</p>
+
+<div class="demo" data-hint="Drag empty space to orbit · drag a shape to move it · scroll to zoom">
+  <canvas id="demo-hero"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera, DragObject, HoverHighlight } from "./trid/tools/index.js";
+
+const scene = new Scene(document.getElementById("demo-hero"), {
+  width: 800, height: 400, camera: { z: -2 },
+});
+
+const ball = scene.add({
+  mesh: makeShape("sphere", { r: 0.45, rings: 10, segments: 16 }),
+  pos: { x: -0.6, y: 0, z: 0 },
+  color: "#E9806E",
+});
+const box = scene.add({
+  mesh: makeShape("cube", { size: 0.6 }),
+  pos: { x: 0.6, y: 0, z: 0 },
+  color: "#7ae96e",
+});
+
+scene.use(new OrbitCamera());
+scene.use(new DragObject());
+scene.use(new HoverHighlight());
+
+scene.start((dt) => {
+  ball.rot.y += dt * 0.6;
+  box.rot.x += dt * 0.8;
+  box.rot.y += dt * 0.5;
+});</code></pre>
+</div>
+
+<h2 id="features">What it does</h2>
+<ul>
+  <li><strong>Scene</strong> — holds a canvas, a camera and your objects, and runs the frame loop for you.</li>
+  <li><strong>Shapes</strong> — cubes, boxes and spheres out of the box, or any mesh you define as vertices and edges.</li>
+  <li><strong>Camera</strong> — position, yaw, pitch, field of view, with near-plane clipping so nothing behind the camera is drawn.</li>
+  <li><strong>Tools</strong> — ready-made orbit and fly cameras, object dragging, hover highlighting and an FPS meter. Writing your own is a plain object with a few methods.</li>
+  <li><strong>Pure math</strong> — every transform and projection function is exported, so you can use the pipeline piece by piece.</li>
+</ul>
+
+<h2 id="quick-start">Quick start</h2>
+<p>Trid is a folder of ES modules. Copy the <code>trid/</code> folder next to your page:</p>
+<pre><code>my-project/
+├── index.html
+├── main.js
+└── trid/
+    ├── scene.js
+    ├── math/
+    ├── render/
+    └── tools/</code></pre>
+
+<p>Add a canvas and load your script as a module:</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;body&gt;
+  &lt;canvas id="canvas"&gt;&lt;/canvas&gt;
+  &lt;script type="module" src="main.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+<p>Then create a scene, add a shape and start the loop:</p>
+<div class="demo">
+  <canvas id="demo-quick"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+
+const scene = new Scene(document.getElementById("demo-quick"), {
+  width: 800, height: 300,
+});
+
+const cube = scene.add({ mesh: makeShape("cube"), color: "#E9806E" });
+
+scene.start((dt) => {
+  cube.rot.x += dt;
+  cube.rot.y += dt * 0.7;
+});</code></pre>
+</div>
+
+<div class="warn">
+  <p><strong>Use a local server.</strong> Browsers block ES module imports from <code>file://</code> pages. From your project folder run <code>python3 -m http.server</code> (or <code>npx serve</code>) and open <code>http://localhost:8000</code>.</p>
+</div>
+
+<h2 id="next">Where to go next</h2>
+<div class="cards">
+  <a class="card" href="concepts.html"><strong>Core concepts</strong><span>Coordinates, meshes, objects and the camera.</span></a>
+  <a class="card" href="scene.html"><strong>Scene</strong><span>Everything the Scene class can do.</span></a>
+  <a class="card" href="tools.html"><strong>Tools</strong><span>Mouse and keyboard controls in one line.</span></a>
+  <a class="card" href="api.html"><strong>API reference</strong><span>Every exported function and class.</span></a>
+</div>
+
+<h2 id="limits">Current limits</h2>
+<ul>
+  <li>Wireframes only — there are no filled faces, lighting or depth sorting yet.</li>
+  <li>Picking (used by dragging and hover) tests each object's <em>screen-space bounding box</em>, so clicking near a sphere's corner still picks it.</li>
+  <li>There is no single entry file or npm package yet: import from the individual modules.</li>
+</ul>
+
+</main>
+</body>
+</html>

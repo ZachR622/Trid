@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Examples · Trid</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script>try{const t=localStorage.getItem("trid-docs-theme");if(t)document.documentElement.dataset.theme=t}catch{}</script>
+  <script type="module" src="assets/docs.js"></script>
+</head>
+<body>
+<main class="content">
+
+<h1>Examples</h1>
+<p class="lead">Small complete programs. Each one is the exact code running above it — copy it into your own <code>main.js</code> and change the canvas id.</p>
+
+<h2 id="solar-system">Orbits</h2>
+<p>A moon orbiting a planet orbiting a sun. There's no parent/child system yet, so each frame computes the moon's position from the planet's.</p>
+<div class="demo" data-hint="Drag to orbit · scroll to zoom">
+  <canvas id="demo-solar"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera } from "./trid/tools/index.js";
+
+const scene = new Scene(document.getElementById("demo-solar"), {
+  width: 800, height: 380, lineWidth: 1.5, background: "#0d0d10",
+  camera: { y: 1.4, z: -2.6 },
+});
+
+const sun = scene.add({ mesh: makeShape("sphere", { r: 0.3 }), color: "#ffd166" });
+const planet = scene.add({ mesh: makeShape("sphere", { r: 0.12, rings: 8, segments: 12 }), color: "#6ba8ff" });
+const moon = scene.add({ mesh: makeShape("sphere", { r: 0.04, rings: 4, segments: 8 }), color: "#ccc" });
+
+// Draw the planet's path as a closed loop
+const path = { vertices: [], edges: [[]] };
+for (let i = 0; i &lt; 64; i++) {
+  const a = (i / 64) * Math.PI * 2;
+  path.edges[0].push(path.vertices.push({ x: Math.cos(a), y: 0, z: Math.sin(a) }) - 1);
+}
+scene.add({ mesh: path, color: "#333", lineWidth: 1 });
+
+scene.use(new OrbitCamera());
+
+scene.start((dt, t) => {
+  sun.rot.y += dt * 0.2;
+  planet.rot.y += dt * 2;
+  planet.pos.x = Math.cos(t * 0.5);
+  planet.pos.z = Math.sin(t * 0.5);
+  moon.pos.x = planet.pos.x + Math.cos(t * 3) * 0.25;
+  moon.pos.y = Math.sin(t * 3) * 0.05;
+  moon.pos.z = planet.pos.z + Math.sin(t * 3) * 0.25;
+});</code></pre>
+</div>
+
+<h2 id="wave">Animated mesh</h2>
+<p>Meshes are plain data, so you can change vertices every frame. Don't share a mesh you rewrite like this — every object using it would change too.</p>
+<div class="demo" data-hint="Drag to orbit">
+  <canvas id="demo-wave"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { OrbitCamera } from "./trid/tools/index.js";
+
+const N = 20, SIZE = 2;
+const grid = { vertices: [], edges: [] };
+for (let i = 0; i &lt;= N; i++) {
+  for (let j = 0; j &lt;= N; j++) {
+    const k = grid.vertices.push({ x: (i / N - 0.5) * SIZE, y: 0, z: (j / N - 0.5) * SIZE }) - 1;
+    if (i &lt; N) grid.edges.push([k, k + N + 1]);   // to the next column
+    if (j &lt; N) grid.edges.push([k, k + 1]);       // to the next row
+  }
+}
+
+const scene = new Scene(document.getElementById("demo-wave"), {
+  width: 800, height: 380, lineWidth: 1, color: "#7ae96e",
+  camera: { y: 1.2, z: -2 },
+});
+scene.add({ mesh: grid });
+scene.use(new OrbitCamera());
+
+scene.start((dt, t) => {
+  for (const v of grid.vertices) {
+    const d = Math.hypot(v.x, v.z);
+    v.y = Math.sin(d * 6 - t * 3) * 0.08 / (1 + d * 2);
+  }
+});</code></pre>
+</div>
+
+<h2 id="labels">Labels with a custom tool</h2>
+<p>A tool's <code>draw</code> runs after the objects, so it can write text on top. <code>worldToScreen</code> finds where a 3D point lands on the canvas.</p>
+<div class="demo" data-hint="Drag to orbit — labels follow">
+  <canvas id="demo-labels"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+import { makeShape } from "./trid/render/shapes.js";
+import { OrbitCamera } from "./trid/tools/index.js";
+import { worldToScreen, worldToCamera, DEFAULT_NEAR } from "./trid/math/transform.js";
+
+const scene = new Scene(document.getElementById("demo-labels"), {
+  width: 800, height: 340, lineWidth: 2, camera: { y: 0.4, z: -2.2 },
+});
+
+["cube", "sphere", "box"].forEach((kind, i) => scene.add({
+  mesh: makeShape(kind, { size: 0.4, r: 0.25, w: 0.5, h: 0.3, d: 0.3 }),
+  pos: { x: (i - 1) * 0.75, y: 0, z: 0 },
+  color: ["#E9806E", "#7ae96e", "#8ab4f8"][i],
+  label: kind,
+}));
+
+const labels = {
+  draw(ctx, scene) {
+    const { camera, canvas } = scene;
+    ctx.font = "15px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ddd";
+    for (const obj of scene.objects) {
+      const above = { x: obj.pos.x, y: obj.pos.y + 0.38, z: obj.pos.z };
+      // Skip points behind the camera
+      if (worldToCamera(above, camera).z &lt; DEFAULT_NEAR) continue;
+      const p = worldToScreen(above, camera, canvas.width, canvas.height);
+      ctx.fillText(obj.label, p.x, p.y);
+    }
+  },
+};
+
+scene.use(new OrbitCamera());
+scene.use(labels);
+scene.start((dt) => scene.objects.forEach(o => (o.rot.y += dt * 0.4)));</code></pre>
+</div>
+
+<h2 id="tunnel">Tunnel</h2>
+<p>Rings rushing toward the camera, recycled when they pass it. The near plane clips them cleanly as they go by.</p>
+<div class="demo">
+  <canvas id="demo-tunnel"></canvas>
+<pre><code class="language-js">import { Scene } from "./trid/scene.js";
+
+const scene = new Scene(document.getElementById("demo-tunnel"), {
+  width: 800, height: 340, lineWidth: 2, background: "#0b0b0b",
+  camera: { z: 0, near: 0.05 },
+});
+
+// A square ring in the XY plane
+const ring = {
+  vertices: [{ x: -1, y: -0.6, z: 0 }, { x: 1, y: -0.6, z: 0 }, { x: 1, y: 0.6, z: 0 }, { x: -1, y: 0.6, z: 0 }],
+  edges: [[0, 1, 2, 3]],
+};
+
+const COUNT = 16, GAP = 0.6;
+const rings = Array.from({ length: COUNT }, (_, i) =>
+  scene.add({ mesh: ring, pos: { x: 0, y: 0, z: i * GAP } }));
+
+scene.start((dt, t) => {
+  for (const r of rings) {
+    r.pos.z -= dt * 1.5;
+    if (r.pos.z &lt; -0.2) r.pos.z += COUNT * GAP;    // recycle behind the far end
+    r.rot.z = r.pos.z * 0.15 + t * 0.2;            // twist
+    const fade = 1 - r.pos.z / (COUNT * GAP);
+    r.color = `hsla(${(t * 40 + r.pos.z * 30) % 360}, 80%, 65%, ${fade})`;
+  }
+});</code></pre>
+</div>
+
+</main>
+</body>
+</html>
