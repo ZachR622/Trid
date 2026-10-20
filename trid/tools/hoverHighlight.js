@@ -1,0 +1,56 @@
+import { pick } from "./helpers.js";
+
+/**
+ * Changes an object's color while the pointer is over it.
+ *
+ * The object's own `color` is put back when the pointer leaves it,
+ * when it leaves the canvas, or when the tool is removed.
+ * Set `obj.hoverable = false` to make an object ignore this tool.
+ */
+export class HoverHighlight {
+  /**
+   * @param {Object} [opts]
+   * @param {string} [opts.color="#ffffff"] - Highlight color
+   * @param {(obj:Object) => boolean} [opts.filter] - Which objects can be highlighted
+   *   (default: those without `hoverable: false`)
+   * @param {(obj:Object|null) => void} [opts.onChange] - Called when the hovered object changes
+   */
+  constructor({ color = "#ffffff", filter = obj => obj.hoverable !== false, onChange } = {}) {
+    this.color = color;
+    this.filter = filter;
+    this.onChange = onChange;
+
+    /** The object under the pointer, or null. */
+    this.hovered = null;
+    this._savedColor = undefined;
+  }
+
+  pointerMove(e, scene) {
+    this._set(pick(scene, e.x, e.y, { filter: this.filter }));
+  }
+
+  pointerLeave() {
+    this._set(null);
+  }
+
+  detach() {
+    this._set(null);
+  }
+
+  _set(obj) {
+    if (obj === this.hovered) return;
+
+    if (this.hovered) {
+      if (this._savedColor === undefined) delete this.hovered.color;
+      else this.hovered.color = this._savedColor;
+    }
+
+    this.hovered = obj;
+    if (obj) {
+      this._savedColor = obj.color;
+      obj.color = this.color;
+    }
+
+    this.onChange?.(obj);
+  }
+}

@@ -1,0 +1,162 @@
+# API reference
+
+Everything the library exports, module by module. Points are plain `{ x, y, z }` objects (or `{ x, y }` on screen). No function changes its inputs unless it says so.
+
+## Modules
+
+| Module | Exports |
+| --- | --- |
+| `trid/scene.js` | [`Scene`](./scene) |
+| `trid/math/transform.js` | [Pipeline](#pipeline), [camera directions](#camera-directions), [basic transforms](#basic-transforms), [constants](#constants) |
+| `trid/math/projection.js` | [`project`, `screen`](#projection) |
+| `trid/render/draw.js` | [`clear`, `point`, `line`, `drawWireframe`, `drawInstance`](#drawing) |
+| `trid/render/loop.js` | [`loop`](#frame-loop) |
+| `trid/render/shapes.js` | [`makeShape`, `scaleMesh`](./shapes) |
+| `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
+| `trid/tools/index.js` | [Tools](./tools), [`pick`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
+
+## Math
+
+### Pipeline
+
+From `trid/math/transform.js`.
+
+```js
+localToWorld(v, inst)            // → point
+worldToCamera(p, camera)         // → point
+cameraToScreen(p, camera, w, h)  // → { x, y }
+worldToScreen(p, camera, w, h)   // → { x, y }
+clipNear(a, b, near)             // → [a, b] or null
+```
+
+- **`localToWorld`** moves a mesh vertex into world space using an object's transform: scale, then rotate (X → Y → Z), then translate by `pos`. `inst` needs `pos`, `rot` and `scale`.
+- **`worldToCamera`** moves a world point into camera space: subtracts the camera position, then undoes its yaw and pitch. In camera space the camera sits at the origin looking down +Z, so `z` is the distance in front of it.
+- **`cameraToScreen`** projects a camera-space point to canvas pixels, using `camera.fov` and the aspect ratio `w / h`. `p.z` must be > 0 — clip segments with `clipNear` first if they can cross behind the camera.
+- **`worldToScreen`** is `worldToCamera` followed by `cameraToScreen`. Handy for placing labels on top of 3D points.
+- **`clipNear`** clips a camera-space segment against the plane `z = near`. Returns the segment unchanged if both ends are in front, `null` if both are behind, or a shortened segment with the hidden end moved onto the plane.
+
+### Camera directions
+
+```js
+cameraForward(camera)  // → point
+cameraRight(camera)    // → point
+cameraUp(camera)       // → point
+```
+
+Unit vectors in world space for where the camera looks, the screen's right side and the screen's top side. Use them to move things relative to the view.
+
+### Basic transforms
+
+```js
+scale(p, sx, sy, sz)       // → point
+translate(p, dx, dy, dz)   // → point
+rotateX(p, angle)          // → point  (pitch, YZ plane)
+rotateY(p, angle)          // → point  (yaw, XZ plane)
+rotateZ(p, angle)          // → point  (roll, XY plane)
+rotateXYZ(p, { x, y, z })  // → point  (X, then Y, then Z)
+```
+
+Each returns a new point. Angles are in radians. Rotation order matters: `rotateXYZ` always applies X first, then Y, then Z.
+
+### Constants
+
+| Name | Value |
+| --- | --- |
+| `DEFAULT_FOV` | `Math.PI / 2` — 90° vertical field of view |
+| `DEFAULT_NEAR` | `0.01` — near plane distance |
+
+### Projection
+
+From `trid/math/projection.js`.
+
+```js
+project(p, fov = Math.PI / 2, aspect = 1)  // → { x, y }
+screen(p, w, h)                            // → { x, y }
+```
+
+- **`project`** is the perspective projection of a camera-space point to normalized coordinates (−1 to +1). X is divided by `aspect` so shapes don't stretch on wide canvases. `p.z` must be > 0.
+- **`screen`** converts normalized coordinates to canvas pixels. Y is flipped: +1 is the top of the canvas.
+
+## Rendering
+
+### Drawing
+
+From `trid/render/draw.js`.
+
+```js
+clear(ctx, w, h, color)
+point(ctx, p, color, size = 20)
+line(ctx, p1, p2, color, width = 4)
+drawWireframe(ctx, points2, edges, color, width = 4)
+drawInstance(ctx, inst, camera, w, h, color, lineWidth = 3)
+```
+
+- **`clear`** fills the whole canvas with `color`.
+- **`point`** draws a filled square centered on screen point `p`. Useful for debugging vertices.
+- **`line`** draws one line between two screen points.
+- **`drawWireframe`** connects already-projected screen points using index edges (2 indices = segment, 3+ = closed loop). Everything is stroked as one path. No clipping is done.
+- **`drawInstance`** is the main drawing call: it transforms an object's mesh, clips every edge against the camera's near plane, projects it and strokes it as one path. `Scene.render` uses it for each object.
+
+### Frame loop
+
+From `trid/render/loop.js`.
+
+```js
+const stop = loop(update, { maxDt = 0.1 } = {})
+```
+
+Calls `update(dt, time)` every animation frame with `requestAnimationFrame`. `dt` is the seconds since the last frame (0 on the first, capped at `maxDt`) and `time` is the seconds since the loop started. Call the returned `stop()` to end it.
+
+### Using the pipeline without Scene
+
+`Scene` is a thin layer over these functions. You can drive them yourself:
+
+<Demo src="raw" />
+
+<<< @/demos/raw.js
+
+## Helpers
+
+From `trid/tools/helpers.js` (also exported by `trid/tools/index.js`).
+
+### pick
+
+```js
+pick(scene, x, y, { filter, padding = 4 } = {})  // → object or null
+```
+
+Returns the object under canvas pixel (`x`, `y`). An object is hit when the point is inside its screen-space bounding box, grown by `padding` pixels. If several are hit, the one whose center is closest to the camera wins. `filter(obj)` can exclude objects.
+
+::: info
+Bounding boxes are approximate: clicking the empty corner around a sphere still picks it.
+:::
+
+### screenBounds
+
+```js
+screenBounds(scene, obj)  // → { minX, minY, maxX, maxY } or null
+```
+
+An object's bounding box on screen, in canvas pixels. Only vertices in front of the near plane count; returns `null` if the whole object is behind the camera.
+
+### worldPerPixel
+
+```js
+worldPerPixel(scene, depth)  // → number
+```
+
+How many world units one canvas pixel covers at `depth` units in front of the camera. Multiply pointer `dx` / `dy` by it to make something follow the cursor exactly.
+
+## ToolManager
+
+From `trid/tools/manager.js`. Each scene creates one as `scene.tools`. It keeps the tool list and turns canvas pointer events into [tool events](./custom-tools#event-objects). Canvas listeners are only added while at least one tool is in the list. You normally go through `scene.use` / `scene.unuse` instead.
+
+| Member | Meaning |
+| --- | --- |
+| `new ToolManager(scene)` | Creates a manager for a scene's canvas |
+| `add(tool)` | Adds a tool and calls its `attach`. Adding the same tool twice does nothing. |
+| `remove(tool)` | Removes a tool (ending its drag if it holds one) and calls its `detach` |
+| `clear()` | Removes every tool |
+| `update(dt)` | Calls every tool's `update` |
+| `draw(ctx)` | Calls every tool's `draw` |
+| `list` | The tools, in the order they were added |

@@ -1,0 +1,100 @@
+/* Trid brand colors on top of the VitePress default theme */
+
+:root {
+  --vp-c-brand-1: #c4523d;
+  --vp-c-brand-2: #b04632;
+  --vp-c-brand-3: #c4523d;
+  --vp-c-brand-soft: rgba(196, 82, 61, 0.14);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #e9806e 20%, #7ae96e);
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, rgba(233, 128, 110, 0.35) 50%, rgba(122, 233, 110, 0.3) 50%);
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+  --vp-c-brand-1: #e9806e;
+  --vp-c-brand-2: #f09584;
+  --vp-c-brand-3: #c4523d;
+  --vp-c-brand-soft: rgba(233, 128, 110, 0.16);
+}
+
+/* Live demos: a canvas followed by its source (<<< snippet) */
+
+.trid-demo {
+  position: relative;
+  margin: 16px 0 0;
+  background: #141414;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.trid-demo canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The code block right after a demo joins it visually */
+.trid-demo + div[class*="language-"] {
+  margin-top: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+.trid-demo-hint {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #9a978f;
+  pointer-events: none;
+}
+
+.trid-demo-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  font: 13px/1.5 var(--vp-font-family-mono);
+  color: #ff8a7a;
+  text-align: center;
+}
+
+/* Demo on the home page */
+.home-demo {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+.home-demo .trid-demo { border-radius: 12px; }
+
+.trid-demo-bar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #9a978f;
+}
+
+.trid-demo-bar button {
+  padding: 4px 12px;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  background: #222;
+  color: #e8e6e1;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.trid-demo-bar button:hover {
+  border-color: var(--vp-c-brand-1);
+}
