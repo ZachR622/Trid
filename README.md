@@ -25,16 +25,21 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 - **Tools** — orbit and fly cameras, object dragging, hover highlight, an FPS meter and an OBJ uploader, one line each. Writing your own is a plain object with a few methods.
 - **Pure math** — every transform and projection step is exported, so you can use the pipeline piece by piece.
 
+## Install
+
+```sh
+npm install trid3d
+```
+
+No bundler? Use the CDN with an import map, or copy the `trid/` folder next to your page and import `./trid/index.js`:
+
+```html
+<script type="importmap">
+  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.1/trid/index.js" } }
+</script>
+```
+
 ## Quick start
-
-For now, Trid is a folder of ES modules: copy the `trid/` folder next to your page. An npm package is planned, so you'll be able to install it with `npm install` later.
-
-```
-my-project/
-├── index.html
-├── main.js
-└── trid/
-```
 
 ```html
 <canvas id="canvas"></canvas>
@@ -43,9 +48,7 @@ my-project/
 
 ```js
 // main.js
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { OrbitCamera } from "./trid/tools/index.js";
+import { Scene, makeShape, OrbitCamera } from "trid3d";
 
 const scene = new Scene(document.getElementById("canvas"), { width: 800, height: 400 });
 const cube = scene.add({ mesh: makeShape("cube"), color: "#E9806E" });              // wireframe
@@ -56,12 +59,12 @@ scene.use(new OrbitCamera()); // drag to orbit, scroll to zoom
 scene.start((dt) => (cube.rot.y += dt));
 ```
 
-Browsers block module imports from `file://` pages, so serve the folder: `python3 -m http.server`, then open `http://localhost:8000`.
+Without a bundler, serve the folder (`python3 -m http.server`) instead of opening the file directly: browsers block module imports from `file://` pages.
 
 ### Loading a model
 
 ```js
-import { loadOBJ } from "./trid/loaders/obj.js";
+import { loadOBJ } from "trid3d";
 
 const mesh = await loadOBJ("models/teapot.obj", { fit: 1 }); // centered, 1 unit wide
 scene.add({ mesh });
@@ -73,10 +76,11 @@ Or let users load their own: `scene.use(new ObjUploader())` accepts dropped `.ob
 
 | Folder | Content |
 | --- | --- |
+| `trid/index.js` | Entry file: exports everything (`"trid3d"`) |
 | `trid/scene.js` | The `Scene` class |
 | `trid/math/` | Transforms, camera directions, projection |
-| `trid/render/` | Drawing, frame loop, built-in shapes |
-| `trid/loaders/` | OBJ loading |
+| `trid/render/` | Renderers (Canvas 2D, WebGL), effects, shapes, drawing, frame loop |
+| `trid/loaders/` | OBJ and texture loading |
 | `trid/tools/` | Camera, object and overlay tools |
 | `docs/` | Documentation site with live demos |
 
@@ -96,5 +100,4 @@ See [`docs/README.md`](docs/README.md) for building and editing the docs.
 - **More shapes** — cylinder, cone, torus, plane/grid
 - **More tools** — rotate/scale objects with the mouse, selection outline
 - **Parent/child transforms** — e.g. a moon orbiting a planet
-- **Packaging** — a single entry file and an npm package
 - **Tests** for the math functions

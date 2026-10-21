@@ -1,5 +1,4 @@
-import { Scene } from "./trid/scene.js";
-import { OrbitCamera } from "./trid/tools/index.js";
+import { Scene, OrbitCamera } from "./trid/index.js";
 
 export default function (canvas) {
   const N = 20, SIZE = 2;

@@ -1,4 +1,4 @@
-import { Scene } from "./trid/scene.js";
+import { Scene } from "./trid/index.js";
 
 // A square ring in the XY plane
 const ring = {

@@ -1,8 +1,4 @@
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { CanvasRenderer } from "./trid/render/canvasRenderer.js";
-import { WebGLRenderer } from "./trid/render/webglRenderer.js";
-import { OrbitCamera } from "./trid/tools/index.js";
+import { Scene, makeShape, CanvasRenderer, WebGLRenderer, OrbitCamera } from "./trid/index.js";
 
 export default function (canvas) {
   const scene = new Scene(canvas, {

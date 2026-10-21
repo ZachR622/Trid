@@ -40,7 +40,7 @@ The logo is a plain cube. `public/logo.svg` and `public/favicon.svg` are hand-wr
 **Add a live demo:** create `docs/demos/my-demo.js`:
 
 ```js
-import { Scene } from "./trid/scene.js";
+import { Scene } from "./trid/index.js";
 
 export default function (canvas) {
   const scene = new Scene(canvas, { width: 800, height: 300 });

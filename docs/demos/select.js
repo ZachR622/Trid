@@ -1,6 +1,4 @@
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { OrbitCamera, pick, screenBounds } from "./trid/tools/index.js";
+import { Scene, makeShape, OrbitCamera, pick, screenBounds } from "./trid/index.js";
 
 class SelectTool {
   constructor({ color = "#ffd166", onSelect } = {}) {

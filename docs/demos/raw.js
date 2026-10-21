@@ -1,7 +1,4 @@
-import { clear, drawInstance, point } from "./trid/render/draw.js";
-import { loop } from "./trid/render/loop.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { worldToScreen } from "./trid/math/transform.js";
+import { clear, drawInstance, point, loop, makeShape, worldToScreen } from "./trid/index.js";
 
 export default function (canvas) {
   canvas.width = 800;

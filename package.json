@@ -1,7 +1,37 @@
 {
-  "name": "trid",
-  "private": true,
+  "name": "trid3d",
+  "version": "0.1.0",
+  "description": "A small 3D library for the HTML canvas: wireframes, filled and smooth faces, textures and shader effects, drawn with Canvas 2D or WebGL. No dependencies.",
+  "keywords": [
+    "3d",
+    "canvas",
+    "webgl",
+    "wireframe",
+    "renderer",
+    "obj",
+    "shader"
+  ],
+  "license": "MIT",
+  "author": "ZachR622",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZachR622/Trid.git"
+  },
+  "homepage": "https://github.com/ZachR622/Trid#readme",
+  "bugs": {
+    "url": "https://github.com/ZachR622/Trid/issues"
+  },
   "type": "module",
+  "main": "./trid/index.js",
+  "module": "./trid/index.js",
+  "exports": {
+    ".": "./trid/index.js",
+    "./*": "./trid/*"
+  },
+  "files": [
+    "trid"
+  ],
+  "sideEffects": false,
   "scripts": {
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",

@@ -1,6 +1,4 @@
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { OrbitCamera, HoverHighlight } from "./trid/tools/index.js";
+import { Scene, makeShape, OrbitCamera, HoverHighlight } from "./trid/index.js";
 
 export default function (canvas) {
   const scene = new Scene(canvas, {

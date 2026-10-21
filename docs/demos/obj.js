@@ -1,6 +1,4 @@
-import { Scene } from "./trid/scene.js";
-import { parseOBJ } from "./trid/loaders/obj.js";
-import { OrbitCamera, ObjUploader } from "./trid/tools/index.js";
+import { Scene, parseOBJ, OrbitCamera, ObjUploader } from "./trid/index.js";
 
 // A small house, written as OBJ text, shown until you load your own file
 const HOUSE = `

@@ -1,8 +1,6 @@
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { WebGLRenderer } from "./trid/render/webglRenderer.js";
-import { toon, rim, edgeGlow, gradient } from "./trid/render/effects.js";
-import { OrbitCamera } from "./trid/tools/index.js";
+import {
+  Scene, makeShape, WebGLRenderer, toon, rim, edgeGlow, gradient, OrbitCamera,
+} from "./trid/index.js";
 
 // A custom effect: stripes that scroll up over time
 const stripes = {

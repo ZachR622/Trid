@@ -1,6 +1,4 @@
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { FlyCamera } from "./trid/tools/index.js";
+import { Scene, makeShape, FlyCamera } from "./trid/index.js";
 
 export default function (canvas) {
   const scene = new Scene(canvas, {

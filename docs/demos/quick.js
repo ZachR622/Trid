@@ -1,5 +1,4 @@
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
+import { Scene, makeShape } from "./trid/index.js";
 
 export default function (canvas) {
   const scene = new Scene(canvas, { width: 800, height: 300 });

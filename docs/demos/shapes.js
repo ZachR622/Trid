@@ -1,6 +1,4 @@
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { OrbitCamera } from "./trid/tools/index.js";
+import { Scene, makeShape, OrbitCamera } from "./trid/index.js";
 
 const pyramid = {
   vertices: [

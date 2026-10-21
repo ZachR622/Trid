@@ -6,6 +6,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 
 | Module | Exports |
 | --- | --- |
+| `trid/index.js` (`"trid3d"`) | Everything below, from one file |
 | `trid/scene.js` | [`Scene`](./scene) |
 | `trid/math/transform.js` | [Pipeline](#pipeline), [camera directions](#camera-directions), [basic transforms](#basic-transforms), [constants](#constants) |
 | `trid/math/projection.js` | [`project`, `screen`](#projection) |

@@ -1,7 +1,6 @@
-import { Scene } from "./trid/scene.js";
-import { makeShape } from "./trid/render/shapes.js";
-import { OrbitCamera } from "./trid/tools/index.js";
-import { worldToScreen, worldToCamera, DEFAULT_NEAR } from "./trid/math/transform.js";
+import {
+  Scene, makeShape, OrbitCamera, worldToScreen, worldToCamera, DEFAULT_NEAR,
+} from "./trid/index.js";
 
 // A tool that writes each object's label above it
 const labels = {
