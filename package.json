@@ -1,6 +1,6 @@
 {
   "name": "trid3d",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A small 3D library for the HTML canvas: wireframes, filled and smooth faces, textures and shader effects, drawn with Canvas 2D or WebGL. No dependencies.",
   "keywords": [
     "3d",
@@ -24,8 +24,12 @@
   "type": "module",
   "main": "./trid/index.js",
   "module": "./trid/index.js",
+  "types": "./trid/index.d.ts",
   "exports": {
-    ".": "./trid/index.js",
+    ".": {
+      "types": "./trid/index.d.ts",
+      "default": "./trid/index.js"
+    },
     "./*": "./trid/*"
   },
   "files": [

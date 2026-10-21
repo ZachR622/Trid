@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/public/logo.svg" width="96" alt="Trid logo">
+  <img src="https://raw.githubusercontent.com/ZachR622/Trid/master/docs/public/logo.svg" width="96" alt="Trid logo">
 </p>
 
 <h1 align="center">Trid</h1>
@@ -95,7 +95,7 @@ npm install
 npm run docs:dev
 ```
 
-See [`docs/README.md`](docs/README.md) for building and editing the docs.
+See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.md) for building and editing the docs.
 
 ## Roadmap
 
