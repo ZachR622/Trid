@@ -86,7 +86,9 @@ Or let users load their own: `scene.use(new ObjUploader())` accepts dropped `.ob
 
 ## Documentation
 
-The docs explain every class, option and function, with live demos. To run them locally (Node 18+):
+**[zachr622.github.io/Trid](https://zachr622.github.io/Trid/)**: every class, option and function, with live demos.
+
+To run the docs locally (Node 18+):
 
 ```sh
 npm install

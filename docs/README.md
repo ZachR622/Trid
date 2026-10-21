@@ -13,7 +13,11 @@ npm run docs:build   # static site in docs/.vitepress/dist
 npm run docs:preview # serve the built site
 ```
 
-For GitHub Pages at `https://zachr622.github.io/Trid/`, build with the base path set:
+## Publishing
+
+Pushing to `master` publishes the docs at `https://zachr622.github.io/Trid/`. The GitHub Action in `.github/workflows/docs.yml` builds them with `DOCS_BASE=/Trid/` (the site lives under `/Trid/`) and deploys to GitHub Pages. It can also be started by hand from the repo's **Actions** tab.
+
+To build the same thing locally:
 
 ```sh
 DOCS_BASE=/Trid/ npm run docs:build
