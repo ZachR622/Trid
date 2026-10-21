@@ -11,8 +11,9 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/math/projection.js` | [`project`, `screen`](#projection) |
 | `trid/render/draw.js` | [`clear`, `point`, `line`, `drawWireframe`, `drawInstance`](#drawing) |
 | `trid/render/loop.js` | [`loop`](#frame-loop) |
-| `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`, `newell`](#canvasrenderer) |
+| `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`](#canvasrenderer) |
 | `trid/render/webglRenderer.js` | [`WebGLRenderer`, `DEFAULT_FAR`](#webglrenderer) |
+| `trid/render/normals.js` | [`cornerNormals`, `creaseOf`, `newell`, `DEFAULT_CREASE`](#normals) |
 | `trid/render/color.js` | [`parseColor`](#parsecolor) |
 | `trid/render/shapes.js` | [`makeShape`, `scaleMesh`](./shapes) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
@@ -109,12 +110,10 @@ From `trid/render/canvasRenderer.js`. The default `scene.renderer`: it draws wir
 ```js
 new CanvasRenderer({ maxFaceSize = null } = {})
 renderer.render(scene)
-newell(points)
 ```
 
 - **`maxFaceSize`** splits faces bigger than that fraction of their mesh's size into triangles, so they sort better (see [Splitting big faces](./faces#splitting-big-faces)). Off by default.
 - **`render(scene)`** clears the canvas and draws every object of the scene. `Scene.render` calls it, then lets tools draw.
-- **`newell(points)`** returns the (not normalized) normal of a polygon. For points clockwise as seen from a side, it points to that side.
 - **`DEFAULT_LIGHT`** is `{ x: -0.5, y: 1, z: -0.8 }` and **`DEFAULT_AMBIENT`** is `0.25`.
 
 ### WebGLRenderer
@@ -135,6 +134,21 @@ renderer.canvas
 - **`dispose()`** frees the graphics card memory; `scene.destroy()` calls it. Safe to call twice.
 - Meshes are uploaded once. Set **`mesh.dirty = true`** after changing a mesh's arrays in place.
 - **`DEFAULT_FAR`** is `1000`, the farthest distance drawn unless the camera sets `far`.
+
+### Normals
+
+From `trid/render/normals.js`.
+
+```js
+cornerNormals(mesh, crease = 60)
+creaseOf(smooth)
+newell(points)
+```
+
+- **`cornerNormals`** returns, for each face, one unit normal per corner: the average of the faces around that vertex that meet it at less than `crease` degrees. Faces with normals from an OBJ file use those. Cached per mesh until its arrays change or `mesh.dirty` is set.
+- **`creaseOf`** turns a material's `smooth` value into a crease angle (`true` → 60), or `null` for flat shading.
+- **`newell`** returns the (not normalized) normal of a polygon. For points clockwise as seen from a side, it points to that side. Also exported from `canvasRenderer.js`.
+- **`DEFAULT_CREASE`** is `60`.
 
 ### parseColor
 

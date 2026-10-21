@@ -6,7 +6,7 @@
 
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
 - **Shapes** — cubes, boxes and spheres out of the box, or any mesh you define as vertices and edges.
-- **Filled faces** — fill and shade any mesh with a material, or keep it as a wireframe.
+- **Filled faces** — fill and shade any mesh with a material (flat or smooth), or keep it as a wireframe.
 - **Two renderers** — the canvas 2D context by default, or WebGL for exact depth and big models.
 - **OBJ files** — load models from a URL or let users drop their own `.obj` files.
 - **Camera** — position, yaw, pitch, field of view, with near-plane clipping so nothing behind the camera is drawn.

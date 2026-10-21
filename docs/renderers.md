@@ -47,7 +47,7 @@ mesh.vertices[0].y += 0.1;
 mesh.dirty = true; // re-sent on the next frame
 ```
 
-Replacing the arrays (`mesh.vertices = [...]`) or adding and removing items is noticed automatically. The canvas renderer reads meshes fresh every frame and ignores `dirty`.
+Replacing the arrays (`mesh.vertices = [...]`) or adding and removing items is noticed automatically. Both renderers clear `dirty` after the next frame. The canvas renderer reads vertices fresh every frame, but caches smooth-shading normals and split faces, so set `dirty` there too when you use those.
 
 ### Far distance
 

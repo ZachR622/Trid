@@ -1,7 +1,8 @@
 import { DEFAULT_FOV, DEFAULT_NEAR } from "../math/transform.js";
 import { clear, edgeSegments } from "./draw.js";
 import { parseColor } from "./color.js";
-import { DEFAULT_LIGHT, DEFAULT_AMBIENT, newell } from "./canvasRenderer.js";
+import { DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./canvasRenderer.js";
+import { newell, cornerNormals, creaseOf } from "./normals.js";
 
 /** Farthest distance drawn by the WebGL renderer, unless the camera sets `far`. */
 export const DEFAULT_FAR = 1000;
@@ -220,6 +221,9 @@ export class WebGLRenderer {
     for (const d of clear2) this._draw(d, view, light, ambient, w, h);
 
     ctx.drawImage(this.canvas, 0, 0);
+
+    // Meshes marked as changed have been sent again
+    for (const obj of scene.objects) if (obj.mesh.dirty) obj.mesh.dirty = false;
   }
 
   /** Frees the graphics card memory. The renderer can't be used afterwards. */
@@ -238,7 +242,7 @@ export class WebGLRenderer {
     const gl = this.gl;
     const isFace = d.kind === "face";
     const prog = isFace ? this._face : this._line;
-    const buf = isFace ? d.geo.faces : d.buf;
+    const buf = isFace ? this._faceBuffer(d.geo, d.obj.mesh, d.mat.shade === false ? null : creaseOf(d.mat.smooth)) : d.buf;
     if (!buf.count) return;
 
     gl.useProgram(prog.program);
@@ -290,22 +294,16 @@ export class WebGLRenderer {
       || geo.edgeList !== mesh.edges || geo.counts !== countsOf(mesh);
     if (!stale) return geo;
 
-    if (geo) for (const b of [geo.faces, geo.outlines, geo.edges]) this._free(b);
+    if (geo) {
+      for (const b of [geo.outlines, geo.edges, ...geo.faceBuffers.values()]) this._free(b);
+    }
     const v = mesh.vertices;
     const faces = mesh.faces ?? [];
 
-    // Faces: every triangle gets its own corners, with its face's normal (flat shading)
-    const tri = [];
+    // Outlines of the faces, each edge once
     const outline = new Set();
     const outlinePairs = [];
     for (const f of faces) {
-      if (f.length < 3) continue;
-      const n = newell(f.map((i) => v[i]));
-      const len = Math.hypot(n.x, n.y, n.z) || 1;
-      const nx = n.x / len, ny = n.y / len, nz = n.z / len;
-      for (let k = 1; k < f.length - 1; k++) {
-        for (const i of [f[0], f[k], f[k + 1]]) tri.push(v[i].x, v[i].y, v[i].z, nx, ny, nz);
-      }
       for (let k = 0; k < f.length; k++) {
         const a = f[k], b = f[(k + 1) % f.length];
         const key = a < b ? a + "," + b : b + "," + a;
@@ -321,13 +319,50 @@ export class WebGLRenderer {
       faceList: mesh.faces,
       edgeList: mesh.edges,
       counts: countsOf(mesh),
-      faces: this._upload(tri, 6),
+      faceBuffers: new Map(), // one per shading mode, built when first needed
       outlines: this._upload(lineData(v, outlinePairs), 8),
       edges: this._upload(lineData(v, edgeSegments(mesh.edges ?? [])), 8),
     };
     this._meshes.set(mesh, geo);
-    mesh.dirty = false;
     return geo;
+  }
+
+  /**
+   * Triangles of a mesh's faces, each corner with its own position and
+   * normal. Flat shading uses the face's normal at every corner; smooth
+   * shading uses the corner normals.
+   */
+  _faceBuffer(geo, mesh, crease) {
+    const key = crease ?? "flat";
+    let buf = geo.faceBuffers.get(key);
+    if (buf) return buf;
+
+    const v = mesh.vertices;
+    const faces = mesh.faces ?? [];
+    const corners = crease ? cornerNormals(mesh, crease) : null;
+    const tri = [];
+    faces.forEach((f, fi) => {
+      if (f.length < 3) return;
+      let ns;
+      if (corners) {
+        ns = corners[fi];
+      } else {
+        const n = newell(f.map((i) => v[i]));
+        const len = Math.hypot(n.x, n.y, n.z) || 1;
+        const flat = { x: n.x / len, y: n.y / len, z: n.z / len };
+        ns = f.map(() => flat);
+      }
+      for (let k = 1; k < f.length - 1; k++) {
+        for (const c of [0, k, k + 1]) {
+          const p = v[f[c]], n = ns[c];
+          tri.push(p.x, p.y, p.z, n.x, n.y, n.z);
+        }
+      }
+    });
+
+    buf = this._upload(tri, 6);
+    geo.faceBuffers.set(key, buf);
+    return buf;
   }
 
   _upload(data, floatsPerVertex) {

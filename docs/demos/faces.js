@@ -15,7 +15,7 @@ export default function (canvas) {
 
   const sphere = scene.add({
     mesh: makeShape("sphere", { r: 0.32 }),
-    material: { fill: "#8ab4f8" },
+    material: { fill: "#8ab4f8", smooth: true },
   });
 
   const box = scene.add({

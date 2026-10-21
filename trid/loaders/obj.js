@@ -1,9 +1,9 @@
 /**
  * Wavefront OBJ loading.
  *
- * Reads vertex positions (`v`), faces (`f`) and polylines (`l`).
- * Everything else (normals, texture coordinates, materials, groups)
- * is ignored for now**.
+ * Reads vertex positions (`v`), normals (`vn`), faces (`f`) and
+ * polylines (`l`). Everything else (texture coordinates, materials,
+ * groups) is ignored for now.
  *
  * OBJ files are right-handed with +Z toward the viewer. Trid is
  * left-handed with the camera looking down +Z, so Z is flipped on
@@ -14,7 +14,10 @@
  * @typedef {Object} ObjMesh
  * @property {{x:number,y:number,z:number}[]} vertices
  * @property {number[][]} edges - Unique edges as [a, b] pairs, ready to draw
- * @property {number[][]} faces - Polygons as vertex index lists (kept for filled rendering later)
+ * @property {number[][]} faces - Polygons as vertex index lists
+ * @property {{x:number,y:number,z:number}[]} [normals] - Normals from the file (`vn`), if any
+ * @property {(number[]|null)[]} [faceNormals] - For each face, the normal index of each corner
+ *   (null when the file gives none for that face). Used by smooth shading.
  *
  * @typedef {Object} ObjOptions
  * @property {number} [fit] - If set, center the model on the origin and scale it
@@ -33,6 +36,8 @@ export function parseOBJ(text, { fit } = {}) {
   const vertices = [];
   const faces = [];
   const lines = [];
+  const normals = [];
+  const faceNormals = []; // per face: normal index of each corner, or null
 
   const src = text.split(/\r?\n/);
 
@@ -46,6 +51,8 @@ export function parseOBJ(text, { fit } = {}) {
 
     if (kind === "v") {
       vertices.push({ x: +(parts[1] ?? 0), y: +(parts[2] ?? 0), z: -(parts[3] ?? 0) });
+    } else if (kind === "vn") {
+      normals.push({ x: +(parts[1] ?? 0), y: +(parts[2] ?? 0), z: -(parts[3] ?? 0) });
     } else if (kind === "f" || kind === "l") {
       // "7", "7/1", "7//3", "7/1/3" all point at vertex 7. Negative = counted from the end.
       const ids = parts.slice(1).map((p) => {
@@ -56,8 +63,18 @@ export function parseOBJ(text, { fit } = {}) {
         }
         return idx;
       });
-      if (kind === "f" && ids.length >= 3) faces.push(ids.reverse());
-      else if (kind === "l" && ids.length >= 2) lines.push(ids);
+      if (kind === "f" && ids.length >= 3) {
+        faces.push(ids.reverse()); // flipping Z flips the winding
+        // "7//3" and "7/1/3": the third number is the corner's normal
+        const ns = parts.slice(1).map((p) => {
+          const s = p.split("/")[2];
+          if (!s) return -1;
+          const i = parseInt(s, 10);
+          const idx = i < 0 ? normals.length + i : i - 1;
+          return idx >= 0 && idx < normals.length ? idx : -1;
+        });
+        faceNormals.push(ns.includes(-1) ? null : ns.reverse());
+      } else if (kind === "l" && ids.length >= 2) lines.push(ids);
     }
   }
 
@@ -84,6 +101,11 @@ export function parseOBJ(text, { fit } = {}) {
   }
 
   const mesh = { vertices, edges, faces };
+  // Normals from the file, used by smooth shading
+  if (faceNormals.some((n) => n)) {
+    mesh.normals = normals;
+    mesh.faceNormals = faceNormals;
+  }
   if (fit != null) fitMesh(mesh, fit);
   return mesh;
 }

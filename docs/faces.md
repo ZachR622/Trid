@@ -18,6 +18,7 @@ scene.add({ mesh: makeShape("cube"), material: { fill: "#E9806E" } });
 | `shade` | `true` | Faces get darker the more they turn away from the light. `false` uses `fill` as-is |
 | `wireframe` | `false` | Also draw each face's outline, with the object's `color` and `lineWidth` |
 | `doubleSided` | `false` | Also draw faces seen from behind. Needed for open shapes, like a flat plane |
+| `smooth` | `false` | Blend the light across faces so curved shapes look round. See [Smooth shading](#smooth-shading) |
 
 A material is a plain object, so several objects can share one:
 
@@ -26,6 +27,29 @@ const metal = { fill: "#9aa0a6" };
 scene.add({ mesh: makeShape("cube"), material: metal });
 scene.add({ mesh: makeShape("sphere"), material: metal, pos: { x: 1, y: 0, z: 0 } });
 ```
+
+## Smooth shading
+
+By default each face has one color, so curved shapes look faceted. `smooth: true` blends the light across faces instead:
+
+```js
+scene.add({ mesh: makeShape("sphere"), material: { fill: "#8ab4f8", smooth: true } });
+```
+
+<Demo src="smooth" hint="Same mesh: flat (left) and smooth: true (right) · drag to orbit" />
+
+Sharp edges stay sharp: faces that meet at more than **60°** aren't blended, so a smooth cube still looks like a cube. Pass an angle to change that limit:
+
+```js
+material: { fill: "#9aa0a6", smooth: 30 }   // only blend faces closer than 30°
+material: { fill: "#9aa0a6", smooth: 180 }  // blend everything
+```
+
+Lower the angle if a model with big flat areas gets odd dark bands; raise it if a low-poly curved shape still looks faceted.
+
+**OBJ files** often store their own smoothing as normals (`vn` lines). With `smooth` on, [loaded models](./obj) use those normals where the file has them, so they look the way they did in your 3D tool.
+
+The canvas renderer shades each triangle with a gradient, and WebGL blends per pixel. Both give the same result.
 
 ## Light
 

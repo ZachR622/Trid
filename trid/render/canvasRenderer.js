@@ -1,6 +1,9 @@
-import { localToWorld, worldToCamera, cameraToScreen, clipNear, DEFAULT_NEAR } from "../math/transform.js";
+import { localToWorld, worldToCamera, cameraToScreen, clipNear, rotateXYZ, DEFAULT_NEAR } from "../math/transform.js";
 import { clear, drawInstance, edgeSegments } from "./draw.js";
 import { parseColor } from "./color.js";
+import { newell, cornerNormals, creaseOf } from "./normals.js";
+
+export { newell };
 
 /** Direction light comes from when the scene doesn't set one: above, left, in front. */
 export const DEFAULT_LIGHT = { x: -0.5, y: 1, z: -0.8 };
@@ -17,6 +20,8 @@ export const DEFAULT_AMBIENT = 0.25;
  * @property {boolean} [shade=true] - Darken faces that turn away from the light
  * @property {boolean} [wireframe=false] - Also draw the face outlines, with the object's `color` and `lineWidth`
  * @property {boolean} [doubleSided=false] - Also draw faces seen from behind
+ * @property {boolean|number} [smooth=false] - Blend the light across faces so curved
+ *   shapes look round. `true` keeps edges sharper than 60° hard; a number sets that angle.
  */
 
 /**
@@ -102,7 +107,25 @@ export class CanvasRenderer {
       const shade = mat.shade !== false;
       const outline = mat.wireframe ? color : null;
 
-      const faces = split ? split.faces : obj.mesh.faces ?? [];
+      // Smooth shading: a normal per face corner (split faces get midpoints' normals by averaging)
+      const crease = shade ? creaseOf(mat.smooth) : null;
+      const corners = crease ? cornerNormals(obj.mesh, crease) : null;
+      const sourceFaces = obj.mesh.faces ?? [];
+      const base = obj.mesh.vertices.length;
+      const normalAt = (F, i) => {
+        if (i < base) return corners[F][sourceFaces[F].indexOf(i)];
+        const [a, b] = split.mids[i - base];
+        const na = normalAt(F, a), nb = normalAt(F, b);
+        return normalize({ x: na.x + nb.x, y: na.y + nb.y, z: na.z + nb.z });
+      };
+      const lightAt = (n, back) => {
+        // Same steps as the vertices: undo the scale, then rotate (keeps normals right on stretched objects)
+        const r = normalize(rotateXYZ({ x: n.x / obj.scale.x, y: n.y / obj.scale.y, z: n.z / obj.scale.z }, obj.rot));
+        const d = (back ? -1 : 1) * (r.x * light.x + r.y * light.y + r.z * light.z);
+        return ambient + (1 - ambient) * Math.max(0, d);
+      };
+
+      const faces = split ? split.faces : sourceFaces;
       for (let f = 0; f < faces.length; f++) {
         const face = faces[f];
         if (face.length < 3) continue;
@@ -117,6 +140,35 @@ export class CanvasRenderer {
         const clipped = clipPolygon(pts, near);
         if (clipped.length < 3) continue;
 
+        // Which edges are real outlines (split faces have extra inner edges); null = all
+        const edges = split && clipped === pts ? split.masks[f] : null;
+
+        if (corners) {
+          const F = split ? split.origins[f] : f;
+          const lit = face.map((i) => lightAt(normalAt(F, i), back));
+          if (clipped === pts) {
+            // One gradient per triangle: brightness changes linearly across a triangle
+            const screen = pts.map(toScreen);
+            const n = face.length;
+            for (let k = 1; k < n - 1; k++) {
+              const tri = [screen[0], screen[k], screen[k + 1]];
+              const fan = (k === 1 ? 1 : 0) | 2 | (k === n - 2 ? 4 : 0);
+              items.push({
+                depth: c.z,
+                poly: tri,
+                fill: this._gradient(ctx, fill, tri, [lit[0], lit[k], lit[k + 1]]),
+                outline, lineWidth,
+                edges: n === 3 ? edges : fan,
+              });
+            }
+            continue;
+          }
+          // Cut by the near plane: use the average brightness
+          const avg = lit.reduce((a, b) => a + b, 0) / lit.length;
+          items.push({ depth: c.z, poly: clipped.map(toScreen), fill: this._shade(ctx, fill, avg), outline, lineWidth, edges });
+          continue;
+        }
+
         let brightness = 1;
         if (shade) {
           const nw = normalize(newell(face.map((i) => world[i])));
@@ -130,8 +182,7 @@ export class CanvasRenderer {
           poly: clipped.map(toScreen),
           fill: this._shade(ctx, fill, brightness),
           outline, lineWidth,
-          // Which edges are real outlines (split faces have extra inner edges); null = all
-          edges: split && clipped === pts ? split.masks[f] : null,
+          edges,
         });
       }
     }
@@ -177,6 +228,9 @@ export class CanvasRenderer {
         ctx.stroke();
       }
     }
+
+    // Meshes marked as changed have been redrawn from their new data
+    for (const obj of scene.objects) if (obj.mesh.dirty) obj.mesh.dirty = false;
   }
 
   /**
@@ -191,7 +245,7 @@ export class CanvasRenderer {
   _split(mesh) {
     const faces0 = mesh.faces ?? [];
     const cached = this._splits.get(mesh);
-    if (cached && cached.source === faces0 && cached.count === faces0.length && cached.size === this.maxFaceSize) {
+    if (cached && !mesh.dirty && cached.source === faces0 && cached.count === faces0.length && cached.size === this.maxFaceSize) {
       return cached;
     }
 
@@ -219,9 +273,10 @@ export class CanvasRenderer {
       return m;
     };
 
-    const faces = [], masks = [];
+    const faces = [], masks = [], origins = [];
     const MAX_DEPTH = 10;
-    for (const face of faces0) {
+    for (let f = 0; f < faces0.length; f++) {
+      const face = faces0[f];
       if (face.length < 3) continue;
       const n = face.length;
       let big = false;
@@ -229,6 +284,7 @@ export class CanvasRenderer {
       if (!big || !(limit > 0)) {
         faces.push(face);
         masks.push(null);
+        origins.push(f);
         continue;
       }
 
@@ -247,6 +303,7 @@ export class CanvasRenderer {
         if (longest <= limit2 || depth >= MAX_DEPTH) {
           faces.push([a, b, c]);
           masks.push(mask);
+          origins.push(f);
           continue;
         }
         // Rotate so the longest edge is a-b, keeping the mask in step
@@ -261,9 +318,34 @@ export class CanvasRenderer {
       }
     }
 
-    const out = { faces, masks, mids, source: faces0, count: faces0.length, size: this.maxFaceSize };
+    const out = { faces, masks, mids, origins, source: faces0, count: faces0.length, size: this.maxFaceSize };
     this._splits.set(mesh, out);
     return out;
+  }
+
+  /**
+   * A fill for a triangle whose corners have different brightness:
+   * a linear gradient along the direction brightness changes fastest.
+   * Exact, because brightness changes linearly across a triangle.
+   */
+  _gradient(ctx, color, tri, lit) {
+    const [p0, p1, p2] = tri;
+    const d1x = p1.x - p0.x, d1y = p1.y - p0.y, d2x = p2.x - p0.x, d2y = p2.y - p0.y;
+    const db1 = lit[1] - lit[0], db2 = lit[2] - lit[0];
+    const det = d1x * d2y - d1y * d2x;
+    const lo = Math.min(...lit), hi = Math.max(...lit);
+    if (Math.abs(det) < 1e-9 || hi - lo < 1 / 255) return this._shade(ctx, color, (lo + hi) / 2);
+
+    // Brightness = lit[0] + g · (point - p0)
+    const gx = (db1 * d2y - db2 * d1y) / det;
+    const gy = (db2 * d1x - db1 * d2x) / det;
+    const g2 = gx * gx + gy * gy;
+    const s = (lo - lit[0]) / g2, e = (hi - lit[0]) / g2;
+    const grad = ctx.createLinearGradient(p0.x + gx * s, p0.y + gy * s, p0.x + gx * e, p0.y + gy * e);
+    const a = this._shade(ctx, color, lo), b = this._shade(ctx, color, hi);
+    grad.addColorStop(0, a.css);
+    grad.addColorStop(1, b.css);
+    return { css: grad, opaque: a.opaque };
   }
 
   /** CSS color for `color` at a brightness, cached (brightness is rounded to 1/255). */
@@ -292,21 +374,6 @@ function withMidpoints(vertices, mids) {
     out.push({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 });
   }
   return out;
-}
-
-/**
- * Normal of a polygon (Newell's method, works for any number of points).
- * Points clockwise as seen from a side give a normal pointing to that side.
- */
-export function newell(pts) {
-  let x = 0, y = 0, z = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i], b = pts[(i + 1) % pts.length];
-    x += (a.y - b.y) * (a.z + b.z);
-    y += (a.z - b.z) * (a.x + b.x);
-    z += (a.x - b.x) * (a.y + b.y);
-  }
-  return { x, y, z };
 }
 
 function centroid(pts) {
