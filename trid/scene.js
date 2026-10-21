@@ -37,8 +37,8 @@ export class Scene {
    * @param {{x:number,y:number,z:number}} [opts.light] - Direction light comes from
    *   (default: above, left and in front)
    * @param {number} [opts.ambient=0.25] - Brightness of faces turned away from the light (0..1)
-   * @param {{ render(scene:Scene): void }} [opts.renderer] - What draws the scene
-   *   (default: a new `CanvasRenderer`)
+   * @param {{ render(scene:Scene): void, dispose?(): void }} [opts.renderer] - What draws the scene
+   *   (default: a new `CanvasRenderer`; or a `WebGLRenderer`)
    */
   constructor(canvas, {
     width,
@@ -151,12 +151,13 @@ export class Scene {
   }
 
   /**
-   * Stops the loop and removes every tool (and its event listeners).
-   * Use it when the scene is no longer needed.
+   * Stops the loop, removes every tool (and its event listeners) and
+   * frees the renderer's resources. Use it when the scene is no longer needed.
    */
   destroy() {
     this.stop();
     this.tools.clear();
+    this.renderer.dispose?.();
   }
 
   /** Whether the frame loop is running. */

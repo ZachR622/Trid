@@ -7,6 +7,7 @@
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
 - **Shapes** — cubes, boxes and spheres out of the box, or any mesh you define as vertices and edges.
 - **Filled faces** — fill and shade any mesh with a material, or keep it as a wireframe.
+- **Two renderers** — the canvas 2D context by default, or WebGL for exact depth and big models.
 - **OBJ files** — load models from a URL or let users drop their own `.obj` files.
 - **Camera** — position, yaw, pitch, field of view, with near-plane clipping so nothing behind the camera is drawn.
 - **Tools** — ready-made orbit and fly cameras, object dragging, hover highlighting and an FPS meter. Writing your own is a plain object with a few methods.
@@ -86,7 +87,7 @@ In your own page, use the body of that function with `const canvas = document.ge
 
 ## Current limits
 
-- Filled faces are sorted far to near (painter's algorithm), so faces that cross each other can be drawn in the wrong order (`maxFaceSize` reduces this). Textures and shaders are planned.
+- With the default canvas renderer, filled faces are sorted far to near, so faces that cross each other can be drawn in the wrong order (`maxFaceSize` reduces this). The [WebGL renderer](./renderers) doesn't have this limit. Textures and shaders are planned.
 - Picking (used by dragging and hover) tests each object's *screen-space bounding box*, so clicking near a sphere's corner still picks it.
 - There is no single entry file or npm package yet: import from the individual modules.
 

@@ -67,11 +67,10 @@ A face can have any number of vertices, but they should all lie in one plane.
 2. Faces seen from behind are dropped (unless `doubleSided`).
 3. Faces are cut at the camera's near plane, so you can fly through objects.
 4. Each face's brightness comes from the angle between it and the light.
-5. All faces, and the lines of wireframe objects, are **sorted far to near** and drawn in that order, so near things cover far ones (the "painter's algorithm").
+5. **Canvas renderer (default):** all faces, and the lines of wireframe objects, are **sorted far to near** and drawn in that order, so near things cover far ones (the "painter's algorithm"). Scenes with only wireframe objects skip all of this and draw exactly as before.
+   **[WebGL renderer](./renderers):** the graphics card keeps the nearest depth of every pixel, so no sorting is needed.
 
-Scenes with only wireframe objects skip all of this and draw exactly as before.
-
-::: warning Limits of sorting
+::: warning Limits of sorting (canvas renderer)
 Sorting whole faces is an approximation. Faces that cross through each other, or a long face next to small ones, can sometimes be drawn in the wrong order: small faces behind a big one poke through as slivers. This shows most on detailed models with big flat areas.
 :::
 
@@ -91,8 +90,8 @@ const scene = new Scene(canvas, {
 
 ## Renderers
 
-All drawing goes through `scene.renderer`, a `CanvasRenderer` by default. A renderer is any object with a `render(scene)` method, so a different one (for example WebGL) can be plugged in later without changing your scene code:
+Everything on this page works with both renderers. The sorting limits above only apply to the default canvas renderer: the [WebGL renderer](./renderers) uses a depth buffer, so faces always overlap correctly, and it's much faster on big models.
 
 ```js
-new Scene(canvas, { renderer: myRenderer });
+new Scene(canvas, { renderer: new WebGLRenderer() });
 ```

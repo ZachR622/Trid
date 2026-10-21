@@ -22,7 +22,7 @@ new Scene(canvas, options?)
 | `camera` | `{ z: -1 }` | The [camera](./concepts#the-camera) object |
 | `light` | `{ x: -0.5, y: 1, z: -0.8 }` | Direction light comes from, for [filled faces](./faces#light) |
 | `ambient` | `0.25` | Brightness of faces turned away from the light (0..1) |
-| `renderer` | a new `CanvasRenderer` | What draws the scene. See [Renderers](./faces#renderers) |
+| `renderer` | a new `CanvasRenderer` | What draws the scene, for example a `WebGLRenderer`. See [Renderers](./renderers) |
 
 The canvas can be resized with CSS (for example `width: 100%`). Drawing stays at `width` × `height`, and tools still get pointer positions in canvas pixels.
 
@@ -100,7 +100,7 @@ The scene's [`ToolManager`](./api#toolmanager). You don't usually need it direct
 
 ### `scene.destroy()`
 
-Stops the loop and removes every tool along with its canvas and keyboard listeners. Call it when the scene is no longer needed, for example before removing the canvas from the page.
+Stops the loop, removes every tool along with its canvas and keyboard listeners, and frees the renderer (for example WebGL memory). Call it when the scene is no longer needed, for example before removing the canvas from the page.
 
 ## Other properties
 

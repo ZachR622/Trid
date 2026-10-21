@@ -12,6 +12,8 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/draw.js` | [`clear`, `point`, `line`, `drawWireframe`, `drawInstance`](#drawing) |
 | `trid/render/loop.js` | [`loop`](#frame-loop) |
 | `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`, `newell`](#canvasrenderer) |
+| `trid/render/webglRenderer.js` | [`WebGLRenderer`, `DEFAULT_FAR`](#webglrenderer) |
+| `trid/render/color.js` | [`parseColor`](#parsecolor) |
 | `trid/render/shapes.js` | [`makeShape`, `scaleMesh`](./shapes) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/tools/index.js` | [Tools](./tools), [`pick`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
@@ -114,6 +116,35 @@ newell(points)
 - **`render(scene)`** clears the canvas and draws every object of the scene. `Scene.render` calls it, then lets tools draw.
 - **`newell(points)`** returns the (not normalized) normal of a polygon. For points clockwise as seen from a side, it points to that side.
 - **`DEFAULT_LIGHT`** is `{ x: -0.5, y: 1, z: -0.8 }` and **`DEFAULT_AMBIENT`** is `0.25`.
+
+### WebGLRenderer
+
+From `trid/render/webglRenderer.js`. Draws with the graphics card and a depth buffer. See [Renderers](./renderers).
+
+```js
+WebGLRenderer.isSupported()
+new WebGLRenderer({ antialias = true } = {})
+renderer.render(scene)
+renderer.dispose()
+renderer.canvas
+```
+
+- **`isSupported()`** says whether the browser can create a WebGL context.
+- The constructor throws an `Error` if WebGL isn't available.
+- **`render(scene)`** draws on the hidden `renderer.canvas`, then copies the picture onto `scene.canvas`.
+- **`dispose()`** frees the graphics card memory; `scene.destroy()` calls it. Safe to call twice.
+- Meshes are uploaded once. Set **`mesh.dirty = true`** after changing a mesh's arrays in place.
+- **`DEFAULT_FAR`** is `1000`, the farthest distance drawn unless the camera sets `far`.
+
+### parseColor
+
+From `trid/render/color.js`.
+
+```js
+parseColor(ctx, color)
+```
+
+Turns any CSS color into `[r, g, b, a]` (0..255, alpha 0..1), using a 2D context to read it. Unknown colors come out black.
 
 ### Frame loop
 

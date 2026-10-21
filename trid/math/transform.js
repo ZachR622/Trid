@@ -13,6 +13,7 @@ import { project, screen } from "./projection.js";
  * @property {number} [pitch=0] - Tilt around X in radians (> 0 looks up)
  * @property {number} [fov=Math.PI/2] - Vertical field of view in radians
  * @property {number} [near=0.01] - Near plane distance; closer geometry is clipped
+ * @property {number} [far=1000] - Far distance; farther geometry isn't drawn (WebGL renderer only)
  */
 
 /** Default vertical field of view (90°). */

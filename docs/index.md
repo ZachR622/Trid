@@ -29,6 +29,10 @@ features:
     title: Filled faces
     details: Fill and shade any mesh with a material, or keep it as a wireframe. Faces are sorted so near ones cover far ones.
     link: /faces
+  - icon: ⚡
+    title: Canvas 2D or WebGL
+    details: Draw with the plain canvas, or switch to WebGL for exact depth and big models. Same scene, same code.
+    link: /renderers
   - icon: 🎥
     title: Tools
     details: Orbit and fly cameras, object dragging, hover highlight and an FPS meter, one line each.

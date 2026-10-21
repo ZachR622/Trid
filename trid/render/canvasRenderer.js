@@ -1,5 +1,6 @@
 import { localToWorld, worldToCamera, cameraToScreen, clipNear, DEFAULT_NEAR } from "../math/transform.js";
 import { clear, drawInstance, edgeSegments } from "./draw.js";
+import { parseColor } from "./color.js";
 
 /** Direction light comes from when the scene doesn't set one: above, left, in front. */
 export const DEFAULT_LIGHT = { x: -0.5, y: 1, z: -0.8 };
@@ -291,25 +292,6 @@ function withMidpoints(vertices, mids) {
     out.push({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 });
   }
   return out;
-}
-
-/**
- * Turns any CSS color into [r, g, b, a], using the canvas to understand it.
- * Unknown colors come out black.
- */
-function parseColor(ctx, color) {
-  ctx.save();
-  ctx.fillStyle = "#000000";
-  ctx.fillStyle = color;
-  const s = String(ctx.fillStyle);
-  ctx.restore();
-
-  if (s[0] === "#") {
-    const hex = s.slice(1);
-    return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)).concat(1);
-  }
-  const nums = (s.match(/[\d.]+/g) ?? []).map(Number);
-  return [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0, nums[3] ?? 1];
 }
 
 /**

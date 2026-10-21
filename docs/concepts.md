@@ -80,6 +80,7 @@ The camera is a plain object where every field is optional:
 | `pitch` | `0` | Tilt around X in radians (> 0 looks up) |
 | `fov` | `Math.PI / 2` | Vertical field of view (90°) |
 | `near` | `0.01` | Near plane: anything closer is clipped |
+| `far` | `1000` | Anything farther isn't drawn ([WebGL renderer](./renderers) only) |
 
 With yaw and pitch at 0, the camera looks down **+Z**. That's why `Scene`'s default camera is `{ z: -1 }`: one unit back from the origin, looking at it.
 
@@ -94,7 +95,7 @@ For every object, every vertex goes through:
 3. **Near clipping**: each edge is clipped against `z = near` (`clipNear`)
 4. **Camera → screen**: perspective projection with the camera's fov and the canvas aspect ratio, then conversion to pixels (`cameraToScreen`)
 
-For wireframe objects, all edges of an object go into one canvas path and are stroked once. Objects with a material go through a few more steps (back faces dropped, shading, sorting far to near); see [Filled faces](./faces#how-it-s-drawn). Each math step is an exported function — see the [API reference](./api#math).
+For wireframe objects, all edges of an object go into one canvas path and are stroked once. Objects with a material go through a few more steps (back faces dropped, shading, sorting far to near); see [Filled faces](./faces#how-it-s-drawn). This describes the default canvas renderer; the [WebGL renderer](./renderers) runs the same math on the graphics card. Each math step is an exported function — see the [API reference](./api#math).
 
 ## The frame loop
 
