@@ -72,8 +72,22 @@ A face can have any number of vertices, but they should all lie in one plane.
 Scenes with only wireframe objects skip all of this and draw exactly as before.
 
 ::: warning Limits of sorting
-Sorting whole faces is an approximation. Faces that cross through each other, or a long face next to small ones, can sometimes be drawn in the wrong order. Splitting big faces into smaller ones helps.
+Sorting whole faces is an approximation. Faces that cross through each other, or a long face next to small ones, can sometimes be drawn in the wrong order: small faces behind a big one poke through as slivers. This shows most on detailed models with big flat areas.
 :::
+
+### Splitting big faces
+
+The canvas renderer can split big faces into small triangles, which sort much better:
+
+```js
+import { CanvasRenderer } from "./trid/render/canvasRenderer.js";
+
+const scene = new Scene(canvas, {
+  renderer: new CanvasRenderer({ maxFaceSize: 0.05 }),
+});
+```
+
+`maxFaceSize` is a fraction of each mesh's size: `0.05` splits any face longer than 5% of its mesh. Smaller values fix more but draw more faces, so start around `0.05` and lower it only if slivers remain. The split is computed once per mesh and reused, and outlines (`wireframe: true`) still follow the original faces.
 
 ## Renderers
 

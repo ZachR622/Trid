@@ -86,7 +86,7 @@ In your own page, use the body of that function with `const canvas = document.ge
 
 ## Current limits
 
-- Filled faces are sorted far to near (painter's algorithm), so faces that cross each other can be drawn in the wrong order. Textures and shaders are planned.
+- Filled faces are sorted far to near (painter's algorithm), so faces that cross each other can be drawn in the wrong order (`maxFaceSize` reduces this). Textures and shaders are planned.
 - Picking (used by dragging and hover) tests each object's *screen-space bounding box*, so clicking near a sphere's corner still picks it.
 - There is no single entry file or npm package yet: import from the individual modules.
 

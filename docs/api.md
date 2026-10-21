@@ -105,11 +105,12 @@ edgeSegments(edges)
 From `trid/render/canvasRenderer.js`. The default `scene.renderer`: it draws wireframes and [filled faces](./faces) with the canvas 2D context.
 
 ```js
-new CanvasRenderer()
+new CanvasRenderer({ maxFaceSize = null } = {})
 renderer.render(scene)
 newell(points)
 ```
 
+- **`maxFaceSize`** splits faces bigger than that fraction of their mesh's size into triangles, so they sort better (see [Splitting big faces](./faces#splitting-big-faces)). Off by default.
 - **`render(scene)`** clears the canvas and draws every object of the scene. `Scene.render` calls it, then lets tools draw.
 - **`newell(points)`** returns the (not normalized) normal of a polygon. For points clockwise as seen from a side, it points to that side.
 - **`DEFAULT_LIGHT`** is `{ x: -0.5, y: 1, z: -0.8 }` and **`DEFAULT_AMBIENT`** is `0.25`.
