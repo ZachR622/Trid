@@ -62,7 +62,7 @@ export function line(ctx, p1, p2, color, width = 4) {
  * @param {number[][]} edges - Edge definitions using vertex indices
  * @returns {Generator<[number, number]>} Index pairs to connect
  */
-function* edgeSegments(edges) {
+export function* edgeSegments(edges) {
   for (const e of edges) {
     const closed = e.length > 2;
     const count = closed ? e.length : e.length - 1;

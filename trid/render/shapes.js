@@ -36,6 +36,15 @@ function rectPrismWire(w = 0.6, h = 0.3, d = 0.4) {
       [2, 6],
       [3, 7],
     ],
+    // Clockwise as seen from outside
+    faces: [
+      [4, 7, 6, 5], // front (-z)
+      [0, 1, 2, 3], // back (+z)
+      [0, 4, 5, 1], // top
+      [3, 2, 6, 7], // bottom
+      [0, 3, 7, 4], // right
+      [1, 5, 6, 2], // left
+    ],
   };
 }
 
@@ -94,7 +103,19 @@ function sphereWire(radius = 0.35, rings = 10, segments = 16) {
     edges.push([lastRing + s, top]);
   }
 
-  return { vertices, edges };
+  // Faces, clockwise as seen from outside: triangles at the poles, quads between rings
+  const faces = [];
+  for (let s = 0; s < segments; s++) {
+    const s1 = (s + 1) % segments;
+    faces.push([bottom, 1 + s, 1 + s1]);
+    for (let r = 0; r < rings - 2; r++) {
+      const a = 1 + r * segments, b = a + segments;
+      faces.push([a + s, b + s, b + s1, a + s1]);
+    }
+    faces.push([top, lastRing + s1, lastRing + s]);
+  }
+
+  return { vertices, edges, faces };
 }
 
 /**

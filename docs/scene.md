@@ -20,6 +20,9 @@ new Scene(canvas, options?)
 | `color` | `"#ffffff"` | Default wireframe color |
 | `lineWidth` | `3` | Default wireframe thickness |
 | `camera` | `{ z: -1 }` | The [camera](./concepts#the-camera) object |
+| `light` | `{ x: -0.5, y: 1, z: -0.8 }` | Direction light comes from, for [filled faces](./faces#light) |
+| `ambient` | `0.25` | Brightness of faces turned away from the light (0..1) |
+| `renderer` | a new `CanvasRenderer` | What draws the scene. See [Renderers](./faces#renderers) |
 
 The canvas can be resized with CSS (for example `width: 100%`). Drawing stays at `width` × `height`, and tools still get pointer positions in canvas pixels.
 
@@ -68,7 +71,7 @@ Read-only: `true` while the loop is running.
 
 ### `scene.render()`
 
-Draws a single frame: clears the canvas, draws every object, then lets tools draw on top. Use it without `start` for static images, or to redraw only when something changes.
+Draws a single frame: the renderer clears the canvas and draws every object, then tools draw on top. Use it without `start` for static images, or to redraw only when something changes.
 
 <Demo src="loop" hint="Click to pause / resume" />
 
@@ -109,4 +112,6 @@ These can all be changed at any time and take effect on the next frame:
 | `background` | Clear color |
 | `color` | Default wireframe color |
 | `lineWidth` | Default wireframe thickness |
+| `light`, `ambient` | Lighting for [filled faces](./faces#light) |
+| `renderer` | What draws the scene |
 | `canvas`, `ctx` | The canvas and its 2D context (read them, don't replace them) |

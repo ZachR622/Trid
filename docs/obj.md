@@ -48,7 +48,7 @@ input.addEventListener("change", async () => {
 
 - **Vertices** (`v`), **faces** (`f`) and **lines** (`l`). Normals, texture coordinates, materials and groups are skipped for now.
 - Faces become **edges**, and an edge shared by two faces is drawn once.
-- The mesh also keeps its **`faces`** (lists of vertex indices), ready for filled rendering later.
+- The mesh also keeps its **`faces`**, so a model can be [filled and shaded](./faces): `scene.add({ mesh, material: { fill: "#8ab4f8" } })`.
 - **Z is flipped** on load. OBJ files are right-handed and Trid is [left-handed](./concepts), so without the flip models would come out mirrored.
 - Faces or lines pointing at a vertex that doesn't exist throw an `Error` with the line number.
 

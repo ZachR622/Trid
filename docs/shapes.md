@@ -12,7 +12,7 @@ import { makeShape, scaleMesh } from "./trid/render/shapes.js";
 
 ## `makeShape(kind, opts?)`
 
-Returns a new mesh centered on the origin. `kind` is not case-sensitive. An unknown kind throws an `Error`.
+Returns a new mesh centered on the origin, with `vertices`, `edges` and `faces` (so it can be drawn as a wireframe or [filled](./faces)). `kind` is not case-sensitive. An unknown kind throws an `Error`.
 
 | Kind | Options (defaults) | Result |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ Every object sharing that mesh changes too. To stretch a single object, change i
 
 ## Custom meshes
 
-A mesh is just `{ vertices, edges }`. Edges with 2 indices are segments; edges with 3 or more are closed loops. See [Meshes](./concepts#meshes).
+A mesh is just `{ vertices, edges }`, plus `faces` if you want to [fill it](./faces#faces-in-a-mesh). Edges with 2 indices are segments; edges with 3 or more are closed loops. See [Meshes](./concepts#meshes).
 
 ### Example: a floor grid
 

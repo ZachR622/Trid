@@ -1,4 +1,4 @@
-import { clear, drawInstance } from "./render/draw.js";
+import { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./render/canvasRenderer.js";
 import { loop } from "./render/loop.js";
 import { ToolManager } from "./tools/manager.js";
 
@@ -12,7 +12,9 @@ import { ToolManager } from "./tools/manager.js";
  * - `scale` → { x: 1, y: 1, z: 1 }
  *
  * Each object can also set its own `color` and `lineWidth`;
- * otherwise the scene's defaults are used.
+ * otherwise the scene's defaults are used. An object with a
+ * `material` draws its mesh's faces (filled and shaded) instead of
+ * only lines: `{ mesh, material: { fill: "#E9806E" } }`.
  *
  * Tools (camera controls, dragging, overlays...) are added with
  * `use`. See `trid/tools/`.
@@ -32,6 +34,11 @@ export class Scene {
    * @param {string} [opts.color="#ffffff"] - Default wireframe color
    * @param {number} [opts.lineWidth=3] - Default wireframe width
    * @param {import("./math/transform.js").Camera} [opts.camera={ z: -1 }] - Camera
+   * @param {{x:number,y:number,z:number}} [opts.light] - Direction light comes from
+   *   (default: above, left and in front)
+   * @param {number} [opts.ambient=0.25] - Brightness of faces turned away from the light (0..1)
+   * @param {{ render(scene:Scene): void }} [opts.renderer] - What draws the scene
+   *   (default: a new `CanvasRenderer`)
    */
   constructor(canvas, {
     width,
@@ -40,6 +47,9 @@ export class Scene {
     color = "#ffffff",
     lineWidth = 3,
     camera = { z: -1 },
+    light = { ...DEFAULT_LIGHT },
+    ambient = DEFAULT_AMBIENT,
+    renderer = new CanvasRenderer(),
   } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
@@ -50,6 +60,9 @@ export class Scene {
     this.color = color;
     this.lineWidth = lineWidth;
     this.camera = camera;
+    this.light = light;
+    this.ambient = ambient;
+    this.renderer = renderer;
     this.objects = [];
     this.tools = new ToolManager(this);
 
@@ -103,21 +116,12 @@ export class Scene {
   }
 
   /**
-   * Clears the canvas, draws every object once, then lets tools
-   * draw on top.
+   * Clears the canvas, draws every object once (through the
+   * renderer), then lets tools draw on top.
    */
   render() {
-    const { ctx, canvas } = this;
-    clear(ctx, canvas.width, canvas.height, this.background);
-
-    for (const obj of this.objects) {
-      drawInstance(
-        ctx, obj, this.camera, canvas.width, canvas.height,
-        obj.color ?? this.color, obj.lineWidth ?? this.lineWidth
-      );
-    }
-
-    this.tools.draw(ctx);
+    this.renderer.render(this);
+    this.tools.draw(this.ctx);
   }
 
   /**

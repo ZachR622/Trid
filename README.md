@@ -10,12 +10,13 @@
 
 Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools, all in plain ES modules you can drop next to your page.
 
-> **Status:** early. Objects are drawn as wireframes for now; filled faces, shading and shaders are on the way.
+> **Status:** early. Objects can be wireframes or filled and shaded; textures and shaders are on the way.
 
 ## Features
 
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
 - **Shapes** — cubes, boxes and spheres built in, or any mesh you define as vertices and edges.
+- **Filled faces** — give an object a `material` to fill and shade its faces, with one directional light.
 - **OBJ files** — load models from a URL, or let users drop their own `.obj` files on the canvas.
 - **Camera** — position, yaw, pitch and field of view, with near-plane clipping.
 - **Tools** — orbit and fly cameras, object dragging, hover highlight, an FPS meter and an OBJ uploader, one line each. Writing your own is a plain object with a few methods.
@@ -44,7 +45,9 @@ import { makeShape } from "./trid/render/shapes.js";
 import { OrbitCamera } from "./trid/tools/index.js";
 
 const scene = new Scene(document.getElementById("canvas"), { width: 800, height: 400 });
-const cube = scene.add({ mesh: makeShape("cube"), color: "#E9806E" });
+const cube = scene.add({ mesh: makeShape("cube"), color: "#E9806E" });              // wireframe
+const ball = scene.add({ mesh: makeShape("sphere"), material: { fill: "#8ab4f8" } }); // filled and shaded
+ball.pos.x = 0.8;
 
 scene.use(new OrbitCamera()); // drag to orbit, scroll to zoom
 scene.start((dt) => (cube.rot.y += dt));
@@ -87,7 +90,7 @@ See [`docs/README.md`](docs/README.md) for building and editing the docs.
 
 ## Roadmap
 
-- **Filled faces and shading** — sorted faces, backface culling, flat shading, then shaders
+- **Textures and shaders** — images on faces, custom face colors, and a WebGL renderer
 - **More shapes** — cylinder, cone, torus, plane/grid
 - **More tools** — rotate/scale objects with the mouse, selection outline
 - **Parent/child transforms** — e.g. a moon orbiting a planet

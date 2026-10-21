@@ -4,7 +4,8 @@ import { pick } from "./helpers.js";
  * Changes an object's color while the pointer is over it.
  *
  * The object's own `color` is put back when the pointer leaves it,
- * when it leaves the canvas, or when the tool is removed.
+ * when it leaves the canvas, or when the tool is removed. Objects
+ * with a `material` get their fill changed too.
  * Set `obj.hoverable = false` to make an object ignore this tool.
  */
 export class HoverHighlight {
@@ -23,6 +24,7 @@ export class HoverHighlight {
     /** The object under the pointer, or null. */
     this.hovered = null;
     this._savedColor = undefined;
+    this._savedMaterial = undefined;
   }
 
   pointerMove(e, scene) {
@@ -43,12 +45,16 @@ export class HoverHighlight {
     if (this.hovered) {
       if (this._savedColor === undefined) delete this.hovered.color;
       else this.hovered.color = this._savedColor;
+      if (this._savedMaterial) this.hovered.material = this._savedMaterial;
     }
 
     this.hovered = obj;
     if (obj) {
       this._savedColor = obj.color;
       obj.color = this.color;
+      // Swap in a copy, so other objects sharing the material don't change
+      this._savedMaterial = obj.material;
+      if (obj.material) obj.material = { ...obj.material, fill: this.color };
     }
 
     this.onChange?.(obj);

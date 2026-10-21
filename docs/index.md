@@ -25,6 +25,10 @@ features:
     title: Shapes & meshes
     details: Cubes, boxes and spheres built in, any mesh you define yourself, or models loaded from .obj files.
     link: /shapes
+  - icon: 🎨
+    title: Filled faces
+    details: Fill and shade any mesh with a material, or keep it as a wireframe. Faces are sorted so near ones cover far ones.
+    link: /faces
   - icon: 🎥
     title: Tools
     details: Orbit and fly cameras, object dragging, hover highlight and an FPS meter, one line each.

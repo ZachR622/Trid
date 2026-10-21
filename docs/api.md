@@ -11,6 +11,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/math/projection.js` | [`project`, `screen`](#projection) |
 | `trid/render/draw.js` | [`clear`, `point`, `line`, `drawWireframe`, `drawInstance`](#drawing) |
 | `trid/render/loop.js` | [`loop`](#frame-loop) |
+| `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`, `newell`](#canvasrenderer) |
 | `trid/render/shapes.js` | [`makeShape`, `scaleMesh`](./shapes) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/tools/index.js` | [Tools](./tools), [`pick`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
@@ -89,13 +90,29 @@ point(ctx, p, color, size = 20)
 line(ctx, p1, p2, color, width = 4)
 drawWireframe(ctx, points2, edges, color, width = 4)
 drawInstance(ctx, inst, camera, w, h, color, lineWidth = 3)
+edgeSegments(edges)
 ```
 
 - **`clear`** fills the whole canvas with `color`.
 - **`point`** draws a filled square centered on screen point `p`. Useful for debugging vertices.
 - **`line`** draws one line between two screen points.
 - **`drawWireframe`** connects already-projected screen points using index edges (2 indices = segment, 3+ = closed loop). Everything is stroked as one path. No clipping is done.
-- **`drawInstance`** is the main drawing call: it transforms an object's mesh, clips every edge against the camera's near plane, projects it and strokes it as one path. `Scene.render` uses it for each object.
+- **`drawInstance`** is the main drawing call: it transforms an object's mesh, clips every edge against the camera's near plane, projects it and strokes it as one path. The canvas renderer uses it for scenes with only wireframe objects.
+- **`edgeSegments`** turns edge definitions into `[a, b]` index pairs (a generator), expanding closed loops.
+
+### CanvasRenderer
+
+From `trid/render/canvasRenderer.js`. The default `scene.renderer`: it draws wireframes and [filled faces](./faces) with the canvas 2D context.
+
+```js
+new CanvasRenderer()
+renderer.render(scene)
+newell(points)
+```
+
+- **`render(scene)`** clears the canvas and draws every object of the scene. `Scene.render` calls it, then lets tools draw.
+- **`newell(points)`** returns the (not normalized) normal of a polygon. For points clockwise as seen from a side, it points to that side.
+- **`DEFAULT_LIGHT`** is `{ x: -0.5, y: 1, z: -0.8 }` and **`DEFAULT_AMBIENT`** is `0.25`.
 
 ### Frame loop
 

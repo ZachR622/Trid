@@ -104,7 +104,7 @@ Click an object to pick it, then drag to move it. The object follows the cursor 
 
 ## HoverHighlight
 
-Recolors the object under the pointer, and puts its own color back when the pointer leaves it, leaves the canvas, or the tool is removed.
+Recolors the object under the pointer, and puts its own color back when the pointer leaves it, leaves the canvas, or the tool is removed. Filled objects get their fill recolored too; their `material` is swapped for a copy, so objects sharing it don't change.
 
 | Option | Default | Meaning |
 | --- | --- | --- |

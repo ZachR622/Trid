@@ -36,6 +36,7 @@ export default defineConfig({
         items: [
           { text: "Scene", link: "/scene" },
           { text: "Shapes & meshes", link: "/shapes" },
+          { text: "Filled faces", link: "/faces" },
           { text: "Loading OBJ files", link: "/obj" },
           { text: "Tools", link: "/tools" },
           { text: "Writing a tool", link: "/custom-tools" },

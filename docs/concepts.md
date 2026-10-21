@@ -18,10 +18,11 @@ Units are arbitrary. Angles are always in **radians** (`Math.PI` is half a turn)
 
 ## Meshes
 
-A mesh is a plain object with two arrays:
+A mesh is a plain object with these arrays:
 
 - `vertices` — points in the mesh's own (local) space: `{ x, y, z }`
 - `edges` — lines to draw, as arrays of *vertex indices*
+- `faces` (optional) — polygons to fill, as arrays of vertex indices. Only used by objects with a [material](./faces)
 
 An edge with **2 indices** is a single segment. An edge with **3 or more** is a closed loop: the last index connects back to the first.
 
@@ -52,6 +53,7 @@ An **object** places a mesh in the world. It's a plain object too:
 | `scale` | `{ x: 1, y: 1, z: 1 }` | Scale along each axis |
 | `color` | scene's color | Any CSS color |
 | `lineWidth` | scene's lineWidth | Line thickness in pixels |
+| `material` | none | Fill and shade the mesh's faces instead of drawing lines. See [Filled faces](./faces) |
 | `draggable` | `true` | Set `false` to ignore [`DragObject`](./tools#dragobject) |
 | `hoverable` | `true` | Set `false` to ignore [`HoverHighlight`](./tools#hoverhighlight) |
 
@@ -92,7 +94,7 @@ For every object, every vertex goes through:
 3. **Near clipping**: each edge is clipped against `z = near` (`clipNear`)
 4. **Camera → screen**: perspective projection with the camera's fov and the canvas aspect ratio, then conversion to pixels (`cameraToScreen`)
 
-All edges of an object go into one canvas path and are stroked once. Each step is an exported function — see the [API reference](./api#math).
+For wireframe objects, all edges of an object go into one canvas path and are stroked once. Objects with a material go through a few more steps (back faces dropped, shading, sorting far to near); see [Filled faces](./faces#how-it-s-drawn). Each math step is an exported function — see the [API reference](./api#math).
 
 ## The frame loop
 
