@@ -3,7 +3,7 @@
 Effects change how a material looks: a cartoon look, a glowing edge, a color gradient, fog... Add them to a material as a list. They're applied in order, each one starting from the color the previous one produced.
 
 ```js
-import { toon, rim, unlit, gradient, fog } from "./trid/render/effects.js";
+import { toon, rim, edgeGlow, unlit, gradient, fog } from "./trid/render/effects.js";
 
 scene.add({
   mesh: makeShape("sphere"),
@@ -11,7 +11,7 @@ scene.add({
 });
 ```
 
-<Demo src="effects" hint="toon · rim (animated) · gradient · custom stripes + rim · drag to orbit" />
+<Demo src="effects" hint="toon · rim (animated) · gradient + edgeGlow · custom stripes + rim · drag to orbit" />
 
 <<< @/demos/effects.js
 
@@ -25,9 +25,14 @@ Effects are small shaders: with the [WebGL renderer](./renderers) they run for e
 | --- | --- | --- |
 | `toon()` | `steps` (3) | Cartoon look: the light comes in a few hard steps |
 | `rim()` | `color` (`"#ffffff"`), `power` (2), `strength` (1) | A glow along the edges, where the surface turns away from you. Higher `power` = thinner glow |
+| `edgeGlow()` | `color` (`"#ffe08a"`), `width` (0.08), `strength` (1) | A glow along the border of each face. Made for boxy shapes, where `rim` barely shows. `width` is a fraction of the face. Uses texture coordinates; WebGL only |
 | `unlit()` | — | Ignores the light: the fill color everywhere, like it glows |
 | `gradient()` | `from`, `to`, `axis` (`"y"`), `min` (-0.5), `max` (0.5), `space` (`"local"`), `lit` (`true`) | Color changes along an axis. `space: "world"` measures in the world instead of the mesh |
 | `fog()` | `near` (1), `far` (5), `color` (the background) | Fades into a color with distance from the camera |
+
+::: tip rim or edgeGlow?
+`rim` lights up where the surface turns away from you, so it needs **curved** shapes: on a sphere it draws a glowing outline. A cube's faces are flat, so each face is either all glow or none. For boxes, crates and other flat-faced shapes, use `edgeGlow`.
+:::
 
 Order matters: `[toon(), rim()]` draws a cartoon object with a glowing edge, while `[rim(), unlit()]` loses the rim (`unlit` replaces the color).
 
@@ -48,6 +53,7 @@ scene.start((dt, time) => {
 | --- | --- |
 | `toon` | `uSteps` |
 | `rim` | `uRimColor`, `uPower`, `uStrength` |
+| `edgeGlow` | `uGlowColor`, `uWidth`, `uStrength` |
 | `gradient` | `uFrom`, `uTo`, `uMin`, `uMax`, `uLit` |
 | `fog` | `uNearFog`, `uFarFog`, `uFogColor` |
 

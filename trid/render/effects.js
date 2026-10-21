@@ -107,6 +107,32 @@ vec4 effect(vec4 color, Surface s) {
   };
 }
 
+/**
+ * A glow along the border of each face, using the texture coordinates
+ * (0 and 1 are a face's edges). Made for boxy shapes, where `rim` barely
+ * shows. Needs texture coordinates: built-in shapes have them.
+ *
+ * WebGL only: the canvas renderer runs effects once per face, at its center,
+ * which is never near a border.
+ *
+ * @param {Object} [opts]
+ * @param {string} [opts.color="#ffe08a"] - Glow color
+ * @param {number} [opts.width=0.08] - Thickness, as a fraction of the face (0.08 = 8%)
+ * @param {number} [opts.strength=1] - How bright the glow is
+ */
+export function edgeGlow({ color = "#ffe08a", width = 0.08, strength = 1 } = {}) {
+  return {
+    name: "edgeGlow",
+    uniforms: { uGlowColor: color, uWidth: width, uStrength: strength },
+    glsl: `
+vec4 effect(vec4 color, Surface s) {
+  vec2 d = min(fract(s.uv), 1.0 - fract(s.uv)); // distance to the nearest face border
+  float edge = 1.0 - smoothstep(0.0, uWidth, min(d.x, d.y));
+  return vec4(color.rgb + uGlowColor.rgb * edge * uStrength, color.a);
+}`,
+  };
+}
+
 /** Ignores the light: the object shows its fill color everywhere, like it glows. */
 export function unlit() {
   return {
