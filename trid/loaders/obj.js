@@ -1,8 +1,8 @@
 /**
  * Wavefront OBJ loading.
  *
- * Reads vertex positions (`v`), normals (`vn`), faces (`f`) and
- * polylines (`l`). Everything else (texture coordinates, materials,
+ * Reads vertex positions (`v`), texture coordinates (`vt`), normals
+ * (`vn`), faces (`f`) and polylines (`l`). Everything else (materials,
  * groups) is ignored for now.
  *
  * OBJ files are right-handed with +Z toward the viewer. Trid is
@@ -18,6 +18,9 @@
  * @property {{x:number,y:number,z:number}[]} [normals] - Normals from the file (`vn`), if any
  * @property {(number[]|null)[]} [faceNormals] - For each face, the normal index of each corner
  *   (null when the file gives none for that face). Used by smooth shading.
+ * @property {{u:number,v:number}[]} [uvs] - Texture coordinates from the file (`vt`), if any
+ * @property {(number[]|null)[]} [faceUVs] - For each face, the texture coordinate index of
+ *   each corner (null when the file gives none for that face). Used by textures.
  *
  * @typedef {Object} ObjOptions
  * @property {number} [fit] - If set, center the model on the origin and scale it
@@ -38,6 +41,8 @@ export function parseOBJ(text, { fit } = {}) {
   const lines = [];
   const normals = [];
   const faceNormals = []; // per face: normal index of each corner, or null
+  const uvs = [];
+  const faceUVs = []; // per face: texture coordinate index of each corner, or null
 
   const src = text.split(/\r?\n/);
 
@@ -51,6 +56,8 @@ export function parseOBJ(text, { fit } = {}) {
 
     if (kind === "v") {
       vertices.push({ x: +(parts[1] ?? 0), y: +(parts[2] ?? 0), z: -(parts[3] ?? 0) });
+    } else if (kind === "vt") {
+      uvs.push({ u: +(parts[1] ?? 0), v: +(parts[2] ?? 0) });
     } else if (kind === "vn") {
       normals.push({ x: +(parts[1] ?? 0), y: +(parts[2] ?? 0), z: -(parts[3] ?? 0) });
     } else if (kind === "f" || kind === "l") {
@@ -74,6 +81,15 @@ export function parseOBJ(text, { fit } = {}) {
           return idx >= 0 && idx < normals.length ? idx : -1;
         });
         faceNormals.push(ns.includes(-1) ? null : ns.reverse());
+        // "7/1" and "7/1/3": the second number is the corner's texture coordinate
+        const ts = parts.slice(1).map((p) => {
+          const s = p.split("/")[1];
+          if (!s) return -1;
+          const i = parseInt(s, 10);
+          const idx = i < 0 ? uvs.length + i : i - 1;
+          return idx >= 0 && idx < uvs.length ? idx : -1;
+        });
+        faceUVs.push(ts.includes(-1) ? null : ts.reverse());
       } else if (kind === "l" && ids.length >= 2) lines.push(ids);
     }
   }
@@ -105,6 +121,11 @@ export function parseOBJ(text, { fit } = {}) {
   if (faceNormals.some((n) => n)) {
     mesh.normals = normals;
     mesh.faceNormals = faceNormals;
+  }
+  // Texture coordinates from the file
+  if (faceUVs.some((t) => t)) {
+    mesh.uvs = uvs;
+    mesh.faceUVs = faceUVs;
   }
   if (fit != null) fitMesh(mesh, fit);
   return mesh;

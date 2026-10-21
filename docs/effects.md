@@ -77,7 +77,8 @@ The `glsl` code must define **`vec4 effect(vec4 color, Surface s)`**: it gets th
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `s.base` | `vec4` | The material's fill color |
+| `s.base` | `vec4` | The material's fill color, times the [texture](./textures)'s color |
+| `s.uv` | `vec2` | Texture coordinates (0, 0 when the mesh has none) |
 | `s.normal` | `vec3` | Unit normal in world space, facing the camera's side |
 | `s.position` | `vec3` | World position |
 | `s.local` | `vec3` | Position in the mesh's own space (moves with the object) |

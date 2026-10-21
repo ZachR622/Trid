@@ -2,6 +2,7 @@ import { localToWorld, worldToCamera, cameraToScreen, clipNear, rotateXYZ, DEFAU
 import { clear, drawInstance, edgeSegments } from "./draw.js";
 import { parseColor } from "./color.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
+import { textureReady, textureSize, textureIsLive } from "../loaders/texture.js";
 
 export { newell };
 
@@ -22,6 +23,9 @@ export const DEFAULT_AMBIENT = 0.25;
  * @property {boolean} [doubleSided=false] - Also draw faces seen from behind
  * @property {boolean|number} [smooth=false] - Blend the light across faces so curved
  *   shapes look round. `true` keeps edges sharper than 60° hard; a number sets that angle.
+ * @property {CanvasImageSource} [texture] - Image drawn on the faces (needs texture coordinates:
+ *   built-in shapes and OBJ files with `vt` have them). `fill` tints it (default white).
+ * @property {boolean} [pixelated=false] - Keep texture pixels sharp instead of smoothing them
  * @property {Object[]} [effects] - Effects applied in order, like `[toon(), rim()]`.
  *   See trid/render/effects.js. The canvas renderer runs them once per face.
  */
@@ -58,6 +62,9 @@ export class CanvasRenderer {
     this._splits = new WeakMap();
     this._colors = new Map();
     this._start = performance.now();
+    this._patterns = new Map(); // texture source → canvas pattern
+    this._warned = new WeakSet();
+    this._frame = 0;
   }
 
   /**
@@ -69,6 +76,7 @@ export class CanvasRenderer {
     const { ctx, canvas, camera } = scene;
     const w = canvas.width, h = canvas.height;
     clear(ctx, w, h, scene.background);
+    this._frame++;
 
     // Wireframes only: nothing to sort
     if (!scene.objects.some((o) => o.material)) {
@@ -111,7 +119,7 @@ export class CanvasRenderer {
         continue;
       }
 
-      const fill = mat.fill ?? scene.color;
+      const fill = mat.fill ?? (mat.texture ? "#ffffff" : scene.color);
       const shade = mat.shade !== false;
       const outline = mat.wireframe ? color : null;
 
@@ -130,6 +138,30 @@ export class CanvasRenderer {
         // Same steps as the vertices: undo the scale, then rotate (keeps normals right on stretched objects)
         const r = normalize(rotateXYZ({ x: n.x / obj.scale.x, y: n.y / obj.scale.y, z: n.z / obj.scale.z }, obj.rot));
         const d = (back ? -1 : 1) * (r.x * light.x + r.y * light.y + r.z * light.z);
+        return ambient + (1 - ambient) * Math.max(0, d);
+      };
+
+      // Textures: each triangle is filled with the image, mapped by its corners' texture coordinates
+      const meshUVs = obj.mesh.uvs, faceUVs = obj.mesh.faceUVs;
+      let tex = null;
+      if (mat.texture && textureReady(mat.texture)) {
+        if (faceUVs && meshUVs) tex = mat.texture;
+        else if (!this._warned.has(obj.mesh)) {
+          this._warned.add(obj.mesh);
+          console.warn("Trid: this mesh has no texture coordinates (uvs / faceUVs), so its texture isn't drawn");
+        }
+      }
+      const uvAt = (F, i) => {
+        const t = faceUVs?.[F];
+        if (!t || !meshUVs) return null;
+        if (i < base) return meshUVs[t[sourceFaces[F].indexOf(i)]];
+        const [a, b] = split.mids[i - base];
+        const ta = uvAt(F, a), tb = uvAt(F, b);
+        return ta && tb ? { u: (ta.u + tb.u) / 2, v: (ta.v + tb.v) / 2 } : null;
+      };
+      const flatLight = (face, back) => {
+        const nw = normalize(newell(face.map((i) => world[i])));
+        const d = (back ? -1 : 1) * (nw.x * light.x + nw.y * light.y + nw.z * light.z);
         return ambient + (1 - ambient) * Math.max(0, d);
       };
 
@@ -156,6 +188,31 @@ export class CanvasRenderer {
         // Which edges are real outlines (split faces have extra inner edges); null = all
         const edges = split && clipped === pts ? split.masks[f] : null;
 
+        if (tex && clipped === pts) {
+          const F = split ? split.origins[f] : f;
+          const ts = face.map((i) => uvAt(F, i));
+          if (ts.every(Boolean)) {
+            let lit;
+            if (!shade) lit = face.map(() => 1);
+            else if (corners) lit = face.map((i) => lightAt(normalAt(F, i), back));
+            else lit = face.map(() => flatLight(face, back));
+            const screen = pts.map(toScreen);
+            const n = face.length;
+            for (let k = 1; k < n - 1; k++) {
+              const fan = (k === 1 ? 1 : 0) | 2 | (k === n - 2 ? 4 : 0);
+              items.push({
+                depth: c.z,
+                poly: [screen[0], screen[k], screen[k + 1]],
+                texture: { src: tex, uvs: [ts[0], ts[k], ts[k + 1]], pixelated: !!mat.pixelated, tint: fill },
+                lit: [lit[0], lit[k], lit[k + 1]],
+                outline, lineWidth,
+                edges: n === 3 ? edges : fan,
+              });
+            }
+            continue;
+          }
+        }
+
         if (effects) {
           // Normal: the face's own, or the average of its corners when smooth
           let nw;
@@ -177,6 +234,7 @@ export class CanvasRenderer {
           const s = {
             base, normal: nw, position, local: centroid(face.map((i) => verts[i])),
             view: normalize(toCam), lightDir: light, diffuse, light: lit, ambient,
+            uv: centerUV(face.map((i) => uvAt(split ? split.origins[f] : f, i))),
             depth: Math.hypot(toCam.x, toCam.y, toCam.z), time, background,
             rgba: (v) => (typeof v === "string" ? this._rgba(ctx, v) : Array.isArray(v) ? v : [v.x, v.y, v.z, 1]),
           };
@@ -249,11 +307,21 @@ export class CanvasRenderer {
         continue;
       }
 
-      ctx.moveTo(it.poly[0].x, it.poly[0].y);
-      for (let k = 1; k < it.poly.length; k++) ctx.lineTo(it.poly[k].x, it.poly[k].y);
-      ctx.closePath();
-      ctx.fillStyle = it.fill.css;
-      ctx.fill();
+      if (it.texture) {
+        this._drawTextured(ctx, it);
+        if (it.outline) {
+          ctx.beginPath();
+          ctx.moveTo(it.poly[0].x, it.poly[0].y);
+          for (let k = 1; k < it.poly.length; k++) ctx.lineTo(it.poly[k].x, it.poly[k].y);
+          ctx.closePath();
+        }
+      } else {
+        ctx.moveTo(it.poly[0].x, it.poly[0].y);
+        for (let k = 1; k < it.poly.length; k++) ctx.lineTo(it.poly[k].x, it.poly[k].y);
+        ctx.closePath();
+        ctx.fillStyle = it.fill.css;
+        ctx.fill();
+      }
 
       if (it.outline) {
         ctx.lineWidth = it.lineWidth;
@@ -270,7 +338,7 @@ export class CanvasRenderer {
           }
         }
         ctx.stroke();
-      } else if (it.fill.opaque) {
+      } else if (it.fill?.opaque) {
         // A thin stroke in the face's own color hides the hairline gaps between faces
         ctx.lineWidth = 1;
         ctx.strokeStyle = it.fill.css;
@@ -378,23 +446,88 @@ export class CanvasRenderer {
    * Exact, because brightness changes linearly across a triangle.
    */
   _gradient(ctx, color, tri, lit) {
-    const [p0, p1, p2] = tri;
-    const d1x = p1.x - p0.x, d1y = p1.y - p0.y, d2x = p2.x - p0.x, d2y = p2.y - p0.y;
-    const db1 = lit[1] - lit[0], db2 = lit[2] - lit[0];
-    const det = d1x * d2y - d1y * d2x;
-    const lo = Math.min(...lit), hi = Math.max(...lit);
-    if (Math.abs(det) < 1e-9 || hi - lo < 1 / 255) return this._shade(ctx, color, (lo + hi) / 2);
-
-    // Brightness = lit[0] + g · (point - p0)
-    const gx = (db1 * d2y - db2 * d1y) / det;
-    const gy = (db2 * d1x - db1 * d2x) / det;
-    const g2 = gx * gx + gy * gy;
-    const s = (lo - lit[0]) / g2, e = (hi - lit[0]) / g2;
-    const grad = ctx.createLinearGradient(p0.x + gx * s, p0.y + gy * s, p0.x + gx * e, p0.y + gy * e);
-    const a = this._shade(ctx, color, lo), b = this._shade(ctx, color, hi);
+    const g = gradientLine(tri, lit);
+    if (!g) return this._shade(ctx, color, (Math.min(...lit) + Math.max(...lit)) / 2);
+    const grad = ctx.createLinearGradient(g.x0, g.y0, g.x1, g.y1);
+    const a = this._shade(ctx, color, g.lo), b = this._shade(ctx, color, g.hi);
     grad.addColorStop(0, a.css);
     grad.addColorStop(1, b.css);
     return { css: grad, opaque: a.opaque };
+  }
+
+  /**
+   * Draws a textured triangle: the image as a pattern mapped onto the
+   * triangle's corners, tinted by the fill color, then darkened by the light.
+   */
+  _drawTextured(ctx, it) {
+    const { src, uvs, pixelated, tint } = it.texture;
+    const { w: W, h: H } = textureSize(src);
+    const [p0, p1, p2] = it.poly;
+
+    // Image pixels of each corner (v goes up, image rows go down)
+    const U = uvs.map((t) => t.u * W), V = uvs.map((t) => (1 - t.v) * H);
+    const du1 = U[1] - U[0], dv1 = V[1] - V[0], du2 = U[2] - U[0], dv2 = V[2] - V[0];
+    const det = du1 * dv2 - du2 * dv1;
+
+    const path = (poly) => {
+      ctx.beginPath();
+      ctx.moveTo(poly[0].x, poly[0].y);
+      for (let k = 1; k < poly.length; k++) ctx.lineTo(poly[k].x, poly[k].y);
+      ctx.closePath();
+    };
+
+    // Slightly enlarged so neighbouring triangles leave no hairline gap. The image,
+    // tint and light all use this shape: the next triangle paints over the overlap
+    // with its own image and light, so nothing gets darkened twice.
+    const shape = grow(it.poly, 0.5);
+    path(shape);
+    if (Math.abs(det) > 1e-12) {
+      // The transform that sends image pixel (U, V) to the screen
+      const dx1 = p1.x - p0.x, dy1 = p1.y - p0.y, dx2 = p2.x - p0.x, dy2 = p2.y - p0.y;
+      const a = (dx1 * dv2 - dx2 * dv1) / det, b = (dy1 * dv2 - dy2 * dv1) / det;
+      const c = (dx2 * du1 - dx1 * du2) / det, d = (dy2 * du1 - dy1 * du2) / det;
+      const pattern = this._pattern(ctx, src);
+      pattern.setTransform(new DOMMatrix([a, b, c, d, p0.x - a * U[0] - c * V[0], p0.y - b * U[0] - d * V[0]]));
+      ctx.imageSmoothingEnabled = !pixelated;
+      ctx.fillStyle = pattern;
+    } else {
+      ctx.fillStyle = tint;
+    }
+    ctx.fill();
+    ctx.imageSmoothingEnabled = true;
+
+    // Tint: multiply by the fill color
+    const t = this._rgba(ctx, tint);
+    if (t[0] < 1 || t[1] < 1 || t[2] < 1) {
+      ctx.globalCompositeOperation = "multiply";
+      ctx.fillStyle = tint;
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    // Light: black on top, as see-through as the face is bright
+    const lo = Math.min(...it.lit), hi = Math.max(...it.lit);
+    if (lo >= 0.999) return;
+    const g = gradientLine(it.poly, it.lit);
+    if (g) {
+      const grad = ctx.createLinearGradient(g.x0, g.y0, g.x1, g.y1);
+      grad.addColorStop(0, `rgba(0, 0, 0, ${1 - g.lo})`);
+      grad.addColorStop(1, `rgba(0, 0, 0, ${1 - g.hi})`);
+      ctx.fillStyle = grad;
+    } else {
+      ctx.fillStyle = `rgba(0, 0, 0, ${1 - (lo + hi) / 2})`;
+    }
+    ctx.fill();
+  }
+
+  /** A repeating pattern for a texture (made again each frame for canvases and videos). */
+  _pattern(ctx, src) {
+    let p = this._patterns.get(src);
+    if (!p || (textureIsLive(src) && p.frame !== this._frame)) {
+      p = { pattern: ctx.createPattern(src, "repeat"), frame: this._frame };
+      this._patterns.set(src, p);
+    }
+    return p.pattern;
   }
 
   /** [r, g, b, a] from 0 to 1 for a CSS color, cached. */
@@ -424,6 +557,43 @@ export class CanvasRenderer {
     }
     return out;
   }
+}
+
+/**
+ * Where a linear gradient must start and end so its value matches `lit`
+ * at the triangle's three corners. Null when the values are all the same.
+ */
+function gradientLine(tri, lit) {
+  const [p0, p1, p2] = tri;
+  const d1x = p1.x - p0.x, d1y = p1.y - p0.y, d2x = p2.x - p0.x, d2y = p2.y - p0.y;
+  const db1 = lit[1] - lit[0], db2 = lit[2] - lit[0];
+  const det = d1x * d2y - d1y * d2x;
+  const lo = Math.min(...lit), hi = Math.max(...lit);
+  if (Math.abs(det) < 1e-9 || hi - lo < 1 / 255) return null;
+
+  // Value = lit[0] + g · (point - p0)
+  const gx = (db1 * d2y - db2 * d1y) / det;
+  const gy = (db2 * d1x - db1 * d2x) / det;
+  const g2 = gx * gx + gy * gy;
+  const s = (lo - lit[0]) / g2, e = (hi - lit[0]) / g2;
+  return { x0: p0.x + gx * s, y0: p0.y + gy * s, x1: p0.x + gx * e, y1: p0.y + gy * e, lo, hi };
+}
+
+/** A polygon pushed outward from its center by `px` pixels. */
+function grow(poly, px) {
+  const cx = poly.reduce((a, p) => a + p.x, 0) / poly.length;
+  const cy = poly.reduce((a, p) => a + p.y, 0) / poly.length;
+  return poly.map((p) => {
+    const dx = p.x - cx, dy = p.y - cy;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: p.x + (dx / len) * px, y: p.y + (dy / len) * px };
+  });
+}
+
+/** Average of texture coordinates, or 0, 0 when some are missing. */
+function centerUV(ts) {
+  if (!ts.every(Boolean)) return { u: 0, v: 0 };
+  return { u: ts.reduce((a, t) => a + t.u, 0) / ts.length, v: ts.reduce((a, t) => a + t.v, 0) / ts.length };
 }
 
 /** The mesh's vertices followed by the midpoints listed in `mids`. */

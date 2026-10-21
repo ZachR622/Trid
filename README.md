@@ -17,6 +17,7 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
 - **Shapes** — cubes, boxes and spheres built in, or any mesh you define as vertices and edges.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth, with one directional light.
+- **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files.
 - **Effects** — stack shader effects like toon, rim glow, gradients and fog on a material, or write your own in GLSL.
 - **Two renderers** — the canvas 2D context by default, or `WebGLRenderer` for exact depth and big models, with the same scene code.
 - **OBJ files** — load models from a URL, or let users drop their own `.obj` files on the canvas.
@@ -92,7 +93,6 @@ See [`docs/README.md`](docs/README.md) for building and editing the docs.
 
 ## Roadmap
 
-- **Textures** — images on faces, with texture coordinates from OBJ files
 - **More shapes** — cylinder, cone, torus, plane/grid
 - **More tools** — rotate/scale objects with the mouse, selection outline
 - **Parent/child transforms** — e.g. a moon orbiting a planet

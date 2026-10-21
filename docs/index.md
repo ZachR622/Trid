@@ -37,6 +37,10 @@ features:
     title: Effects
     details: Toon, rim glow, gradients and fog, stacked on any material, or your own shaders in a few lines of GLSL.
     link: /effects
+  - icon: 🖼️
+    title: Textures
+    details: Images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files.
+    link: /textures
   - icon: 🎥
     title: Tools
     details: Orbit and fly cameras, object dragging, hover highlight and an FPS meter, one line each.

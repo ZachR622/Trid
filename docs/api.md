@@ -17,6 +17,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/effects.js` | [`toon`, `rim`, `unlit`, `gradient`, `fog`](./effects#built-in-effects), [`buildEffects`, `effectsKey`, `uniformType`, `SURFACE_GLSL`](#effects) |
 | `trid/render/color.js` | [`parseColor`](#parsecolor) |
 | `trid/render/shapes.js` | [`makeShape`, `scaleMesh`](./shapes) |
+| `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/tools/index.js` | [Tools](./tools), [`pick`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
 
@@ -159,6 +160,15 @@ From `trid/render/effects.js`. The built-in effects and how to write your own ar
 - **`effectsKey(effects)`** returns a string that's equal for lists that compile to the same shader (same code, same uniform types).
 - **`uniformType(value)`** returns the GLSL type a uniform value becomes, or `null`.
 - **`SURFACE_GLSL`** is the GLSL declaration of the `Surface` struct.
+
+### Textures
+
+From `trid/loaders/texture.js`. Using textures is explained on the [Textures](./textures) page.
+
+- **`loadTexture(url)`** returns a promise for a loaded `<img>` (with CORS enabled).
+- **`textureReady(src)`** says whether an image, canvas or video has pixels to draw yet.
+- **`textureSize(src)`** returns `{ w, h }` in pixels.
+- **`textureIsLive(src)`** is `true` for canvases and videos, which renderers read again every frame.
 
 ### parseColor
 

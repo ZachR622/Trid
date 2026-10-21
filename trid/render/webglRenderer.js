@@ -4,6 +4,7 @@ import { parseColor } from "./color.js";
 import { DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./canvasRenderer.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
 import { SURFACE_GLSL, buildEffects, effectsKey } from "./effects.js";
+import { textureReady, textureSize, textureIsLive } from "../loaders/texture.js";
 
 /** Farthest distance drawn by the WebGL renderer, unless the camera sets `far`. */
 export const DEFAULT_FAR = 1000;
@@ -32,13 +33,16 @@ vec4 toClip(vec3 p) {
 const FACE_VS = `
 attribute vec3 aPos;
 attribute vec3 aNormal;
+attribute vec2 aUV;
 varying vec3 vNormal;
 varying vec3 vWorld;
 varying vec3 vLocal;
+varying vec2 vUV;
 ${COMMON}
 void main() {
   vNormal = rotXYZ(aNormal / uScale); // inverse scale keeps normals right on stretched objects
   vLocal = aPos;
+  vUV = aUV;
   vWorld = toWorld(aPos);
   gl_Position = toClip(toCamera(vWorld));
 }
@@ -60,9 +64,12 @@ uniform float uShade;
 uniform float uTime;
 uniform vec4 uBackground;
 uniform vec3 uCamWorld;
+uniform sampler2D uTexture;
+uniform float uUseTexture;
 varying vec3 vNormal;
 varying vec3 vWorld;
 varying vec3 vLocal;
+varying vec2 vUV;
 ${SURFACE_GLSL}
 ${fx.code}
 void main() {
@@ -71,8 +78,12 @@ void main() {
   float diffuse = max(0.0, dot(n, uLight));
   float light = mix(1.0, uAmbient + (1.0 - uAmbient) * diffuse, uShade);
 
+  // Fill color, times the texture's color when there is one
+  vec4 base = uColor * mix(vec4(1.0), texture2D(uTexture, vUV), uUseTexture);
+
   Surface s;
-  s.base = uColor;
+  s.base = base;
+  s.uv = vUV;
   s.normal = n;
   s.position = vWorld;
   s.local = vLocal;
@@ -85,16 +96,17 @@ void main() {
   s.time = uTime;
   s.background = uBackground;
 
-  vec4 color = vec4(uColor.rgb * light, uColor.a);
+  vec4 color = vec4(base.rgb * light, base.a);
 ${fx.calls}
   color = clamp(color, 0.0, 1.0);
+  if (color.a < 0.004) discard; // fully see-through pixels (e.g. a PNG's empty parts) don't hide what's behind
   gl_FragColor = vec4(color.rgb * color.a, color.a);
 }
 `;
   return { source, uniforms: fx.uniforms };
 }
 
-const FACE_UNIFORMS = ["uLight", "uAmbient", "uShade", "uTime", "uBackground", "uCamWorld"];
+const FACE_UNIFORMS = ["uLight", "uAmbient", "uShade", "uTime", "uBackground", "uCamWorld", "uTexture", "uUseTexture"];
 
 // Each line segment is a thin rectangle facing the screen, `uWidth` pixels wide
 const LINE_VS = `
@@ -191,8 +203,13 @@ export class WebGLRenderer {
     const gl = this.canvas.getContext("webgl2", this._options) || this.canvas.getContext("webgl", this._options);
     if (!gl) throw new Error("WebGL is not available in this browser");
     this.gl = gl;
+    this._webgl2 = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
     this._meshes = new WeakMap();
     this._buffers = new Set();
+    this._textures = new WeakMap(); // image / canvas / video → GL texture
+    this._glTextures = new Set();
+    this._warned = new WeakSet();
+    this._frame = 0;
 
     this._faces = new Map(); // face programs, one per combination of effects
     this._line = program(gl, LINE_VS, LINE_FS, ["aA", "aB", "aCorner"], [...UNIFORMS, "uRes", "uWidth"]);
@@ -219,6 +236,7 @@ export class WebGLRenderer {
     if (this._lost || this._disposed) return;
 
     const gl = this.gl;
+    this._frame++;
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
@@ -253,7 +271,7 @@ export class WebGLRenderer {
       const mat = obj.material;
 
       if (mat) {
-        const fill = this._color(ctx, mat.fill ?? scene.color);
+        const fill = this._color(ctx, mat.fill ?? (mat.texture ? "#ffffff" : scene.color));
         (fill[3] < 1 ? clear2 : opaque).push({ kind: "face", obj, geo, color: fill, mat });
         if (mat.wireframe) {
           (lineColor[3] < 1 ? clear2 : opaque).push({ kind: "line", obj, buf: geo.outlines, color: lineColor, width: lineWidth });
@@ -279,6 +297,8 @@ export class WebGLRenderer {
     this._disposed = true;
     const gl = this.gl;
     for (const b of this._buffers) gl.deleteBuffer(b);
+    for (const t of this._glTextures) gl.deleteTexture(t);
+    this._glTextures.clear();
     this._buffers.clear();
     for (const p of new Set(this._faces.values())) gl.deleteProgram(p.program);
     gl.deleteProgram(this._line.program);
@@ -323,8 +343,14 @@ export class WebGLRenderer {
       if (d.mat.doubleSided) gl.disable(gl.CULL_FACE);
       else gl.enable(gl.CULL_FACE);
       gl.enable(gl.POLYGON_OFFSET_FILL);
-      gl.vertexAttribPointer(a.aPos, 3, gl.FLOAT, false, 24, 0);
-      if (a.aNormal >= 0) gl.vertexAttribPointer(a.aNormal, 3, gl.FLOAT, false, 24, 12);
+      gl.vertexAttribPointer(a.aPos, 3, gl.FLOAT, false, 32, 0);
+      if (a.aNormal >= 0) gl.vertexAttribPointer(a.aNormal, 3, gl.FLOAT, false, 32, 12);
+      if (a.aUV >= 0) gl.vertexAttribPointer(a.aUV, 2, gl.FLOAT, false, 32, 24);
+      const tex = d.mat.texture ? this._texture(d.mat.texture, !!d.mat.pixelated, d.obj.mesh) : null;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.uniform1i(u.uTexture, 0);
+      gl.uniform1f(u.uUseTexture, tex ? 1 : 0);
     } else {
       if (a.aA < 0) return;
       gl.uniform2f(u.uRes, w, h);
@@ -352,7 +378,7 @@ export class WebGLRenderer {
     if (p) return p;
     try {
       const fs = faceFS(effects);
-      p = program(this.gl, FACE_VS, fs.source, ["aPos", "aNormal"],
+      p = program(this.gl, FACE_VS, fs.source, ["aPos", "aNormal", "aUV"],
         [...UNIFORMS, ...FACE_UNIFORMS, ...fs.uniforms.map((u) => u.glslName)]);
       p.effectUniforms = fs.uniforms;
     } catch (err) {
@@ -365,6 +391,64 @@ export class WebGLRenderer {
     }
     this._faces.set(key, p);
     return p;
+  }
+
+  /**
+   * The GL texture for an image, canvas or video, uploaded once
+   * (canvases and videos: every frame). Null while it isn't ready,
+   * or if the mesh has no texture coordinates.
+   */
+  _texture(src, pixelated, mesh) {
+    const gl = this.gl;
+    if (!textureReady(src)) return null;
+    if (!mesh.faceUVs) {
+      if (!this._warned.has(mesh)) {
+        this._warned.add(mesh);
+        console.warn("Trid: this mesh has no texture coordinates (uvs / faceUVs), so its texture isn't drawn");
+      }
+      return null;
+    }
+
+    let t = this._textures.get(src);
+    const live = textureIsLive(src);
+    if (!t || live || t.failed) {
+      if (t?.failed) return null;
+      const { w, h } = textureSize(src);
+      if (!t) {
+        t = { tex: gl.createTexture(), frame: -1 };
+        this._textures.set(src, t);
+        this._glTextures.add(t.tex);
+      }
+      if (t.frame !== this._frame) {
+        t.frame = this._frame;
+        gl.bindTexture(gl.TEXTURE_2D, t.tex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); // images go top-down, v goes up
+        try {
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+        } catch (err) {
+          // Usually an image from another site without permission (CORS)
+          console.warn("Trid: can't use this image as a texture: " + err.message);
+          t.failed = true;
+          return null;
+        } finally {
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        }
+        // WebGL 1 can only repeat and mipmap power-of-two sizes
+        const pot = (w & (w - 1)) === 0 && (h & (h - 1)) === 0;
+        const full = this._webgl2 || pot;
+        t.mipmaps = full && !live;
+        if (t.mipmaps) gl.generateMipmap(gl.TEXTURE_2D);
+        const wrap = full ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+      }
+    }
+
+    gl.bindTexture(gl.TEXTURE_2D, t.tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, pixelated ? gl.NEAREST : gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER,
+      pixelated ? (t.mipmaps ? gl.NEAREST_MIPMAP_NEAREST : gl.NEAREST) : (t.mipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR));
+    return t.tex;
   }
 
   /** Sends one effect setting to the shader, converting it to its GLSL type. */
@@ -430,6 +514,7 @@ export class WebGLRenderer {
     const v = mesh.vertices;
     const faces = mesh.faces ?? [];
     const corners = crease ? cornerNormals(mesh, crease) : null;
+    const uvs = mesh.uvs, faceUVs = mesh.faceUVs;
     const tri = [];
     faces.forEach((f, fi) => {
       if (f.length < 3) return;
@@ -442,15 +527,17 @@ export class WebGLRenderer {
         const flat = { x: n.x / len, y: n.y / len, z: n.z / len };
         ns = f.map(() => flat);
       }
+      const ts = uvs && faceUVs?.[fi];
       for (let k = 1; k < f.length - 1; k++) {
         for (const c of [0, k, k + 1]) {
           const p = v[f[c]], n = ns[c];
-          tri.push(p.x, p.y, p.z, n.x, n.y, n.z);
+          const t = ts ? uvs[ts[c]] : null;
+          tri.push(p.x, p.y, p.z, n.x, n.y, n.z, t ? t.u : 0, t ? t.v : 0);
         }
       }
     });
 
-    buf = this._upload(tri, 6);
+    buf = this._upload(tri, 8);
     geo.faceBuffers.set(key, buf);
     return buf;
   }

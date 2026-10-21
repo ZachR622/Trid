@@ -12,7 +12,7 @@ import { makeShape, scaleMesh } from "./trid/render/shapes.js";
 
 ## `makeShape(kind, opts?)`
 
-Returns a new mesh centered on the origin, with `vertices`, `edges` and `faces` (so it can be drawn as a wireframe or [filled](./faces)). `kind` is not case-sensitive. An unknown kind throws an `Error`.
+Returns a new mesh centered on the origin, with `vertices`, `edges`, `faces` and texture coordinates (so it can be drawn as a wireframe, [filled](./faces) or [textured](./textures)). `kind` is not case-sensitive. An unknown kind throws an `Error`.
 
 | Kind | Options (defaults) | Result |
 | --- | --- | --- |

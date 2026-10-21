@@ -46,7 +46,8 @@ input.addEventListener("change", async () => {
 
 ## What gets loaded
 
-- **Vertices** (`v`), **normals** (`vn`), **faces** (`f`) and **lines** (`l`). Texture coordinates, materials and groups are skipped for now.
+- **Vertices** (`v`), **texture coordinates** (`vt`), **normals** (`vn`), **faces** (`f`) and **lines** (`l`). Materials (`.mtl` files) and groups are skipped for now, so load textures yourself with [`loadTexture`](./textures).
+- Texture coordinates are kept as `mesh.uvs` and `mesh.faceUVs`, and used by [textures](./textures).
 - Normals are kept as `mesh.normals` and `mesh.faceNormals` (each face's corner normal indices), and used by [smooth shading](./faces#smooth-shading).
 - Faces become **edges**, and an edge shared by two faces is drawn once.
 - The mesh also keeps its **`faces`**, so a model can be [filled and shaded](./faces): `scene.add({ mesh, material: { fill: "#8ab4f8" } })`.
@@ -69,7 +70,7 @@ All of them take the same options: `{ fit }` (see above). Without `fit`, the fil
 | `pickOBJFile()` | `Promise<File \| null>` | Opens the file dialog for `.obj` files. Call it from a click. `null` if cancelled |
 | `fitMesh(mesh, size = 1)` | the same mesh | Centers and scales any mesh **in place** |
 
-The mesh is `{ vertices, edges, faces }` (plus `normals` and `faceNormals` when the file has them): pass it to `scene.add({ mesh })` like any other.
+The mesh is `{ vertices, edges, faces }` (plus `normals`, `faceNormals`, `uvs` and `faceUVs` when the file has them): pass it to `scene.add({ mesh })` like any other.
 
 ## ObjUploader
 

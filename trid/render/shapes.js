@@ -16,7 +16,7 @@ function cubeWire(size = 0.5) {
 function rectPrismWire(w = 0.6, h = 0.3, d = 0.4) {
   const x = w / 2, y = h / 2, z = d / 2;
 
-  return {
+  const mesh = {
     vertices: [
       { x:  x, y:  y, z:  z },
       { x: -x, y:  y, z:  z },
@@ -46,6 +46,41 @@ function rectPrismWire(w = 0.6, h = 0.3, d = 0.4) {
       [1, 5, 6, 2], // left
     ],
   };
+  return withFaceUVs(mesh);
+}
+
+/**
+ * Gives every face the whole texture, upright as seen from outside:
+ * side faces have +Y up, the top face has +Z up, the bottom face -Z.
+ */
+function withFaceUVs(mesh) {
+  const uvs = [], faceUVs = [];
+  for (const f of mesh.faces) {
+    const p = f.map((i) => mesh.vertices[i]);
+    // Outward normal (faces are clockwise from outside)
+    let nx = 0, ny = 0, nz = 0;
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length];
+      nx += (a.y - b.y) * (a.z + b.z);
+      ny += (a.z - b.z) * (a.x + b.x);
+      nz += (a.x - b.x) * (a.y + b.y);
+    }
+    const up = Math.abs(ny) > Math.max(Math.abs(nx), Math.abs(nz))
+      ? { x: 0, y: 0, z: ny > 0 ? 1 : -1 }
+      : { x: 0, y: 1, z: 0 };
+    // Right, as seen from outside: normal × up
+    const right = { x: ny * up.z - nz * up.y, y: nz * up.x - nx * up.z, z: nx * up.y - ny * up.x };
+    const us = p.map((q) => q.x * right.x + q.y * right.y + q.z * right.z);
+    const vs = p.map((q) => q.x * up.x + q.y * up.y + q.z * up.z);
+    const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs);
+    faceUVs.push(p.map((_, k) => {
+      uvs.push({ u: (us[k] - u0) / (u1 - u0 || 1), v: (vs[k] - v0) / (v1 - v0 || 1) });
+      return uvs.length - 1;
+    }));
+  }
+  mesh.uvs = uvs;
+  mesh.faceUVs = faceUVs;
+  return mesh;
 }
 
 /**
@@ -103,19 +138,27 @@ function sphereWire(radius = 0.35, rings = 10, segments = 16) {
     edges.push([lastRing + s, top]);
   }
 
-  // Faces, clockwise as seen from outside: triangles at the poles, quads between rings
+  // Faces, clockwise as seen from outside: triangles at the poles, quads between rings.
+  // Texture coordinates wrap around like a world map: u around, v from bottom to top.
+  // The seam gets its own u = 1 coordinates, so the image doesn't smear across it.
   const faces = [];
+  const uvs = [];
+  const faceUVs = [];
+  const uv = (s, r) => uvs.push({ u: s / segments, v: r / rings }) - 1;
   for (let s = 0; s < segments; s++) {
     const s1 = (s + 1) % segments;
     faces.push([bottom, 1 + s, 1 + s1]);
+    faceUVs.push([uv(s + 0.5, 0), uv(s, 1), uv(s + 1, 1)]);
     for (let r = 0; r < rings - 2; r++) {
       const a = 1 + r * segments, b = a + segments;
       faces.push([a + s, b + s, b + s1, a + s1]);
+      faceUVs.push([uv(s, r + 1), uv(s, r + 2), uv(s + 1, r + 2), uv(s + 1, r + 1)]);
     }
     faces.push([top, lastRing + s1, lastRing + s]);
+    faceUVs.push([uv(s + 0.5, rings), uv(s + 1, rings - 1), uv(s, rings - 1)]);
   }
 
-  return { vertices, edges, faces };
+  return { vertices, edges, faces, uvs, faceUVs };
 }
 
 /**

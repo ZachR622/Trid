@@ -23,7 +23,8 @@
  * the canvas renderer's `s` object have the same names.
  *
  * @typedef {Object} Surface
- * @property {number[]} base - The material's fill color [r, g, b, a]
+ * @property {number[]} base - The material's fill color [r, g, b, a], times the texture's color
+ * @property {{u,v}} uv - Texture coordinates (0, 0 when the mesh has none)
  * @property {{x,y,z}} normal - Unit normal, in world space, facing the camera's side
  * @property {{x,y,z}} position - World position
  * @property {{x,y,z}} local - Position in the mesh's own space
@@ -41,6 +42,7 @@
 export const SURFACE_GLSL = `
 struct Surface {
   vec4 base;
+  vec2 uv;
   vec3 normal;
   vec3 position;
   vec3 local;
