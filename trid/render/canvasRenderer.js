@@ -22,6 +22,8 @@ export const DEFAULT_AMBIENT = 0.25;
  * @property {boolean} [doubleSided=false] - Also draw faces seen from behind
  * @property {boolean|number} [smooth=false] - Blend the light across faces so curved
  *   shapes look round. `true` keeps edges sharper than 60° hard; a number sets that angle.
+ * @property {Object[]} [effects] - Effects applied in order, like `[toon(), rim()]`.
+ *   See trid/render/effects.js. The canvas renderer runs them once per face.
  */
 
 /**
@@ -54,6 +56,8 @@ export class CanvasRenderer {
     this.maxFaceSize = maxFaceSize;
     this._shades = new Map();
     this._splits = new WeakMap();
+    this._colors = new Map();
+    this._start = performance.now();
   }
 
   /**
@@ -79,6 +83,10 @@ export class CanvasRenderer {
     const ambient = scene.ambient ?? DEFAULT_AMBIENT;
     const toScreen = (p) => cameraToScreen(p, camera, w, h);
     const items = [];
+    // For effects
+    const camPos = { x: camera.x ?? 0, y: camera.y ?? 0, z: camera.z ?? 0 };
+    const time = (performance.now() - this._start) / 1000;
+    const background = this._rgba(ctx, scene.background);
 
     for (const obj of scene.objects) {
       // Split big faces (cached per mesh); extra vertices are midpoints of existing ones
@@ -125,6 +133,11 @@ export class CanvasRenderer {
         return ambient + (1 - ambient) * Math.max(0, d);
       };
 
+      // Effects run once per face, at its center (see trid/render/effects.js)
+      const effects = mat.effects?.length ? mat.effects : null;
+      const toWorldNormal = (n) =>
+        normalize(rotateXYZ({ x: n.x / obj.scale.x, y: n.y / obj.scale.y, z: n.z / obj.scale.z }, obj.rot));
+
       const faces = split ? split.faces : sourceFaces;
       for (let f = 0; f < faces.length; f++) {
         const face = faces[f];
@@ -142,6 +155,42 @@ export class CanvasRenderer {
 
         // Which edges are real outlines (split faces have extra inner edges); null = all
         const edges = split && clipped === pts ? split.masks[f] : null;
+
+        if (effects) {
+          // Normal: the face's own, or the average of its corners when smooth
+          let nw;
+          if (corners) {
+            const F = split ? split.origins[f] : f;
+            const sum = face.map((i) => toWorldNormal(normalAt(F, i)))
+              .reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }), { x: 0, y: 0, z: 0 });
+            nw = normalize(sum);
+          } else {
+            nw = normalize(newell(face.map((i) => world[i])));
+          }
+          if (back) nw = { x: -nw.x, y: -nw.y, z: -nw.z };
+
+          const position = centroid(face.map((i) => world[i]));
+          const toCam = { x: camPos.x - position.x, y: camPos.y - position.y, z: camPos.z - position.z };
+          const diffuse = Math.max(0, nw.x * light.x + nw.y * light.y + nw.z * light.z);
+          const lit = shade ? ambient + (1 - ambient) * diffuse : 1;
+          const base = this._rgba(ctx, fill);
+          const s = {
+            base, normal: nw, position, local: centroid(face.map((i) => verts[i])),
+            view: normalize(toCam), lightDir: light, diffuse, light: lit, ambient,
+            depth: Math.hypot(toCam.x, toCam.y, toCam.z), time, background,
+            rgba: (v) => (typeof v === "string" ? this._rgba(ctx, v) : Array.isArray(v) ? v : [v.x, v.y, v.z, 1]),
+          };
+          let col = [base[0] * lit, base[1] * lit, base[2] * lit, base[3]];
+          for (const e of effects) if (e.canvas) col = e.canvas(col, s, e.uniforms ?? {});
+          const k = col.map((x) => Math.min(1, Math.max(0, x)));
+          items.push({
+            depth: c.z,
+            poly: clipped.map(toScreen),
+            fill: { css: `rgba(${Math.round(k[0] * 255)}, ${Math.round(k[1] * 255)}, ${Math.round(k[2] * 255)}, ${k[3]})`, opaque: k[3] >= 1 },
+            outline, lineWidth, edges,
+          });
+          continue;
+        }
 
         if (corners) {
           const F = split ? split.origins[f] : f;
@@ -346,6 +395,17 @@ export class CanvasRenderer {
     grad.addColorStop(0, a.css);
     grad.addColorStop(1, b.css);
     return { css: grad, opaque: a.opaque };
+  }
+
+  /** [r, g, b, a] from 0 to 1 for a CSS color, cached. */
+  _rgba(ctx, css) {
+    let c = this._colors.get(css);
+    if (!c) {
+      const [r, g, b, a] = parseColor(ctx, css);
+      c = [r / 255, g / 255, b / 255, a];
+      this._colors.set(css, c);
+    }
+    return c;
   }
 
   /** CSS color for `color` at a brightness, cached (brightness is rounded to 1/255). */

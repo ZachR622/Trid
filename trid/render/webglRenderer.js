@@ -3,6 +3,7 @@ import { clear, edgeSegments } from "./draw.js";
 import { parseColor } from "./color.js";
 import { DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./canvasRenderer.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
+import { SURFACE_GLSL, buildEffects, effectsKey } from "./effects.js";
 
 /** Farthest distance drawn by the WebGL renderer, unless the camera sets `far`. */
 export const DEFAULT_FAR = 1000;
@@ -32,27 +33,68 @@ const FACE_VS = `
 attribute vec3 aPos;
 attribute vec3 aNormal;
 varying vec3 vNormal;
+varying vec3 vWorld;
+varying vec3 vLocal;
 ${COMMON}
 void main() {
   vNormal = rotXYZ(aNormal / uScale); // inverse scale keeps normals right on stretched objects
-  gl_Position = toClip(toCamera(toWorld(aPos)));
+  vLocal = aPos;
+  vWorld = toWorld(aPos);
+  gl_Position = toClip(toCamera(vWorld));
 }
 `;
 
-const FACE_FS = `
+/** Fragment shader for faces: Trid's lighting, then the material's effects in order. */
+function faceFS(effects) {
+  const fx = buildEffects(effects);
+  const source = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 uniform vec4 uColor;
 uniform vec3 uLight;
 uniform float uAmbient;
 uniform float uShade;
+uniform float uTime;
+uniform vec4 uBackground;
+uniform vec3 uCamWorld;
 varying vec3 vNormal;
+varying vec3 vWorld;
+varying vec3 vLocal;
+${SURFACE_GLSL}
+${fx.code}
 void main() {
   vec3 n = normalize(vNormal);
   if (!gl_FrontFacing) n = -n;
-  float b = mix(1.0, uAmbient + (1.0 - uAmbient) * max(0.0, dot(n, uLight)), uShade);
-  gl_FragColor = vec4(uColor.rgb * b * uColor.a, uColor.a);
+  float diffuse = max(0.0, dot(n, uLight));
+  float light = mix(1.0, uAmbient + (1.0 - uAmbient) * diffuse, uShade);
+
+  Surface s;
+  s.base = uColor;
+  s.normal = n;
+  s.position = vWorld;
+  s.local = vLocal;
+  s.view = normalize(uCamWorld - vWorld);
+  s.lightDir = uLight;
+  s.diffuse = diffuse;
+  s.light = light;
+  s.ambient = uAmbient;
+  s.depth = length(uCamWorld - vWorld);
+  s.time = uTime;
+  s.background = uBackground;
+
+  vec4 color = vec4(uColor.rgb * light, uColor.a);
+${fx.calls}
+  color = clamp(color, 0.0, 1.0);
+  gl_FragColor = vec4(color.rgb * color.a, color.a);
 }
 `;
+  return { source, uniforms: fx.uniforms };
+}
+
+const FACE_UNIFORMS = ["uLight", "uAmbient", "uShade", "uTime", "uBackground", "uCamWorld"];
 
 // Each line segment is a thin rectangle facing the screen, `uWidth` pixels wide
 const LINE_VS = `
@@ -130,6 +172,8 @@ export class WebGLRenderer {
     this._options = { antialias, alpha: true, premultipliedAlpha: true, depth: true };
     this._colors = new Map();
     this._lost = false;
+    this._start = performance.now();
+    this._failed = new Set(); // effect lists whose shader didn't compile (reported once)
 
     this.canvas.addEventListener("webglcontextlost", (e) => {
       e.preventDefault(); // allows the context to come back
@@ -150,7 +194,7 @@ export class WebGLRenderer {
     this._meshes = new WeakMap();
     this._buffers = new Set();
 
-    this._face = program(gl, FACE_VS, FACE_FS, ["aPos", "aNormal"], [...UNIFORMS, "uLight", "uAmbient", "uShade"]);
+    this._faces = new Map(); // face programs, one per combination of effects
     this._line = program(gl, LINE_VS, LINE_FS, ["aA", "aB", "aCorner"], [...UNIFORMS, "uRes", "uWidth"]);
 
     gl.enable(gl.DEPTH_TEST);
@@ -185,6 +229,9 @@ export class WebGLRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     const view = {
+      ctx,
+      background: this._color(ctx, scene.background),
+      time: (performance.now() - this._start) / 1000,
       camPos: [camera.x ?? 0, camera.y ?? 0, camera.z ?? 0],
       camRot: [camera.yaw ?? 0, camera.pitch ?? 0],
       f: 1 / Math.tan((camera.fov ?? DEFAULT_FOV) / 2),
@@ -233,7 +280,7 @@ export class WebGLRenderer {
     const gl = this.gl;
     for (const b of this._buffers) gl.deleteBuffer(b);
     this._buffers.clear();
-    gl.deleteProgram(this._face.program);
+    for (const p of new Set(this._faces.values())) gl.deleteProgram(p.program);
     gl.deleteProgram(this._line.program);
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
@@ -241,7 +288,8 @@ export class WebGLRenderer {
   _draw(d, view, light, ambient, w, h) {
     const gl = this.gl;
     const isFace = d.kind === "face";
-    const prog = isFace ? this._face : this._line;
+    const effects = isFace ? d.mat.effects ?? [] : null;
+    const prog = isFace ? this._faceProgram(effects) : this._line;
     const buf = isFace ? this._faceBuffer(d.geo, d.obj.mesh, d.mat.shade === false ? null : creaseOf(d.mat.smooth)) : d.buf;
     if (!buf.count) return;
 
@@ -266,6 +314,12 @@ export class WebGLRenderer {
       gl.uniform3fv(u.uLight, light);
       gl.uniform1f(u.uAmbient, ambient);
       gl.uniform1f(u.uShade, d.mat.shade === false ? 0 : 1);
+      gl.uniform1f(u.uTime, view.time);
+      gl.uniform4fv(u.uBackground, view.background);
+      gl.uniform3fv(u.uCamWorld, view.camPos);
+      for (const e of prog.effectUniforms) {
+        this._setUniform(view.ctx, u[e.glslName], e.type, effects[e.effect]?.uniforms?.[e.name]);
+      }
       if (d.mat.doubleSided) gl.disable(gl.CULL_FACE);
       else gl.enable(gl.CULL_FACE);
       gl.enable(gl.POLYGON_OFFSET_FILL);
@@ -285,6 +339,42 @@ export class WebGLRenderer {
     for (const loc of locs) gl.enableVertexAttribArray(loc);
     gl.drawArrays(gl.TRIANGLES, 0, buf.count);
     for (const loc of locs) gl.disableVertexAttribArray(loc);
+  }
+
+  /**
+   * The face program for a list of effects, compiled once per combination.
+   * A shader that doesn't compile is reported once, and the object is
+   * drawn without its effects.
+   */
+  _faceProgram(effects) {
+    const key = effectsKey(effects);
+    let p = this._faces.get(key);
+    if (p) return p;
+    try {
+      const fs = faceFS(effects);
+      p = program(this.gl, FACE_VS, fs.source, ["aPos", "aNormal"],
+        [...UNIFORMS, ...FACE_UNIFORMS, ...fs.uniforms.map((u) => u.glslName)]);
+      p.effectUniforms = fs.uniforms;
+    } catch (err) {
+      if (!this._failed.has(key)) {
+        this._failed.add(key);
+        console.error("Trid: an effect's shader failed to compile, drawing without effects.\n" + err.message);
+      }
+      p = effects.length ? this._faceProgram([]) : null;
+      if (!p) throw err;
+    }
+    this._faces.set(key, p);
+    return p;
+  }
+
+  /** Sends one effect setting to the shader, converting it to its GLSL type. */
+  _setUniform(ctx, loc, type, value) {
+    const gl = this.gl;
+    if (loc == null || value == null) return;
+    if (type === "float") gl.uniform1f(loc, Number(value));
+    else if (typeof value === "string") gl.uniform4fv(loc, this._color(ctx, value));
+    else if (Array.isArray(value)) gl[`uniform${value.length}fv`](loc, value);
+    else gl.uniform3f(loc, value.x, value.y, value.z);
   }
 
   /** Graphics card buffers for a mesh, built once and rebuilt when it changes. */

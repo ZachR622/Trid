@@ -19,6 +19,7 @@ scene.add({ mesh: makeShape("cube"), material: { fill: "#E9806E" } });
 | `wireframe` | `false` | Also draw each face's outline, with the object's `color` and `lineWidth` |
 | `doubleSided` | `false` | Also draw faces seen from behind. Needed for open shapes, like a flat plane |
 | `smooth` | `false` | Blend the light across faces so curved shapes look round. See [Smooth shading](#smooth-shading) |
+| `effects` | none | A list of shader effects, like `[toon(), rim()]`. See [Effects](./effects) |
 
 A material is a plain object, so several objects can share one:
 

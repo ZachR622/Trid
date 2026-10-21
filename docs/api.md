@@ -14,6 +14,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`](#canvasrenderer) |
 | `trid/render/webglRenderer.js` | [`WebGLRenderer`, `DEFAULT_FAR`](#webglrenderer) |
 | `trid/render/normals.js` | [`cornerNormals`, `creaseOf`, `newell`, `DEFAULT_CREASE`](#normals) |
+| `trid/render/effects.js` | [`toon`, `rim`, `unlit`, `gradient`, `fog`](./effects#built-in-effects), [`buildEffects`, `effectsKey`, `uniformType`, `SURFACE_GLSL`](#effects) |
 | `trid/render/color.js` | [`parseColor`](#parsecolor) |
 | `trid/render/shapes.js` | [`makeShape`, `scaleMesh`](./shapes) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
@@ -149,6 +150,15 @@ newell(points)
 - **`creaseOf`** turns a material's `smooth` value into a crease angle (`true` → 60), or `null` for flat shading.
 - **`newell`** returns the (not normalized) normal of a polygon. For points clockwise as seen from a side, it points to that side. Also exported from `canvasRenderer.js`.
 - **`DEFAULT_CREASE`** is `60`.
+
+### Effects
+
+From `trid/render/effects.js`. The built-in effects and how to write your own are on the [Effects](./effects) page. The helpers below are what the renderers use:
+
+- **`buildEffects(effects)`** joins a list of effects into GLSL code, with names made unique per effect. Returns `{ code, calls, uniforms }`.
+- **`effectsKey(effects)`** returns a string that's equal for lists that compile to the same shader (same code, same uniform types).
+- **`uniformType(value)`** returns the GLSL type a uniform value becomes, or `null`.
+- **`SURFACE_GLSL`** is the GLSL declaration of the `Surface` struct.
 
 ### parseColor
 

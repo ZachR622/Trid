@@ -33,6 +33,10 @@ features:
     title: Canvas 2D or WebGL
     details: Draw with the plain canvas, or switch to WebGL for exact depth and big models. Same scene, same code.
     link: /renderers
+  - icon: ✨
+    title: Effects
+    details: Toon, rim glow, gradients and fog, stacked on any material, or your own shaders in a few lines of GLSL.
+    link: /effects
   - icon: 🎥
     title: Tools
     details: Orbit and fly cameras, object dragging, hover highlight and an FPS meter, one line each.

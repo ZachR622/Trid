@@ -38,6 +38,7 @@ export default defineConfig({
           { text: "Shapes & meshes", link: "/shapes" },
           { text: "Filled faces", link: "/faces" },
           { text: "Renderers", link: "/renderers" },
+          { text: "Effects", link: "/effects" },
           { text: "Loading OBJ files", link: "/obj" },
           { text: "Tools", link: "/tools" },
           { text: "Writing a tool", link: "/custom-tools" },
