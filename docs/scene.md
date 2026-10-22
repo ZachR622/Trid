@@ -96,6 +96,20 @@ Removes a tool and its event listeners. Does nothing if it isn't added.
 
 The scene's [`ToolManager`](./api#toolmanager). You don't usually need it directly.
 
+## Exporting
+
+### `scene.screenshot(options?)`
+
+Draws a new frame and returns it as an image file (a promise for a `Blob`, PNG by default). The page's canvas doesn't change. See [Screenshots](./export#screenshots).
+
+```js
+download(scene.screenshot(), "scene.png");
+```
+
+### `scene.record(options?)`
+
+Starts recording the canvas as a video. Returns a recording with `stop()` and `done`. See [Videos](./export#videos).
+
 ## Cleaning up
 
 ### `scene.destroy()`

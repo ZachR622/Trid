@@ -81,6 +81,8 @@ const material = car.materialNames.map((name) => looks[name] ?? { fill: "#888" }
 
 See [A texture per face](./textures#a-texture-per-face).
 
+To save meshes as OBJ files, see [Exporting](./export#obj-files).
+
 ::: tip Use `fit`
 OBJ files come in any size and are rarely centered. `{ fit: 1 }` centers the model on the origin and scales it so its largest side is 1 unit.
 :::

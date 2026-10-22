@@ -35,6 +35,10 @@ export { cornerNormals, creaseOf, newell, DEFAULT_CREASE } from "./render/normal
 export { parseOBJ, loadOBJ, readOBJFile, pickOBJFile, fitMesh } from "./loaders/obj.js";
 export { loadTexture, textureReady, textureSize, textureIsLive } from "./loaders/texture.js";
 
+// Exporting
+export { exportOBJ } from "./export/obj.js";
+export { screenshot, record, download } from "./export/capture.js";
+
 // Tools
 export {
   OrbitCamera, FlyCamera, DragObject, HoverHighlight, FpsMeter, ObjUploader,

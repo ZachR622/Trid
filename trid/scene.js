@@ -1,6 +1,7 @@
 import { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./render/canvasRenderer.js";
 import { loop } from "./render/loop.js";
 import { ToolManager } from "./tools/manager.js";
+import { screenshot, record } from "./export/capture.js";
 
 /**
  * Holds a canvas, a camera and a list of objects, and draws them.
@@ -148,6 +149,28 @@ export class Scene {
   stop() {
     this._stop?.();
     this._stop = null;
+  }
+
+  /**
+   * Draws a new frame and returns it as an image file (PNG by default).
+   * The page's canvas doesn't change. Save it with `download`.
+   *
+   * @param {import("./export/capture.js").ScreenshotOptions} [opts]
+   * @returns {Promise<Blob>}
+   */
+  screenshot(opts) {
+    return screenshot(this, opts);
+  }
+
+  /**
+   * Starts recording the canvas as a video. Call `stop()` on the result,
+   * or pass `duration`, then save `await recording.done` with `download`.
+   *
+   * @param {import("./export/capture.js").RecordOptions} [opts]
+   * @returns {import("./export/capture.js").Recording}
+   */
+  record(opts) {
+    return record(this, opts);
   }
 
   /**

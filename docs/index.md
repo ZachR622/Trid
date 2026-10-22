@@ -41,6 +41,10 @@ features:
     title: Textures
     details: Images, canvases or videos on faces. Wrap them by shape (box, sphere, cylinder…), tile and scroll them, or give each face its own.
     link: /textures
+  - icon: 💾
+    title: Export
+    details: Save screenshots and videos of the canvas, or your meshes as OBJ files for Blender and other 3D programs.
+    link: /export
   - icon: 🎥
     title: Tools
     details: Orbit and fly cameras, object dragging, hover highlight and an FPS meter, one line each.

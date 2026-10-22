@@ -213,6 +213,10 @@ export class Scene {
   start(update?: (dt: number, time: number, scene: Scene) => void): this;
   /** Stops the frame loop. The last frame stays on the canvas. */
   stop(): void;
+  /** Draws a new frame and returns it as an image file. The page's canvas doesn't change. */
+  screenshot(opts?: ScreenshotOptions): Promise<Blob>;
+  /** Starts recording the canvas as a video. */
+  record(opts?: RecordOptions): Recording;
   /** Stops the loop, removes every tool and frees the renderer's resources. */
   destroy(): void;
   /** Whether the frame loop is running. */
@@ -505,6 +509,80 @@ export function textureReady(src: TextureSource | null | undefined): boolean;
 export function textureSize(src: TextureSource): { w: number; h: number };
 /** Whether a source can change over time (canvas, video). */
 export function textureIsLive(src: TextureSource): boolean;
+
+// ---------------------------------------------------------------------------
+// Exporting
+// ---------------------------------------------------------------------------
+
+export interface ExportOBJOptions {
+  /**
+   * Write texture coordinates (default true). For an object whose material has a
+   * `mapping` or texture repeat/offset/rotation, the coordinates it's drawn with are written.
+   */
+  uvs?: boolean;
+  /** Write the mesh's normals when it has them (default true) */
+  normals?: boolean;
+  /** Write edges that aren't the side of a face as lines (default true) */
+  lines?: boolean;
+  /** Decimals kept in numbers (default 6) */
+  precision?: number;
+  /** Comment at the top of the file; "" for none (default "Exported by Trid") */
+  header?: string;
+}
+
+/** Something exportOBJ can write: a mesh, or an object placed in a scene. */
+export type OBJExportable = Mesh | (SceneObjectInput & Partial<Transform> & { name?: string });
+
+/**
+ * Writes meshes as the text of an OBJ file. Objects are written where they are
+ * in the scene; a list or a Scene gives one `o` per object.
+ */
+export function exportOBJ(input: OBJExportable | OBJExportable[] | Scene, opts?: ExportOBJOptions): string;
+
+export interface ScreenshotOptions {
+  /** "image/png" (default), "image/jpeg" or "image/webp" */
+  type?: string;
+  /** For JPEG and WebP, from 0 to 1 (default 0.92) */
+  quality?: number;
+  /** Image width in pixels (default: the canvas's) */
+  width?: number;
+  /** Image height in pixels (default: the canvas's) */
+  height?: number;
+  /** Include what tools draw on top (default true) */
+  tools?: boolean;
+}
+
+export interface RecordOptions {
+  /** Frames per second (default 60) */
+  fps?: number;
+  /** Video format, like "video/webm" (default: the best one the browser has) */
+  type?: string;
+  /** Quality: higher is sharper and bigger (default 8,000,000) */
+  bitsPerSecond?: number;
+  /** Stop by itself after this many seconds */
+  duration?: number;
+}
+
+/** A video being recorded. */
+export interface Recording {
+  /** The video format being recorded */
+  readonly type: string;
+  /** Whether it's still recording */
+  readonly recording: boolean;
+  /** Resolves with the video once recording stops */
+  readonly done: Promise<Blob>;
+  /** Stops recording; resolves with the video */
+  stop(): Promise<Blob>;
+}
+
+/** Draws a new frame of a scene and returns it as an image file. */
+export function screenshot(scene: Scene, opts?: ScreenshotOptions): Promise<Blob>;
+
+/** Records a scene's canvas as a video. Throws if the browser can't. */
+export function record(scene: Scene, opts?: RecordOptions): Recording;
+
+/** Saves a file or text in the browser's downloads. */
+export function download(data: Blob | string | Promise<Blob | string>, filename: string): Promise<void>;
 
 // ---------------------------------------------------------------------------
 // Tools

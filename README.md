@@ -21,6 +21,7 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 - **Effects** — stack shader effects like toon, rim and edge glow, gradients and fog on a material, or write your own in GLSL.
 - **Two renderers** — the canvas 2D context by default, or `WebGLRenderer` for exact depth and big models, with the same scene code.
 - **OBJ files** — load models from a URL, or let users drop their own `.obj` files on the canvas.
+- **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` writes meshes, objects or whole scenes as OBJ files.
 - **Camera** — position, yaw, pitch and field of view, with near-plane clipping.
 - **Tools** — orbit and fly cameras, object dragging, hover highlight, an FPS meter and an OBJ uploader, one line each. Writing your own is a plain object with a few methods.
 - **Pure math** — every transform and projection step is exported, so you can use the pipeline piece by piece.
@@ -81,6 +82,7 @@ Or let users load their own: `scene.use(new ObjUploader())` accepts dropped `.ob
 | `trid/math/` | Transforms, camera directions, projection |
 | `trid/render/` | Renderers (Canvas 2D, WebGL), effects, shapes, drawing, frame loop |
 | `trid/loaders/` | OBJ and texture loading |
+| `trid/export/` | Screenshots, video recording and OBJ export |
 | `trid/tools/` | Camera, object and overlay tools |
 | `docs/` | Documentation site with live demos |
 
@@ -101,8 +103,7 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 
 Roughly in order:
 
-- **Export** — `scene.screenshot()` as a PNG, `exportOBJ(mesh)`, and short video clips of the canvas
-- **More import formats** — `.mtl` material files for OBJ (colors and textures per part), STL; basic glTF later
+- **More import and export formats** — `.mtl` material files for OBJ (colors and textures per part, both ways), STL; basic glTF later
 - **Parent/child transforms** — e.g. a moon orbiting a planet
 - **More tools** — a gizmo to move, rotate and scale objects with the mouse, a selection outline, a grid/axes helper
 - **More shapes** — cylinder, cone, torus, plane/grid

@@ -41,6 +41,7 @@ export default defineConfig({
           { text: "Textures", link: "/textures" },
           { text: "Effects", link: "/effects" },
           { text: "Loading OBJ files", link: "/obj" },
+          { text: "Exporting", link: "/export" },
           { text: "Tools", link: "/tools" },
           { text: "Writing a tool", link: "/custom-tools" },
         ],

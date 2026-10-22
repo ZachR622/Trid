@@ -21,6 +21,8 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/shapes.js` | [`makeShape`, `scaleMesh`](./shapes) |
 | `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
+| `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |
+| `trid/export/capture.js` | [`screenshot`, `record`, `download`](./export) |
 | `trid/tools/index.js` | [Tools](./tools), [`pick`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
 
 ## Math
