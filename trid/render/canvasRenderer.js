@@ -3,8 +3,23 @@ import { clear, drawInstance, edgeSegments } from "./draw.js";
 import { parseColor } from "./color.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
 import { textureReady, textureSize, textureIsLive } from "../loaders/texture.js";
+import { uvsFor, uvTransform, applyUVTransform } from "./uvMapping.js";
 
 export { newell };
+
+/**
+ * An object's materials as a list (`material` can be one material or a
+ * list of them, picked per face by `mesh.faceMaterials`). Null when the
+ * object is a wireframe.
+ *
+ * @returns {Material[]|null}
+ */
+export function materialsOf(obj) {
+  const m = obj.material;
+  if (!m) return null;
+  if (!Array.isArray(m)) return [m];
+  return m.length && m[0] ? m : null;
+}
 
 /** Direction light comes from when the scene doesn't set one: above, left, in front. */
 export const DEFAULT_LIGHT = { x: -0.5, y: 1, z: -0.8 };
@@ -16,6 +31,10 @@ export const DEFAULT_AMBIENT = 0.25;
  * Material: how an object's faces look. Objects without one are drawn
  * as wireframes using their `color` and `lineWidth`.
  *
+ * An object's `material` can also be a list: each face then uses the
+ * entry `mesh.faceMaterials[face]` points at (the first one by default).
+ * Built-in cubes and boxes number their sides 0 to 5.
+ *
  * @typedef {Object} Material
  * @property {string} [fill] - Face color, any CSS color (default: the scene's color)
  * @property {boolean} [shade=true] - Darken faces that turn away from the light
@@ -26,6 +45,11 @@ export const DEFAULT_AMBIENT = 0.25;
  * @property {CanvasImageSource} [texture] - Image drawn on the faces (needs texture coordinates:
  *   built-in shapes and OBJ files with `vt` have them). `fill` tints it (default white).
  * @property {boolean} [pixelated=false] - Keep texture pixels sharp instead of smoothing them
+ * @property {import("./uvMapping.js").Mapping} [mapping="uv"] - Where texture coordinates come
+ *   from: the mesh's own ("uv"), or made from its shape ("planar", "box", "sphere", "cylinder")
+ * @property {number|{u:number,v:number}} [textureRepeat=1] - How many times the image repeats across
+ * @property {{u:number,v:number}} [textureOffset] - Moves the image (1 = its whole width or height)
+ * @property {number} [textureRotation=0] - Turns the image around its center, in radians
  * @property {Object[]} [effects] - Effects applied in order, like `[toon(), rim()]`.
  *   See trid/render/effects.js. The canvas renderer runs them once per face.
  */
@@ -79,7 +103,7 @@ export class CanvasRenderer {
     this._frame++;
 
     // Wireframes only: nothing to sort
-    if (!scene.objects.some((o) => o.material)) {
+    if (!scene.objects.some((o) => materialsOf(o))) {
       for (const obj of scene.objects) {
         drawInstance(ctx, obj, camera, w, h, obj.color ?? scene.color, obj.lineWidth ?? scene.lineWidth);
       }
@@ -97,16 +121,16 @@ export class CanvasRenderer {
     const background = this._rgba(ctx, scene.background);
 
     for (const obj of scene.objects) {
+      const mats = materialsOf(obj);
       // Split big faces (cached per mesh); extra vertices are midpoints of existing ones
-      const split = obj.material && this.maxFaceSize ? this._split(obj.mesh) : null;
+      const split = mats && this.maxFaceSize ? this._split(obj.mesh) : null;
       const verts = split ? withMidpoints(obj.mesh.vertices, split.mids) : obj.mesh.vertices;
       const world = verts.map((v) => localToWorld(v, obj));
       const cam = world.map((p) => worldToCamera(p, camera));
       const color = obj.color ?? scene.color;
       const lineWidth = obj.lineWidth ?? scene.lineWidth;
-      const mat = obj.material;
 
-      if (!mat) {
+      if (!mats) {
         for (const [i, j] of edgeSegments(obj.mesh.edges)) {
           const seg = clipNear(cam[i], cam[j], near);
           if (!seg) continue;
@@ -119,19 +143,14 @@ export class CanvasRenderer {
         continue;
       }
 
-      const fill = mat.fill ?? (mat.texture ? "#ffffff" : scene.color);
-      const shade = mat.shade !== false;
-      const outline = mat.wireframe ? color : null;
-
-      // Smooth shading: a normal per face corner (split faces get midpoints' normals by averaging)
-      const crease = shade ? creaseOf(mat.smooth) : null;
-      const corners = crease ? cornerNormals(obj.mesh, crease) : null;
       const sourceFaces = obj.mesh.faces ?? [];
       const base = obj.mesh.vertices.length;
-      const normalAt = (F, i) => {
+
+      // Smooth shading: a normal per face corner (split faces get midpoints' normals by averaging)
+      const normalAt = (corners, F, i) => {
         if (i < base) return corners[F][sourceFaces[F].indexOf(i)];
         const [a, b] = split.mids[i - base];
-        const na = normalAt(F, a), nb = normalAt(F, b);
+        const na = normalAt(corners, F, a), nb = normalAt(corners, F, b);
         return normalize({ x: na.x + nb.x, y: na.y + nb.y, z: na.z + nb.z });
       };
       const lightAt = (n, back) => {
@@ -140,47 +159,69 @@ export class CanvasRenderer {
         const d = (back ? -1 : 1) * (r.x * light.x + r.y * light.y + r.z * light.z);
         return ambient + (1 - ambient) * Math.max(0, d);
       };
-
-      // Textures: each triangle is filled with the image, mapped by its corners' texture coordinates
-      const meshUVs = obj.mesh.uvs, faceUVs = obj.mesh.faceUVs;
-      let tex = null;
-      if (mat.texture && textureReady(mat.texture)) {
-        if (faceUVs && meshUVs) tex = mat.texture;
-        else if (!this._warned.has(obj.mesh)) {
-          this._warned.add(obj.mesh);
-          console.warn("Trid: this mesh has no texture coordinates (uvs / faceUVs), so its texture isn't drawn");
-        }
-      }
-      const uvAt = (F, i) => {
-        const t = faceUVs?.[F];
-        if (!t || !meshUVs) return null;
-        if (i < base) return meshUVs[t[sourceFaces[F].indexOf(i)]];
-        const [a, b] = split.mids[i - base];
-        const ta = uvAt(F, a), tb = uvAt(F, b);
-        return ta && tb ? { u: (ta.u + tb.u) / 2, v: (ta.v + tb.v) / 2 } : null;
-      };
       const flatLight = (face, back) => {
         const nw = normalize(newell(face.map((i) => world[i])));
         const d = (back ? -1 : 1) * (nw.x * light.x + nw.y * light.y + nw.z * light.z);
         return ambient + (1 - ambient) * Math.max(0, d);
       };
-
-      // Effects run once per face, at its center (see trid/render/effects.js)
-      const effects = mat.effects?.length ? mat.effects : null;
       const toWorldNormal = (n) =>
         normalize(rotateXYZ({ x: n.x / obj.scale.x, y: n.y / obj.scale.y, z: n.z / obj.scale.z }, obj.rot));
+
+      // Everything a material needs, worked out once per object and frame
+      const prepare = (mat) => {
+        const shade = mat.shade !== false;
+        const crease = shade ? creaseOf(mat.smooth) : null;
+        // Texture coordinates: the mesh's own, or made from its shape (mat.mapping)
+        const { uvs: meshUVs, faceUVs } = uvsFor(obj.mesh, mat.mapping);
+        const xf = uvTransform(mat);
+        const rawUV = (F, i) => {
+          const t = faceUVs?.[F];
+          if (!t || !meshUVs) return null;
+          if (i < base) return meshUVs[t[sourceFaces[F].indexOf(i)]];
+          const [a, b] = split.mids[i - base];
+          const ta = rawUV(F, a), tb = rawUV(F, b);
+          return ta && tb ? { u: (ta.u + tb.u) / 2, v: (ta.v + tb.v) / 2 } : null;
+        };
+        let tex = null;
+        if (mat.texture && textureReady(mat.texture)) {
+          if (faceUVs && meshUVs) tex = mat.texture;
+          else if (!this._warned.has(obj.mesh)) {
+            this._warned.add(obj.mesh);
+            console.warn("Trid: this mesh has no texture coordinates (uvs / faceUVs), so its texture isn't drawn. Set material.mapping to make some.");
+          }
+        }
+        return {
+          mat, shade, tex,
+          fill: mat.fill ?? (mat.texture ? "#ffffff" : scene.color),
+          outline: mat.wireframe ? color : null,
+          corners: crease ? cornerNormals(obj.mesh, crease) : null,
+          effects: mat.effects?.length ? mat.effects : null,
+          uvAt: (F, i) => applyUVTransform(xf, rawUV(F, i)),
+        };
+      };
+      // Which material each face uses (mesh.faceMaterials), prepared when first needed
+      const looks = new Array(mats.length);
+      const faceMats = obj.mesh.faceMaterials;
+      const lookOf = (F) => {
+        let k = faceMats?.[F] ?? 0;
+        if (!(k >= 0 && k < mats.length && mats[k])) k = 0;
+        return (looks[k] ??= prepare(mats[k]));
+      };
 
       const faces = split ? split.faces : sourceFaces;
       for (let f = 0; f < faces.length; f++) {
         const face = faces[f];
         if (face.length < 3) continue;
+        const F = split ? split.origins[f] : f; // the mesh face this one comes from
+        const L = lookOf(F);
+        const { fill, shade, outline, corners } = L;
         const pts = face.map((i) => cam[i]);
 
         // Seen from behind? (camera sits at the origin of camera space)
         const n = newell(pts);
         const c = centroid(pts);
         const back = n.x * c.x + n.y * c.y + n.z * c.z >= 0;
-        if (back && !mat.doubleSided) continue;
+        if (back && !L.mat.doubleSided) continue;
 
         const clipped = clipPolygon(pts, near);
         if (clipped.length < 3) continue;
@@ -188,13 +229,13 @@ export class CanvasRenderer {
         // Which edges are real outlines (split faces have extra inner edges); null = all
         const edges = split && clipped === pts ? split.masks[f] : null;
 
-        if (tex && clipped === pts) {
-          const F = split ? split.origins[f] : f;
-          const ts = face.map((i) => uvAt(F, i));
+        // Textures: each triangle is filled with the image, mapped by its corners' texture coordinates
+        if (L.tex && clipped === pts) {
+          const ts = face.map((i) => L.uvAt(F, i));
           if (ts.every(Boolean)) {
             let lit;
             if (!shade) lit = face.map(() => 1);
-            else if (corners) lit = face.map((i) => lightAt(normalAt(F, i), back));
+            else if (corners) lit = face.map((i) => lightAt(normalAt(corners, F, i), back));
             else lit = face.map(() => flatLight(face, back));
             const screen = pts.map(toScreen);
             const n = face.length;
@@ -203,7 +244,7 @@ export class CanvasRenderer {
               items.push({
                 depth: c.z,
                 poly: [screen[0], screen[k], screen[k + 1]],
-                texture: { src: tex, uvs: [ts[0], ts[k], ts[k + 1]], pixelated: !!mat.pixelated, tint: fill },
+                texture: { src: L.tex, uvs: [ts[0], ts[k], ts[k + 1]], pixelated: !!L.mat.pixelated, tint: fill },
                 lit: [lit[0], lit[k], lit[k + 1]],
                 outline, lineWidth,
                 edges: n === 3 ? edges : fan,
@@ -213,12 +254,12 @@ export class CanvasRenderer {
           }
         }
 
-        if (effects) {
+        // Effects run once per face, at its center (see trid/render/effects.js)
+        if (L.effects) {
           // Normal: the face's own, or the average of its corners when smooth
           let nw;
           if (corners) {
-            const F = split ? split.origins[f] : f;
-            const sum = face.map((i) => toWorldNormal(normalAt(F, i)))
+            const sum = face.map((i) => toWorldNormal(normalAt(corners, F, i)))
               .reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }), { x: 0, y: 0, z: 0 });
             nw = normalize(sum);
           } else {
@@ -230,16 +271,16 @@ export class CanvasRenderer {
           const toCam = { x: camPos.x - position.x, y: camPos.y - position.y, z: camPos.z - position.z };
           const diffuse = Math.max(0, nw.x * light.x + nw.y * light.y + nw.z * light.z);
           const lit = shade ? ambient + (1 - ambient) * diffuse : 1;
-          const base = this._rgba(ctx, fill);
+          const rgba = this._rgba(ctx, fill);
           const s = {
-            base, normal: nw, position, local: centroid(face.map((i) => verts[i])),
+            base: rgba, normal: nw, position, local: centroid(face.map((i) => verts[i])),
             view: normalize(toCam), lightDir: light, diffuse, light: lit, ambient,
-            uv: centerUV(face.map((i) => uvAt(split ? split.origins[f] : f, i))),
+            uv: centerUV(face.map((i) => L.uvAt(F, i))),
             depth: Math.hypot(toCam.x, toCam.y, toCam.z), time, background,
             rgba: (v) => (typeof v === "string" ? this._rgba(ctx, v) : Array.isArray(v) ? v : [v.x, v.y, v.z, 1]),
           };
-          let col = [base[0] * lit, base[1] * lit, base[2] * lit, base[3]];
-          for (const e of effects) if (e.canvas) col = e.canvas(col, s, e.uniforms ?? {});
+          let col = [rgba[0] * lit, rgba[1] * lit, rgba[2] * lit, rgba[3]];
+          for (const e of L.effects) if (e.canvas) col = e.canvas(col, s, e.uniforms ?? {});
           const k = col.map((x) => Math.min(1, Math.max(0, x)));
           items.push({
             depth: c.z,
@@ -251,8 +292,7 @@ export class CanvasRenderer {
         }
 
         if (corners) {
-          const F = split ? split.origins[f] : f;
-          const lit = face.map((i) => lightAt(normalAt(F, i), back));
+          const lit = face.map((i) => lightAt(normalAt(corners, F, i), back));
           if (clipped === pts) {
             // One gradient per triangle: brightness changes linearly across a triangle
             const screen = pts.map(toScreen);
@@ -276,14 +316,7 @@ export class CanvasRenderer {
           continue;
         }
 
-        let brightness = 1;
-        if (shade) {
-          const nw = normalize(newell(face.map((i) => world[i])));
-          const s = back ? -1 : 1;
-          const d = s * (nw.x * light.x + nw.y * light.y + nw.z * light.z);
-          brightness = ambient + (1 - ambient) * Math.max(0, d);
-        }
-
+        const brightness = shade ? flatLight(face, back) : 1;
         items.push({
           depth: c.z,
           poly: clipped.map(toScreen),

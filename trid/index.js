@@ -16,7 +16,7 @@ export { Scene } from "./scene.js";
 export { makeShape, scaleMesh } from "./render/shapes.js";
 
 // Renderers
-export { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./render/canvasRenderer.js";
+export { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./render/canvasRenderer.js";
 export { WebGLRenderer, DEFAULT_FAR } from "./render/webglRenderer.js";
 
 // Effects
@@ -24,6 +24,9 @@ export {
   toon, rim, edgeGlow, unlit, gradient, fog,
   buildEffects, effectsKey, uniformType, SURFACE_GLSL,
 } from "./render/effects.js";
+
+// Texture mapping
+export { computeUVs, mapUVs, uvsFor, uvTransform, applyUVTransform, mappingOf, mappingKey, MAPPINGS } from "./render/uvMapping.js";
 
 // Normals (smooth shading)
 export { cornerNormals, creaseOf, newell, DEFAULT_CREASE } from "./render/normals.js";

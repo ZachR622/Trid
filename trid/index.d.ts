@@ -69,6 +69,11 @@ export interface Mesh {
   uvs?: UV[];
   /** For each face, the index into `uvs` of each corner (null: none for that face) */
   faceUVs?: (number[] | null)[];
+  /**
+   * For each face, which entry of the object's material list it uses
+   * (when `material` is a list). Built-in cubes and boxes number their sides 0 to 5.
+   */
+  faceMaterials?: number[];
   /** Set after changing the mesh in place so renderers rebuild their caches */
   dirty?: boolean;
 }
@@ -104,7 +109,24 @@ export interface Material {
   pixelated?: boolean;
   /** Effects applied in order, like `[toon(), rim()]` */
   effects?: Effect[];
+  /** Where texture coordinates come from: the mesh's own ("uv", default) or made from its shape */
+  mapping?: Mapping;
+  /** How many times the texture repeats across (default 1) */
+  textureRepeat?: number | UV;
+  /** Moves the texture; 1 is its whole width or height */
+  textureOffset?: UV;
+  /** Turns the texture around its center, in radians */
+  textureRotation?: number;
 }
+
+/** Ways to make texture coordinates from a mesh's shape. */
+export type MappingType = "uv" | "planar" | "box" | "sphere" | "cylinder";
+
+/**
+ * A texture mapping: a type, or a type with an axis. `axis` is the projection
+ * direction for "planar" (default "z") and the wrap axis for "sphere" and "cylinder" (default "y").
+ */
+export type Mapping = MappingType | { type: MappingType; axis?: "x" | "y" | "z" };
 
 /** What you pass to `scene.add`. Missing transform fields get defaults. */
 export interface SceneObjectInput {
@@ -116,8 +138,8 @@ export interface SceneObjectInput {
   color?: string;
   /** Wireframe width (default: the scene's lineWidth) */
   lineWidth?: number;
-  /** Draw faces instead of only lines */
-  material?: Material;
+  /** Draw faces instead of only lines. A list gives each group of faces its own (see `Mesh.faceMaterials`) */
+  material?: Material | Material[];
   /** Set to false to make `DragObject` ignore this object */
   draggable?: boolean;
   /** Set to false to make `HoverHighlight` ignore this object */
@@ -236,6 +258,9 @@ export const DEFAULT_LIGHT: Readonly<Vec3>;
 export const DEFAULT_AMBIENT: number;
 /** Default far distance (WebGL renderer). */
 export const DEFAULT_FAR: number;
+
+/** An object's materials as a list, or null when it's a wireframe. */
+export function materialsOf(obj: { material?: Material | Material[] }): Material[] | null;
 
 export interface CanvasRendererOptions {
   /**
@@ -395,6 +420,41 @@ export function uniformType(value: unknown): "float" | "vec2" | "vec3" | "vec4" 
 export const SURFACE_GLSL: string;
 
 // ---------------------------------------------------------------------------
+// Texture mapping
+// ---------------------------------------------------------------------------
+
+/** Texture coordinates for every face corner. */
+export interface MeshUVs {
+  uvs: UV[];
+  faceUVs: number[][];
+}
+
+/** The mapping types. */
+export const MAPPINGS: readonly MappingType[];
+
+/** Texture coordinates made from a mesh's shape. The mesh isn't changed. */
+export function computeUVs(mesh: Mesh, mapping: Mapping): MeshUVs;
+
+/** Replaces a mesh's texture coordinates with ones made from its shape, in place. */
+export function mapUVs<M extends Mesh>(mesh: M, mapping: Mapping): M & MeshUVs;
+
+/** The texture coordinates a renderer uses for a mesh and mapping (cached). */
+export function uvsFor(mesh: Mesh, mapping?: Mapping): { uvs?: UV[]; faceUVs?: (number[] | null)[] };
+
+/** A material's repeat, offset and rotation as [a, b, c, d, e, f], or null when they change nothing. */
+export function uvTransform(material: Material): [number, number, number, number, number, number] | null;
+
+/** Applies a `uvTransform` matrix to one texture coordinate. */
+export function applyUVTransform(m: number[] | null, uv: UV): UV;
+export function applyUVTransform(m: number[] | null, uv: UV | null): UV | null;
+
+/** A mapping as `{ type, axis }`. Throws for an unknown type or axis. */
+export function mappingOf(mapping?: Mapping): { type: MappingType; axis?: "x" | "y" | "z" };
+
+/** A short string naming a mapping, for caches ("" for "uv"). */
+export function mappingKey(mapping?: Mapping): string;
+
+// ---------------------------------------------------------------------------
 // Normals
 // ---------------------------------------------------------------------------
 
@@ -417,6 +477,8 @@ export function newell(pts: Vec3[]): Vec3;
 /** A mesh loaded from an OBJ file. Always has faces. */
 export interface ObjMesh extends Mesh {
   faces: number[][];
+  /** Material names from `usemtl` lines, when the file uses more than one */
+  materialNames?: string[];
 }
 
 export interface ObjOptions {

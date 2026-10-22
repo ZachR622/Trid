@@ -10,14 +10,14 @@
 
 Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools, all in plain ES modules you can drop next to your page.
 
-> **Status:** early. Objects can be wireframes or filled and shaded; textures and shaders are on the way.
+> **Status:** early. Objects can be wireframes or filled, shaded and textured, with shader effects.
 
 ## Features
 
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
 - **Shapes** — cubes, boxes and spheres built in, or any mesh you define as vertices and edges.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth, with one directional light.
-- **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files.
+- **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files, or made from the shape (planar, box, sphere and cylinder mapping). Repeat, offset and rotate them, or give each face its own material.
 - **Effects** — stack shader effects like toon, rim and edge glow, gradients and fog on a material, or write your own in GLSL.
 - **Two renderers** — the canvas 2D context by default, or `WebGLRenderer` for exact depth and big models, with the same scene code.
 - **OBJ files** — load models from a URL, or let users drop their own `.obj` files on the canvas.
@@ -99,7 +99,12 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 
 ## Roadmap
 
-- **More shapes** — cylinder, cone, torus, plane/grid
-- **More tools** — rotate/scale objects with the mouse, selection outline
+Roughly in order:
+
+- **Export** — `scene.screenshot()` as a PNG, `exportOBJ(mesh)`, and short video clips of the canvas
+- **More import formats** — `.mtl` material files for OBJ (colors and textures per part), STL; basic glTF later
 - **Parent/child transforms** — e.g. a moon orbiting a planet
+- **More tools** — a gizmo to move, rotate and scale objects with the mouse, a selection outline, a grid/axes helper
+- **More shapes** — cylinder, cone, torus, plane/grid
+- **Post effects** (WebGL) — bloom, vignette, outlines, antialiasing and color grading over the whole image
 - **Tests** for the math functions

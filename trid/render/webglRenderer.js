@@ -1,7 +1,8 @@
 import { DEFAULT_FOV, DEFAULT_NEAR } from "../math/transform.js";
 import { clear, edgeSegments } from "./draw.js";
 import { parseColor } from "./color.js";
-import { DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./canvasRenderer.js";
+import { DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./canvasRenderer.js";
+import { uvsFor, uvTransform, mappingKey } from "./uvMapping.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
 import { SURFACE_GLSL, buildEffects, effectsKey } from "./effects.js";
 import { textureReady, textureSize, textureIsLive } from "../loaders/texture.js";
@@ -38,11 +39,12 @@ varying vec3 vNormal;
 varying vec3 vWorld;
 varying vec3 vLocal;
 varying vec2 vUV;
+uniform mat3 uUVTransform; // textureRepeat, textureOffset, textureRotation
 ${COMMON}
 void main() {
   vNormal = rotXYZ(aNormal / uScale); // inverse scale keeps normals right on stretched objects
   vLocal = aPos;
-  vUV = aUV;
+  vUV = (uUVTransform * vec3(aUV, 1.0)).xy;
   vWorld = toWorld(aPos);
   gl_Position = toClip(toCamera(vWorld));
 }
@@ -106,7 +108,7 @@ ${fx.calls}
   return { source, uniforms: fx.uniforms };
 }
 
-const FACE_UNIFORMS = ["uLight", "uAmbient", "uShade", "uTime", "uBackground", "uCamWorld", "uTexture", "uUseTexture"];
+const FACE_UNIFORMS = ["uUVTransform", "uLight", "uAmbient", "uShade", "uTime", "uBackground", "uCamWorld", "uTexture", "uUseTexture"];
 
 // Each line segment is a thin rectangle facing the screen, `uWidth` pixels wide
 const LINE_VS = `
@@ -268,16 +270,26 @@ export class WebGLRenderer {
       const geo = this._geometry(obj.mesh);
       const lineColor = this._color(ctx, obj.color ?? scene.color);
       const lineWidth = obj.lineWidth ?? scene.lineWidth;
-      const mat = obj.material;
+      const mats = materialsOf(obj);
 
-      if (mat) {
-        const fill = this._color(ctx, mat.fill ?? (mat.texture ? "#ffffff" : scene.color));
-        (fill[3] < 1 ? clear2 : opaque).push({ kind: "face", obj, geo, color: fill, mat });
-        if (mat.wireframe) {
-          (lineColor[3] < 1 ? clear2 : opaque).push({ kind: "line", obj, buf: geo.outlines, color: lineColor, width: lineWidth });
+      if (mats) {
+        // One draw per group of faces sharing a material (mesh.faceMaterials)
+        const groups = geo.groups.map((g) => {
+          const k = g.index >= 0 && g.index < mats.length && mats[g.index] ? g.index : 0;
+          return { ...g, mat: mats[k] };
+        });
+        for (const g of groups) {
+          const fill = this._color(ctx, g.mat.fill ?? (g.mat.texture ? "#ffffff" : scene.color));
+          (fill[3] < 1 ? clear2 : opaque).push({ kind: "face", obj, geo, color: fill, mat: g.mat, first: g.first, count: g.count });
         }
+        const lines = (buf) => (lineColor[3] < 1 ? clear2 : opaque).push({ kind: "line", obj, buf, color: lineColor, width: lineWidth });
+        if (groups.every((g) => g.mat.wireframe)) lines(this._lineBuffer(geo, "outlines", () => outlinePairs(geo.faceList ?? [])));
+        else for (const g of groups) if (g.mat.wireframe) lines(this._outlineBuffer(geo, obj.mesh, g));
       } else {
-        (lineColor[3] < 1 ? clear2 : opaque).push({ kind: "line", obj, buf: geo.edges, color: lineColor, width: lineWidth });
+        (lineColor[3] < 1 ? clear2 : opaque).push({
+          kind: "line", obj, color: lineColor, width: lineWidth,
+          buf: this._lineBuffer(geo, "edges", () => edgeSegments(obj.mesh.edges ?? [])),
+        });
       }
     }
 
@@ -310,8 +322,11 @@ export class WebGLRenderer {
     const isFace = d.kind === "face";
     const effects = isFace ? d.mat.effects ?? [] : null;
     const prog = isFace ? this._faceProgram(effects) : this._line;
-    const buf = isFace ? this._faceBuffer(d.geo, d.obj.mesh, d.mat.shade === false ? null : creaseOf(d.mat.smooth)) : d.buf;
-    if (!buf.count) return;
+    const buf = isFace
+      ? this._faceBuffer(d.geo, d.obj.mesh, d.mat.shade === false ? null : creaseOf(d.mat.smooth), d.mat.mapping)
+      : d.buf;
+    const first = d.first ?? 0, count = d.count ?? buf.count;
+    if (!count) return;
 
     gl.useProgram(prog.program);
     const u = prog.uniforms;
@@ -331,6 +346,8 @@ export class WebGLRenderer {
     const a = prog.attributes;
 
     if (isFace) {
+      const m = uvTransform(d.mat) ?? [1, 0, 0, 1, 0, 0];
+      gl.uniformMatrix3fv(u.uUVTransform, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
       gl.uniform3fv(u.uLight, light);
       gl.uniform1f(u.uAmbient, ambient);
       gl.uniform1f(u.uShade, d.mat.shade === false ? 0 : 1);
@@ -346,7 +363,9 @@ export class WebGLRenderer {
       gl.vertexAttribPointer(a.aPos, 3, gl.FLOAT, false, 32, 0);
       if (a.aNormal >= 0) gl.vertexAttribPointer(a.aNormal, 3, gl.FLOAT, false, 32, 12);
       if (a.aUV >= 0) gl.vertexAttribPointer(a.aUV, 2, gl.FLOAT, false, 32, 24);
-      const tex = d.mat.texture ? this._texture(d.mat.texture, !!d.mat.pixelated, d.obj.mesh) : null;
+      const tex = d.mat.texture
+        ? this._texture(d.mat.texture, !!d.mat.pixelated, d.obj.mesh, !!uvsFor(d.obj.mesh, d.mat.mapping).faceUVs)
+        : null;
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.uniform1i(u.uTexture, 0);
@@ -363,7 +382,7 @@ export class WebGLRenderer {
     }
     const locs = Object.values(a).filter((loc) => loc >= 0);
     for (const loc of locs) gl.enableVertexAttribArray(loc);
-    gl.drawArrays(gl.TRIANGLES, 0, buf.count);
+    gl.drawArrays(gl.TRIANGLES, first, count);
     for (const loc of locs) gl.disableVertexAttribArray(loc);
   }
 
@@ -398,13 +417,13 @@ export class WebGLRenderer {
    * (canvases and videos: every frame). Null while it isn't ready,
    * or if the mesh has no texture coordinates.
    */
-  _texture(src, pixelated, mesh) {
+  _texture(src, pixelated, mesh, hasUVs) {
     const gl = this.gl;
     if (!textureReady(src)) return null;
-    if (!mesh.faceUVs) {
+    if (!hasUVs) {
       if (!this._warned.has(mesh)) {
         this._warned.add(mesh);
-        console.warn("Trid: this mesh has no texture coordinates (uvs / faceUVs), so its texture isn't drawn");
+        console.warn("Trid: this mesh has no texture coordinates (uvs / faceUVs), so its texture isn't drawn. Set material.mapping to make some.");
       }
       return null;
     }
@@ -413,7 +432,7 @@ export class WebGLRenderer {
     const live = textureIsLive(src);
     if (!t || live || t.failed) {
       if (t?.failed) return null;
-      const { w, h } = textureSize(src);
+      let { w, h } = textureSize(src);
       if (!t) {
         t = { tex: gl.createTexture(), frame: -1 };
         this._textures.set(src, t);
@@ -422,9 +441,23 @@ export class WebGLRenderer {
       if (t.frame !== this._frame) {
         t.frame = this._frame;
         gl.bindTexture(gl.TEXTURE_2D, t.tex);
+        // Bigger than the graphics card allows: upload a smaller copy
+        let pixels = src;
+        const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        if (w > max || h > max) {
+          const k = max / Math.max(w, h);
+          if (!t.small || live) t.small = shrink(src, Math.floor(w * k), Math.floor(h * k), t.small);
+          if (!t.warned) {
+            t.warned = true;
+            console.warn(`Trid: a ${w} × ${h} texture is bigger than this graphics card allows (${max}), so it's drawn at ${t.small.width} × ${t.small.height}`);
+          }
+          pixels = t.small;
+          w = t.small.width;
+          h = t.small.height;
+        }
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); // images go top-down, v goes up
         try {
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
         } catch (err) {
           // Usually an image from another site without permission (CORS)
           console.warn("Trid: can't use this image as a texture: " + err.message);
@@ -465,59 +498,87 @@ export class WebGLRenderer {
   _geometry(mesh) {
     let geo = this._meshes.get(mesh);
     const stale = !geo || mesh.dirty || geo.vertices !== mesh.vertices || geo.faceList !== mesh.faces
-      || geo.edgeList !== mesh.edges || geo.counts !== countsOf(mesh);
+      || geo.edgeList !== mesh.edges || geo.faceMats !== mesh.faceMaterials || geo.counts !== countsOf(mesh);
     if (!stale) return geo;
 
     if (geo) {
-      for (const b of [geo.outlines, geo.edges, ...geo.faceBuffers.values()]) this._free(b);
+      for (const b of [...geo.lines.values(), ...geo.faceBuffers.values(), ...geo.groupOutlines.values()]) this._free(b);
     }
-    const v = mesh.vertices;
     const faces = mesh.faces ?? [];
 
-    // Outlines of the faces, each edge once
-    const outline = new Set();
-    const outlinePairs = [];
-    for (const f of faces) {
-      for (let k = 0; k < f.length; k++) {
-        const a = f[k], b = f[(k + 1) % f.length];
-        const key = a < b ? a + "," + b : b + "," + a;
-        if (!outline.has(key)) {
-          outline.add(key);
-          outlinePairs.push([a, b]);
-        }
-      }
+    // Faces grouped by material index, in the order the face buffers store them
+    const byIndex = new Map();
+    faces.forEach((f, fi) => {
+      if (f.length < 3) return;
+      const k = mesh.faceMaterials?.[fi] ?? 0;
+      if (!byIndex.has(k)) byIndex.set(k, []);
+      byIndex.get(k).push(fi);
+    });
+    const groups = [];
+    let first = 0;
+    for (const k of [...byIndex.keys()].sort((a, b) => a - b)) {
+      const list = byIndex.get(k);
+      const count = list.reduce((n, fi) => n + (faces[fi].length - 2) * 3, 0);
+      groups.push({ index: k, faces: list, first, count });
+      first += count;
     }
 
     geo = {
       vertices: mesh.vertices,
       faceList: mesh.faces,
       edgeList: mesh.edges,
+      faceMats: mesh.faceMaterials,
       counts: countsOf(mesh),
-      faceBuffers: new Map(), // one per shading mode, built when first needed
-      outlines: this._upload(lineData(v, outlinePairs), 8),
-      edges: this._upload(lineData(v, edgeSegments(mesh.edges ?? [])), 8),
+      groups,
+      groupOutlines: new Map(), // outlines of one group, when only some materials have `wireframe`
+      faceBuffers: new Map(), // one per shading mode and mapping, built when first needed
+      lines: new Map(), // "outlines" and "edges", built when first drawn (they're big on big models)
     };
     this._meshes.set(mesh, geo);
     return geo;
   }
 
+  /** A line buffer of the mesh, built the first time it's drawn. */
+  _lineBuffer(geo, name, pairs) {
+    let buf = geo.lines.get(name);
+    if (!buf) {
+      buf = this._upload(lineData(geo.vertices, pairs()), 8);
+      geo.lines.set(name, buf);
+    }
+    return buf;
+  }
+
+  /** Outlines of one group of faces (see `_geometry`), built when first needed. */
+  _outlineBuffer(geo, mesh, group) {
+    let buf = geo.groupOutlines.get(group.index);
+    if (!buf) {
+      const faces = mesh.faces ?? [];
+      buf = this._upload(lineData(mesh.vertices, outlinePairs(group.faces.map((fi) => faces[fi]))), 8);
+      geo.groupOutlines.set(group.index, buf);
+    }
+    return buf;
+  }
+
   /**
-   * Triangles of a mesh's faces, each corner with its own position and
-   * normal. Flat shading uses the face's normal at every corner; smooth
-   * shading uses the corner normals.
+   * Triangles of a mesh's faces, each corner with its own position,
+   * normal and texture coordinate, grouped by material (`geo.groups`).
+   * Flat shading uses the face's normal at every corner; smooth shading
+   * uses the corner normals. `mapping` picks the texture coordinates.
    */
-  _faceBuffer(geo, mesh, crease) {
-    const key = crease ?? "flat";
+  _faceBuffer(geo, mesh, crease, mapping) {
+    const key = (crease ?? "flat") + "|" + mappingKey(mapping);
     let buf = geo.faceBuffers.get(key);
     if (buf) return buf;
 
     const v = mesh.vertices;
     const faces = mesh.faces ?? [];
     const corners = crease ? cornerNormals(mesh, crease) : null;
-    const uvs = mesh.uvs, faceUVs = mesh.faceUVs;
-    const tri = [];
-    faces.forEach((f, fi) => {
-      if (f.length < 3) return;
+    const { uvs, faceUVs } = uvsFor(mesh, mapping);
+    const total = geo.groups.reduce((n, g) => n + g.count, 0);
+    const tri = new Float32Array(total * 8);
+    let o = 0;
+    for (const fi of geo.groups.flatMap((g) => g.faces)) {
+      const f = faces[fi];
       let ns;
       if (corners) {
         ns = corners[fi];
@@ -532,10 +593,12 @@ export class WebGLRenderer {
         for (const c of [0, k, k + 1]) {
           const p = v[f[c]], n = ns[c];
           const t = ts ? uvs[ts[c]] : null;
-          tri.push(p.x, p.y, p.z, n.x, n.y, n.z, t ? t.u : 0, t ? t.v : 0);
+          tri[o++] = p.x; tri[o++] = p.y; tri[o++] = p.z;
+          tri[o++] = n.x; tri[o++] = n.y; tri[o++] = n.z;
+          tri[o++] = t ? t.u : 0; tri[o++] = t ? t.v : 0;
         }
       }
-    });
+    }
 
     buf = this._upload(tri, 8);
     geo.faceBuffers.set(key, buf);
@@ -546,7 +609,7 @@ export class WebGLRenderer {
     const gl = this.gl;
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, data instanceof Float32Array ? data : new Float32Array(data), gl.STATIC_DRAW);
     this._buffers.add(buffer);
     return { buffer, count: data.length / floatsPerVertex };
   }
@@ -573,13 +636,44 @@ function countsOf(mesh) {
   return `${mesh.vertices.length}/${mesh.edges?.length ?? 0}/${mesh.faces?.length ?? 0}`;
 }
 
+/** A smaller copy of an image, drawn on a canvas (reused when given one). */
+function shrink(src, w, h, canvas = document.createElement("canvas")) {
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d").drawImage(src, 0, 0, w, h);
+  return canvas;
+}
+
+/** Each edge of the faces once, as [a, b] pairs. */
+function outlinePairs(faces) {
+  const seen = new Set();
+  const pairs = [];
+  for (const f of faces) {
+    for (let k = 0; k < f.length; k++) {
+      const a = f[k], b = f[(k + 1) % f.length];
+      const key = a < b ? a * 4294967296 + b : b * 4294967296 + a; // one number per edge
+      if (!seen.has(key)) {
+        seen.add(key);
+        pairs.push([a, b]);
+      }
+    }
+  }
+  return pairs;
+}
+
 /** Six corners (two triangles) per segment: A, B, then which corner. */
-function lineData(v, pairs) {
-  const out = [];
+function lineData(v, segments) {
+  const pairs = Array.isArray(segments) ? segments : [...segments]; // edgeSegments is a generator
+  const out = new Float32Array(pairs.length * 48);
   const corners = [[0, -1], [1, -1], [1, 1], [0, -1], [1, 1], [0, 1]];
+  let o = 0;
   for (const [i, j] of pairs) {
     const a = v[i], b = v[j];
-    for (const [cx, cy] of corners) out.push(a.x, a.y, a.z, b.x, b.y, b.z, cx, cy);
+    for (const [cx, cy] of corners) {
+      out[o++] = a.x; out[o++] = a.y; out[o++] = a.z;
+      out[o++] = b.x; out[o++] = b.y; out[o++] = b.z;
+      out[o++] = cx; out[o++] = cy;
+    }
   }
   return out;
 }

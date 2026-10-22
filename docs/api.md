@@ -12,7 +12,8 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/math/projection.js` | [`project`, `screen`](#projection) |
 | `trid/render/draw.js` | [`clear`, `point`, `line`, `drawWireframe`, `drawInstance`](#drawing) |
 | `trid/render/loop.js` | [`loop`](#frame-loop) |
-| `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`](#canvasrenderer) |
+| `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`, `materialsOf`](#canvasrenderer) |
+| `trid/render/uvMapping.js` | [`computeUVs`, `mapUVs`](./textures#texture-mapping), [`uvsFor`, `uvTransform`, `applyUVTransform`, `mappingOf`, `mappingKey`, `MAPPINGS`](#texture-mapping) |
 | `trid/render/webglRenderer.js` | [`WebGLRenderer`, `DEFAULT_FAR`](#webglrenderer) |
 | `trid/render/normals.js` | [`cornerNormals`, `creaseOf`, `newell`, `DEFAULT_CREASE`](#normals) |
 | `trid/render/effects.js` | [`toon`, `rim`, `edgeGlow`, `unlit`, `gradient`, `fog`](./effects#built-in-effects), [`buildEffects`, `effectsKey`, `uniformType`, `SURFACE_GLSL`](#effects) |
@@ -170,6 +171,17 @@ From `trid/loaders/texture.js`. Using textures is explained on the [Textures](./
 - **`textureReady(src)`** says whether an image, canvas or video has pixels to draw yet.
 - **`textureSize(src)`** returns `{ w, h }` in pixels.
 - **`textureIsLive(src)`** is `true` for canvases and videos, which renderers read again every frame.
+
+### Texture mapping
+
+From `trid/render/uvMapping.js`. Using mappings is explained on the [Textures](./textures#texture-mapping) page.
+
+- **`computeUVs(mesh, mapping)`** returns `{ uvs, faceUVs }` made from the mesh's shape. The mesh isn't changed.
+- **`mapUVs(mesh, mapping)`** writes them into the mesh and returns it.
+- **`uvsFor(mesh, mapping)`** returns the coordinates a renderer uses: the mesh's own, or computed for the mapping and cached until the mesh changes.
+- **`uvTransform(material)`** turns `textureRepeat`, `textureOffset` and `textureRotation` into a 2D matrix `[a, b, c, d, e, f]` (`u' = a·u + c·v + e`, `v' = b·u + d·v + f`), or `null` when they change nothing. **`applyUVTransform(m, uv)`** applies it to one coordinate.
+- **`mappingOf(mapping)`** returns the mapping as `{ type, axis }` and throws for an unknown one. **`mappingKey(mapping)`** is a short string for caches. **`MAPPINGS`** lists the mapping types.
+- **`materialsOf(obj)`** (from `canvasRenderer.js`) returns an object's materials as a list, or `null` for a wireframe.
 
 ### parseColor
 

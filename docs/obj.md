@@ -46,13 +46,40 @@ input.addEventListener("change", async () => {
 
 ## What gets loaded
 
-- **Vertices** (`v`), **texture coordinates** (`vt`), **normals** (`vn`), **faces** (`f`) and **lines** (`l`). Materials (`.mtl` files) and groups are skipped for now, so load textures yourself with [`loadTexture`](./textures).
-- Texture coordinates are kept as `mesh.uvs` and `mesh.faceUVs`, and used by [textures](./textures).
+- **Vertices** (`v`), **texture coordinates** (`vt`), **normals** (`vn`), **faces** (`f`), **lines** (`l`) and **material names** (`usemtl`). Material files (`.mtl`) and groups are skipped for now, so load textures yourself with [`loadTexture`](./textures).
+- Texture coordinates are kept as `mesh.uvs` and `mesh.faceUVs`, and used by [textures](./textures). A model without them can still be textured with a [mapping](./textures#texture-mapping).
 - Normals are kept as `mesh.normals` and `mesh.faceNormals` (each face's corner normal indices), and used by [smooth shading](./faces#smooth-shading).
 - Faces become **edges**, and an edge shared by two faces is drawn once.
 - The mesh also keeps its **`faces`**, so a model can be [filled and shaded](./faces): `scene.add({ mesh, material: { fill: "#8ab4f8" } })`.
 - **Z is flipped** on load. OBJ files are right-handed and Trid is [left-handed](./concepts), so without the flip models would come out mirrored.
 - Faces or lines pointing at a vertex that doesn't exist throw an `Error` with the line number.
+
+## Materials
+
+When a file uses more than one material name (`usemtl`), the mesh gets `materialNames`, in the order they first appear, and `faceMaterials`, the index of each face's name. Give the object a list of materials in the same order:
+
+```js
+const car = await loadOBJ("car.obj", { fit: 1 });
+console.log(car.materialNames); // ["body", "glass", "tires"]
+
+scene.add({
+  mesh: car,
+  material: [
+    { fill: "#E9806E", smooth: true }, // body
+    { fill: "rgba(150, 200, 255, 0.4)" }, // glass
+    { fill: "#222" }, // tires
+  ],
+});
+```
+
+Or build the list from the names:
+
+```js
+const looks = { body: { fill: "#E9806E" }, glass: { fill: "rgba(150, 200, 255, 0.4)" } };
+const material = car.materialNames.map((name) => looks[name] ?? { fill: "#888" });
+```
+
+See [A texture per face](./textures#a-texture-per-face).
 
 ::: tip Use `fit`
 OBJ files come in any size and are rarely centered. `{ fit: 1 }` centers the model on the origin and scales it so its largest side is 1 unit.
@@ -70,7 +97,7 @@ All of them take the same options: `{ fit }` (see above). Without `fit`, the fil
 | `pickOBJFile()` | `Promise<File \| null>` | Opens the file dialog for `.obj` files. Call it from a click. `null` if cancelled |
 | `fitMesh(mesh, size = 1)` | the same mesh | Centers and scales any mesh **in place** |
 
-The mesh is `{ vertices, edges, faces }` (plus `normals`, `faceNormals`, `uvs` and `faceUVs` when the file has them): pass it to `scene.add({ mesh })` like any other.
+The mesh is `{ vertices, edges, faces }` (plus `normals`, `faceNormals`, `uvs`, `faceUVs`, `materialNames` and `faceMaterials` when the file has them): pass it to `scene.add({ mesh })` like any other.
 
 ## ObjUploader
 

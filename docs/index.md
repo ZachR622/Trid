@@ -39,7 +39,7 @@ features:
     link: /effects
   - icon: 🖼️
     title: Textures
-    details: Images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files.
+    details: Images, canvases or videos on faces. Wrap them by shape (box, sphere, cylinder…), tile and scroll them, or give each face its own.
     link: /textures
   - icon: 🎥
     title: Tools

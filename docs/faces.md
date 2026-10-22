@@ -21,7 +21,11 @@ scene.add({ mesh: makeShape("cube"), material: { fill: "#E9806E" } });
 | `smooth` | `false` | Blend the light across faces so curved shapes look round. See [Smooth shading](#smooth-shading) |
 | `texture` | none | An image drawn on the faces. See [Textures](./textures) |
 | `pixelated` | `false` | Keep texture pixels sharp |
+| `mapping` | `"uv"` | Make texture coordinates from the shape: `"planar"`, `"box"`, `"sphere"`, `"cylinder"`. See [Texture mapping](./textures#texture-mapping) |
+| `textureRepeat`, `textureOffset`, `textureRotation` | none | Tile, move and turn the texture. See [Textures](./textures#repeat-offset-and-rotation) |
 | `effects` | none | A list of shader effects, like `[toon(), rim()]`. See [Effects](./effects) |
+
+An object can also have a list of materials, one per group of faces. See [A texture per face](./textures#a-texture-per-face).
 
 A material is a plain object, so several objects can share one:
 

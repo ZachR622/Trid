@@ -54,7 +54,8 @@ export class HoverHighlight {
       obj.color = this.color;
       // Swap in a copy, so other objects sharing the material don't change
       this._savedMaterial = obj.material;
-      if (obj.material) obj.material = { ...obj.material, fill: this.color };
+      if (Array.isArray(obj.material)) obj.material = obj.material.map((m) => m && { ...m, fill: this.color });
+      else if (obj.material) obj.material = { ...obj.material, fill: this.color };
     }
 
     this.onChange?.(obj);

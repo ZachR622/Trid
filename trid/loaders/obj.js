@@ -2,8 +2,8 @@
  * Wavefront OBJ loading.
  *
  * Reads vertex positions (`v`), texture coordinates (`vt`), normals
- * (`vn`), faces (`f`) and polylines (`l`). Everything else (materials,
- * groups) is ignored for now.
+ * (`vn`), faces (`f`), polylines (`l`) and material names (`usemtl`).
+ * Everything else (.mtl files, groups) is ignored for now.
  *
  * OBJ files are right-handed with +Z toward the viewer. Trid is
  * left-handed with the camera looking down +Z, so Z is flipped on
@@ -21,6 +21,9 @@
  * @property {{u:number,v:number}[]} [uvs] - Texture coordinates from the file (`vt`), if any
  * @property {(number[]|null)[]} [faceUVs] - For each face, the texture coordinate index of
  *   each corner (null when the file gives none for that face). Used by textures.
+ * @property {string[]} [materialNames] - Material names from `usemtl` lines, in the order they first appear
+ * @property {number[]} [faceMaterials] - For each face, its index in `materialNames`. Give the
+ *   object a list of materials in the same order to color or texture each part.
  *
  * @typedef {Object} ObjOptions
  * @property {number} [fit] - If set, center the model on the origin and scale it
@@ -43,6 +46,9 @@ export function parseOBJ(text, { fit } = {}) {
   const faceNormals = []; // per face: normal index of each corner, or null
   const uvs = [];
   const faceUVs = []; // per face: texture coordinate index of each corner, or null
+  const materialNames = [];
+  const faceMaterials = []; // per face: index in materialNames
+  let material = 0;
 
   const src = text.split(/\r?\n/);
 
@@ -60,6 +66,10 @@ export function parseOBJ(text, { fit } = {}) {
       uvs.push({ u: +(parts[1] ?? 0), v: +(parts[2] ?? 0) });
     } else if (kind === "vn") {
       normals.push({ x: +(parts[1] ?? 0), y: +(parts[2] ?? 0), z: -(parts[3] ?? 0) });
+    } else if (kind === "usemtl") {
+      const name = parts.slice(1).join(" ");
+      material = materialNames.indexOf(name);
+      if (material < 0) material = materialNames.push(name) - 1;
     } else if (kind === "f" || kind === "l") {
       // "7", "7/1", "7//3", "7/1/3" all point at vertex 7. Negative = counted from the end.
       const ids = parts.slice(1).map((p) => {
@@ -72,6 +82,7 @@ export function parseOBJ(text, { fit } = {}) {
       });
       if (kind === "f" && ids.length >= 3) {
         faces.push(ids.reverse()); // flipping Z flips the winding
+        faceMaterials.push(material);
         // "7//3" and "7/1/3": the third number is the corner's normal
         const ns = parts.slice(1).map((p) => {
           const s = p.split("/")[2];
@@ -126,6 +137,11 @@ export function parseOBJ(text, { fit } = {}) {
   if (faceUVs.some((t) => t)) {
     mesh.uvs = uvs;
     mesh.faceUVs = faceUVs;
+  }
+  // Parts using different materials
+  if (materialNames.length > 1) {
+    mesh.materialNames = materialNames;
+    mesh.faceMaterials = faceMaterials;
   }
   if (fit != null) fitMesh(mesh, fit);
   return mesh;

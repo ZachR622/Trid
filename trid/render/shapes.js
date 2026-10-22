@@ -45,6 +45,8 @@ function rectPrismWire(w = 0.6, h = 0.3, d = 0.4) {
       [0, 3, 7, 4], // right
       [1, 5, 6, 2], // left
     ],
+    // Which material each face uses when `material` is a list: one per side, in the order above
+    faceMaterials: [0, 1, 2, 3, 4, 5],
   };
   return withFaceUVs(mesh);
 }
