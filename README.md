@@ -10,7 +10,7 @@
 
 Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools, all in plain ES modules you can drop next to your page.
 
-> **Status:** early. Objects can be wireframes or filled, shaded and textured, with shader effects.
+> **Status:** early (0.x): the API can still change between minor versions. See [Upgrading](#upgrading).
 
 ## Features
 
@@ -26,7 +26,7 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 - **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` / `exportModel` write meshes, objects or whole scenes as OBJ files with their MTL materials and textures.
 - **Camera** — position, yaw, pitch and field of view, with near-plane clipping.
 - **Tools** — orbit and fly cameras, object dragging, hover highlight, a move / rotate / scale gizmo, a view axes gizmo, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles. Writing your own is a plain object with a few methods.
-- **Pure math** — every transform and projection step is exported, so you can use the pipeline piece by piece.
+- **Pure math** — every transform and projection step is exported, plus 4×4 matrices and rotations, so you can use the pipeline piece by piece.
 
 ## Install
 
@@ -38,7 +38,7 @@ No bundler? Use the CDN with an import map, or copy the `trid/` folder next to y
 
 ```html
 <script type="importmap">
-  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.1/trid/index.js" } }
+  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.3/trid/index.js" } }
 </script>
 ```
 
@@ -69,8 +69,8 @@ Without a bundler, serve the folder (`python3 -m http.server`) instead of openin
 ```js
 import { loadOBJ } from "trid3d";
 
-const mesh = await loadOBJ("models/teapot.obj", { fit: 1 }); // centered, 1 unit wide
-scene.add({ mesh });
+const mesh = await loadOBJ("models/teapot.obj", { fit: 1, materials: true }); // centered, 1 unit wide
+scene.add({ mesh, material: mesh.materials }); // colors and textures from its .mtl file
 ```
 
 Or let users load their own: `scene.use(new ObjUploader())` accepts dropped `.obj` files, and `uploader.open()` shows a file dialog.
@@ -81,12 +81,14 @@ Or let users load their own: `scene.use(new ObjUploader())` accepts dropped `.ob
 | --- | --- |
 | `trid/index.js` | Entry file: exports everything (`"trid3d"`) |
 | `trid/scene.js` | The `Scene` class |
-| `trid/math/` | Transforms, camera directions, projection |
-| `trid/render/` | Renderers (Canvas 2D, WebGL), effects, shapes, drawing, frame loop |
-| `trid/loaders/` | OBJ and texture loading |
-| `trid/export/` | Screenshots, video recording and OBJ export |
-| `trid/tools/` | Camera, object and overlay tools |
+| `trid/sceneGraph.js` | Groups: `children`, world matrices |
+| `trid/math/` | Transforms, camera directions, projection, matrices, rotations, random numbers and noise |
+| `trid/render/` | Renderers (Canvas 2D, WebGL), effects, shapes, mesh helpers, procedural textures, drawing, frame loop |
+| `trid/loaders/` | OBJ, MTL and texture loading |
+| `trid/export/` | Screenshots, video recording, OBJ and MTL export |
+| `trid/tools/` | Camera, object, gizmo and overlay tools |
 | `docs/` | Documentation site with live demos |
+| `test/` | Tests (`npm test`) |
 
 ## Documentation
 
@@ -101,6 +103,23 @@ npm run docs:dev
 
 See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.md) for building and editing the docs.
 
+## Tests
+
+```sh
+npm test
+```
+
+Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes, mesh helpers, noise, textures, OBJ / MTL, picking, tools, groups and matrices, and the WebGL renderer's GPU memory on a fake WebGL context.
+
+## Upgrading
+
+### From 0.2 to 0.3
+
+- **Canvas textures are read once.** A canvas used as a `texture` is now uploaded once (faster, and sharper with mipmaps). If you draw on it again, call `updateTexture(canvas)` after drawing, or give its material `liveTexture: true` to read it every frame. Videos still play on their own. See [Changing a canvas](https://zachr622.github.io/Trid/textures#changing-a-canvas).
+- **The WebGL renderer frees unused GPU memory**: meshes and textures not drawn for 300 frames are freed (and sent again if they come back). Set `new WebGLRenderer({ releaseAfter: Infinity })` to keep the old behavior.
+- **Objects can have `children`**, and `mesh` is optional for a group. Code that walks `scene.objects` only sees the top level; use `worldObjects(scene)` to include children.
+- `parseOBJ` now sets `materialNames` / `faceMaterials` for a file with a single material too.
+
 ## Roadmap
 
 Roughly in order:
@@ -108,4 +127,4 @@ Roughly in order:
 - **More import and export formats** — STL; basic glTF later
 - **More tools** — a selection outline, a grid helper
 - **Post effects** (WebGL) — bloom, vignette, outlines, antialiasing and color grading over the whole image
-- **More tests** — `npm test` covers shapes and tools so far; the math functions are next
+- **More tests** — the canvas renderer's drawing and the remaining math functions
