@@ -91,6 +91,8 @@ export type TextureSource = CanvasImageSource;
 
 /** How an object's faces look. Objects without one are drawn as wireframes. */
 export interface Material {
+  /** A name: `exportOBJ` / `exportMTL` write it as the material's name (`usemtl` / `newmtl`) */
+  name?: string;
   /** Face color, any CSS color (default: the scene's color, or white with a texture) */
   fill?: string;
   /** Darken faces that turn away from the light (default true) */
