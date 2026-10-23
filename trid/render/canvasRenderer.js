@@ -1,4 +1,6 @@
-import { localToWorld, worldToCamera, cameraToScreen, clipNear, rotateXYZ, DEFAULT_NEAR } from "../math/transform.js";
+import { worldToCamera, cameraToScreen, clipNear, DEFAULT_NEAR } from "../math/transform.js";
+import { transformPoint, normalMatrix, transformNormal, determinantMat4 } from "../math/matrix.js";
+import { worldObjects } from "../sceneGraph.js";
 import { clear, drawInstance, edgeSegments, wireEdges } from "./draw.js";
 import { parseColor } from "./color.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
@@ -104,11 +106,15 @@ export class CanvasRenderer {
     clear(ctx, w, h, scene.background);
     this._frame++;
 
+    // Every object with a mesh, groups' children included, with its world matrix
+    const drawn = worldObjects(scene).filter((o) => o.mesh);
+
     // Wireframes only: nothing to sort
-    if (!scene.objects.some((o) => materialsOf(o))) {
-      for (const obj of scene.objects) {
-        drawInstance(ctx, obj, camera, w, h, obj.color ?? scene.color, obj.lineWidth ?? scene.lineWidth);
+    if (!drawn.some((o) => materialsOf(o))) {
+      for (const obj of drawn) {
+        drawInstance(ctx, obj, camera, w, h, obj.color ?? scene.color, obj.lineWidth ?? scene.lineWidth, obj.world);
       }
+      for (const obj of drawn) if (obj.mesh.dirty) obj.mesh.dirty = false;
       return;
     }
 
@@ -122,12 +128,12 @@ export class CanvasRenderer {
     const time = (performance.now() - this._start) / 1000;
     const background = this._rgba(ctx, scene.background);
 
-    for (const obj of scene.objects) {
+    for (const obj of drawn) {
       const mats = materialsOf(obj);
       // Split big faces (cached per mesh); extra vertices are midpoints of existing ones
       const split = mats && this.maxFaceSize ? this._split(obj.mesh) : null;
       const verts = split ? withMidpoints(obj.mesh.vertices, split.mids) : obj.mesh.vertices;
-      const world = verts.map((v) => localToWorld(v, obj));
+      const world = verts.map((v) => transformPoint(obj.world, v));
       const cam = world.map((p) => worldToCamera(p, camera));
       const color = obj.color ?? scene.color;
       const lineWidth = obj.lineWidth ?? scene.lineWidth;
@@ -147,6 +153,13 @@ export class CanvasRenderer {
 
       const sourceFaces = obj.mesh.faces ?? [];
       const base = obj.mesh.vertices.length;
+      // Normals turn with the object (stretched and mirrored ones too); a mirror reverses face winding
+      const nm = normalMatrix(obj.world);
+      const flip = determinantMat4(obj.world) < 0 ? -1 : 1;
+      const flatNormal = (face) => {
+        const n = normalize(newell(face.map((i) => world[i])));
+        return { x: n.x * flip, y: n.y * flip, z: n.z * flip };
+      };
 
       // Smooth shading: a normal per face corner (split faces get midpoints' normals by averaging)
       const normalAt = (corners, F, i) => {
@@ -156,18 +169,16 @@ export class CanvasRenderer {
         return normalize({ x: na.x + nb.x, y: na.y + nb.y, z: na.z + nb.z });
       };
       const lightAt = (n, back) => {
-        // Same steps as the vertices: undo the scale, then rotate (keeps normals right on stretched objects)
-        const r = normalize(rotateXYZ({ x: n.x / obj.scale.x, y: n.y / obj.scale.y, z: n.z / obj.scale.z }, obj.rot));
+        const r = transformNormal(nm, n);
         const d = (back ? -1 : 1) * (r.x * light.x + r.y * light.y + r.z * light.z);
         return ambient + (1 - ambient) * Math.max(0, d);
       };
       const flatLight = (face, back) => {
-        const nw = normalize(newell(face.map((i) => world[i])));
+        const nw = flatNormal(face);
         const d = (back ? -1 : 1) * (nw.x * light.x + nw.y * light.y + nw.z * light.z);
         return ambient + (1 - ambient) * Math.max(0, d);
       };
-      const toWorldNormal = (n) =>
-        normalize(rotateXYZ({ x: n.x / obj.scale.x, y: n.y / obj.scale.y, z: n.z / obj.scale.z }, obj.rot));
+      const toWorldNormal = (n) => transformNormal(nm, n);
 
       // Everything a material needs, worked out once per object and frame
       const prepare = (mat) => {
@@ -222,7 +233,7 @@ export class CanvasRenderer {
         // Seen from behind? (camera sits at the origin of camera space)
         const n = newell(pts);
         const c = centroid(pts);
-        const back = n.x * c.x + n.y * c.y + n.z * c.z >= 0;
+        const back = (n.x * c.x + n.y * c.y + n.z * c.z >= 0) !== (flip < 0);
         if (back && !L.mat.doubleSided) continue;
 
         const clipped = clipPolygon(pts, near);
@@ -265,7 +276,7 @@ export class CanvasRenderer {
               .reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }), { x: 0, y: 0, z: 0 });
             nw = normalize(sum);
           } else {
-            nw = normalize(newell(face.map((i) => world[i])));
+            nw = flatNormal(face);
           }
           if (back) nw = { x: -nw.x, y: -nw.y, z: -nw.z };
 
@@ -382,7 +393,7 @@ export class CanvasRenderer {
     }
 
     // Meshes marked as changed have been redrawn from their new data
-    for (const obj of scene.objects) if (obj.mesh.dirty) obj.mesh.dirty = false;
+    for (const obj of drawn) if (obj.mesh.dirty) obj.mesh.dirty = false;
   }
 
   /**

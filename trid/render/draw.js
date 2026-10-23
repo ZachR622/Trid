@@ -1,4 +1,5 @@
 import { localToWorld, worldToCamera, cameraToScreen, clipNear, DEFAULT_NEAR } from "../math/transform.js";
+import { transformPoint } from "../math/matrix.js";
 
 /**
  * Clears the entire canvas with a solid background color.
@@ -136,10 +137,13 @@ export function drawWireframe(ctx, points2, edges, color, width = 4) {
  * @param {number} h - Canvas height
  * @param {string} color - Wireframe color
  * @param {number} lineWidth - Wireframe width
+ * @param {number[]} [world] - World matrix to place it with (e.g. `obj.world` inside a group).
+ *   Default: the instance's own pos / rot / scale
  */
-export function drawInstance(ctx, inst, camera, w, h, color, lineWidth = 3) {
+export function drawInstance(ctx, inst, camera, w, h, color, lineWidth = 3, world) {
   const near = camera.near ?? DEFAULT_NEAR;
-  const ptsCam = inst.mesh.vertices.map(v => worldToCamera(localToWorld(v, inst), camera));
+  const toWorld = world ? (v) => transformPoint(world, v) : (v) => localToWorld(v, inst);
+  const ptsCam = inst.mesh.vertices.map((v) => worldToCamera(toWorld(v), camera));
 
   ctx.lineWidth = lineWidth;
   ctx.strokeStyle = color;

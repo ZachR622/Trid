@@ -1,6 +1,8 @@
 import { cameraForward, worldToCamera, worldToScreen, DEFAULT_NEAR } from "../math/transform.js";
 import { applyTransformOp, matFromAxisAngle, mulVec } from "../math/rotation.js";
 import { meshBounds } from "../render/meshUtils.js";
+import { transformOpToLocal } from "../math/matrix.js";
+import { worldMatrix, ancestors } from "../sceneGraph.js";
 import { worldPerPixel } from "./helpers.js";
 
 const AXES = [
@@ -23,6 +25,10 @@ const RING = 64;
  *   the one facing the camera wins
  * - `"scale"`: X, Y, Z handles with square ends to stretch along an axis,
  *   and a center square for all axes at once (×2 per 100 px dragged right)
+ *
+ * Targets can be groups (their children move with them) or objects inside
+ * groups: the handles work in world space, and each target is changed in
+ * its parent's space, so it follows the mouse however its group is turned.
  *
  * By default it changes the targets' `pos`, `rot` and `scale`. With
  * `apply: false` it only reports what the drag does (a `TransformOp`,
@@ -176,6 +182,10 @@ export class TransformGizmo {
       angle0: Math.atan2(e.y - cs.y, e.x - cs.x),
       turnSign,
       start: this.targets.map((t) => ({ pos: { ...t.pos }, rot: { ...t.rot }, scale: { ...t.scale } })),
+      // Parents' world matrices at the grab (ops are turned into each target's parent space)
+      parents: this.targets.map((t) => (t.parent ? worldMatrix(t.parent) : null)),
+      // A target inside another target already moves with it
+      moves: this.targets.map((t) => !ancestors(t).slice(1).some((a) => this.targets.includes(a))),
       op: null,
     };
     this.dragging = true;
@@ -217,7 +227,13 @@ export class TransformGizmo {
       op = { mode: "scale", axis: AXES[d.id].dir, factor: Math.max(0.05, 1 + along()), center: d.center };
     }
     d.op = op;
-    if (this.apply) this.targets.forEach((t, i) => Object.assign(t, applyTransformOp(d.start[i], op)));
+    if (this.apply) {
+      this.targets.forEach((t, i) => {
+        if (!d.moves[i]) return;
+        const local = d.parents[i] ? transformOpToLocal(op, d.parents[i]) : op;
+        Object.assign(t, applyTransformOp(d.start[i], local));
+      });
+    }
     this.onChange?.(op, this.targets);
   }
 

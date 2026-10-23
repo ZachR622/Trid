@@ -26,6 +26,8 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |
 | `trid/export/capture.js` | [`screenshot`, `record`, `download`](./export) |
 | `trid/tools/index.js` | [Tools](./tools), [`pick`, `pickHit`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
+| `trid/sceneGraph.js` | [`worldObjects`, `worldMatrix`, `worldPosition`, `ancestors`, `forEachPlaced`](./groups#where-things-are-parent-and-world) |
+| `trid/math/matrix.js` | [`identityMat4`, `mat4FromTransform`, `mulMat4`, `invertMat4`, `determinantMat4`, `transformPoint`, `transformDirection`, `normalMatrix`, `transformNormal`, `transformOpToLocal`](./groups#matrices) |
 | `trid/math/rotation.js` | [`matFromEuler`, `eulerFromMat`, `matFromAxisAngle`, `mulMat`, `mulVec`, `applyTransformOp`](#rotations) |
 
 ## Math

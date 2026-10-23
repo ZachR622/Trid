@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 /** A fake WebGL context: every call works; uploads and frees are counted. */
 function fakeGL() {
   const count = { texImage2D: 0, createBuffer: 0, deleteBuffer: 0, createTexture: 0, deleteTexture: 0, generateMipmap: 0 };
+  const calls = { models: [], frontFace: [] };
   const special = {
+    uniformMatrix4fv: (loc, transpose, m) => calls.models.push([...m]),
+    frontFace: (mode) => calls.frontFace.push(mode),
     getParameter: () => 4096,
     getAttribLocation: () => 0,
     getShaderParameter: () => true,
@@ -22,7 +25,7 @@ function fakeGL() {
       return () => ({});
     },
   });
-  return { gl, count };
+  return { gl, count, calls };
 }
 
 /** A 2D context that keeps fillStyle (parseColor reads it back) and ignores drawing. */
@@ -45,7 +48,7 @@ globalThis.HTMLVideoElement = FakeVideo;
 globalThis.document = { createElement: () => new FakeCanvas() };
 
 let current = fakeGL();
-const { WebGLRenderer, makeShape, updateTexture } = await import("../trid/index.js");
+const { WebGLRenderer, makeShape, updateTexture, worldMatrix } = await import("../trid/index.js");
 
 function setup(opts) {
   current = fakeGL();
@@ -56,7 +59,7 @@ function setup(opts) {
   };
   const add = (o) => (scene.objects.push({ pos: { x: 0, y: 0, z: 0 }, rot: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 }, ...o }), scene.objects.at(-1));
   const frames = (n) => { for (let i = 0; i < n; i++) renderer.render(scene); };
-  return { renderer, scene, add, frames, count: current.count };
+  return { renderer, scene, add, frames, count: current.count, calls: current.calls };
 }
 
 // --- #6 ----------------------------------------------------------------------
@@ -151,4 +154,19 @@ test("#7: release() frees a mesh or texture now; it's sent again if drawn again"
   frames(1);
   assert.deepEqual(renderer.memory, { meshes: 1, buffers: 1, textures: 1 });
   assert.equal(count.texImage2D, 2);
+});
+
+// --- Groups -------------------------------------------------------------------
+
+test("groups: each child is drawn with its world matrix; mirrored ones flip the face winding", () => {
+  const { add, frames, calls } = setup();
+  const child = { mesh: makeShape("cube"), pos: { x: 0.5, y: 0, z: 0 }, rot: { x: 0, y: 0, z: 0.4 }, scale: { x: 1, y: 1, z: 1 } };
+  const mirrored = { mesh: makeShape("cube"), pos: { x: 0, y: 0, z: 0 }, rot: { x: 0, y: 0, z: 0 }, scale: { x: -1, y: 1, z: 1 }, material: { fill: "#0f0" } };
+  child.material = { fill: "#f00" };
+  add({ scale: { x: 2, y: 1, z: 1 }, rot: { x: 0, y: 0.7, z: 0 }, children: [child, mirrored] });
+  frames(1);
+  const sent = calls.models.map((m) => m.map((x) => x.toFixed(9)).join());
+  assert.ok(sent.includes(worldMatrix(child).map((x) => x.toFixed(9)).join()));
+  assert.ok(sent.includes(worldMatrix(mirrored).map((x) => x.toFixed(9)).join()));
+  assert.deepEqual([...new Set(calls.frontFace)].sort(), ["CCW", "CW"]);
 });

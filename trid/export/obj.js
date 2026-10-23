@@ -10,7 +10,8 @@
  * the right way round in Blender and other 3D programs.
  */
 
-import { localToWorld, rotateXYZ } from "../math/transform.js";
+import { transformPoint, normalMatrix, transformNormal, determinantMat4 } from "../math/matrix.js";
+import { forEachPlaced, worldMatrix } from "../sceneGraph.js";
 import { edgeSegments } from "../render/draw.js";
 import { materialsOf } from "../render/canvasRenderer.js";
 import { uvsFor, uvTransform, applyUVTransform } from "../render/uvMapping.js";
@@ -33,6 +34,8 @@ import { uvsFor, uvTransform, applyUVTransform } from "../render/uvMapping.js";
  * - a mesh (`{ vertices, edges, faces }`): written as it is
  * - a scene object (`{ mesh, pos, rot, scale }`): its position, rotation and
  *   scale are applied, so it's written where it is in the scene
+ * - a group (an object with `children`): every mesh in it is written, each
+ *   where it's drawn, as its own object
  * - a list of meshes or objects, or a `Scene`: each becomes its own object (`o`)
  *   in the file, named after its `name` field when it has one
  *
@@ -54,19 +57,32 @@ export function exportOBJ(input, { uvs = true, normals = true, lines = true, pre
   if (header) out.push(...header.split("\n").map((l) => "# " + l));
   let vBase = 0, tBase = 0, nBase = 0; // OBJ indices count across the whole file, from 1
 
-  items.forEach((item, index) => {
-    if (!item) return;
-    const isObject = !!item.mesh;
-    const mesh = isObject ? item.mesh : item;
-    if (!mesh?.vertices) throw new Error("exportOBJ: expected a mesh, a scene object, a list of them or a Scene");
-    const faces = mesh.faces ?? [];
-    const placed = isObject && item.pos && item.rot && item.scale;
+  // Plain meshes as they are; objects and their children where they're drawn (world matrix)
+  const entries = [];
+  for (const item of items) {
+    if (!item) continue;
+    if (item.vertices) entries.push({ item, mesh: item, world: null });
+    else if (item.mesh || item.children) {
+      forEachPlaced([item], (root) => (root.parent ? worldMatrix(root.parent) : null), (obj, world) => {
+        if (obj.mesh) entries.push({ item: obj, mesh: obj.mesh, world });
+      });
+    } else {
+      throw new Error("exportOBJ: expected a mesh, a scene object, a list of them or a Scene");
+    }
+  }
 
-    if (items.length > 1 || item.name) out.push(`o ${item.name ?? `object${index + 1}`}`);
+  entries.forEach(({ item, mesh, world }, index) => {
+    if (!mesh?.vertices) throw new Error("exportOBJ: expected a mesh, a scene object, a list of them or a Scene");
+    const isObject = !!world;
+    const faces = mesh.faces ?? [];
+    // A mirrored object's faces are already turned around once
+    const mirrored = world ? determinantMat4(world) < 0 : false;
+
+    if (entries.length > 1 || item.name) out.push(`o ${item.name ?? `object${index + 1}`}`);
 
     // Positions, in the scene's place when it's an object; Z flipped back to OBJ's right-handed axes
     for (const v of mesh.vertices) {
-      const p = placed ? localToWorld(v, item) : v;
+      const p = world ? transformPoint(world, v) : v;
       out.push(`v ${num(p.x)} ${num(p.y)} ${num(-p.z)}`);
     }
 
@@ -86,13 +102,9 @@ export function exportOBJ(input, { uvs = true, normals = true, lines = true, pre
     // Normals: turned like the object, and flipped back like the positions
     const writeNormals = !!(normals && mesh.normals && mesh.faceNormals?.some(Boolean));
     if (writeNormals) {
+      const nm = world ? normalMatrix(world) : null;
       for (const n of mesh.normals) {
-        let r = n;
-        if (placed) {
-          r = rotateXYZ({ x: n.x / item.scale.x, y: n.y / item.scale.y, z: n.z / item.scale.z }, item.rot);
-          const len = Math.hypot(r.x, r.y, r.z) || 1;
-          r = { x: r.x / len, y: r.y / len, z: r.z / len };
-        }
+        const r = nm ? transformNormal(nm, n) : n;
         out.push(`vn ${num(r.x)} ${num(r.y)} ${num(-r.z)}`);
       }
     }
@@ -113,7 +125,8 @@ export function exportOBJ(input, { uvs = true, normals = true, lines = true, pre
       const ts = writeUVs ? faceUVs[fi] : null;
       const ns = writeNormals ? mesh.faceNormals[fi] : null;
       const corners = [];
-      for (let k = f.length - 1; k >= 0; k--) {
+      const order = mirrored ? f.map((_, k) => k) : f.map((_, k) => f.length - 1 - k);
+      for (const k of order) {
         const v = vBase + f[k] + 1;
         const t = ts ? tBase + ts[k] + 1 : "";
         const n = ns ? nBase + ns[k] + 1 : "";

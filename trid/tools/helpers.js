@@ -1,9 +1,13 @@
-import { localToWorld, worldToCamera, cameraToScreen, DEFAULT_FOV, DEFAULT_NEAR } from "../math/transform.js";
+import { worldToCamera, cameraToScreen, DEFAULT_FOV, DEFAULT_NEAR } from "../math/transform.js";
+import { transformPoint } from "../math/matrix.js";
+import { worldMatrix, worldObjects, ancestors } from "../sceneGraph.js";
 import { edgeSegments, wireEdges } from "../render/draw.js";
 
 /**
  * Screen-space bounding box of an object, in canvas pixels.
  * Only vertices in front of the camera's near plane are used.
+ *
+ * Objects inside groups are measured where they're drawn.
  *
  * @param {import("../scene.js").Scene} scene - Scene the object is in
  * @param {Object} obj - Mesh instance (mesh, pos, rot, scale)
@@ -13,10 +17,11 @@ import { edgeSegments, wireEdges } from "../render/draw.js";
 export function screenBounds(scene, obj) {
   const { camera, canvas } = scene;
   const near = camera.near ?? DEFAULT_NEAR;
+  const world = worldMatrix(obj);
   let box = null;
 
   for (const v of obj.mesh.vertices) {
-    const pCam = worldToCamera(localToWorld(v, obj), camera);
+    const pCam = worldToCamera(transformPoint(world, v), camera);
     if (pCam.z < near) continue;
 
     const p = cameraToScreen(pCam, camera, canvas.width, canvas.height);
@@ -44,6 +49,9 @@ export function screenBounds(scene, obj) {
  * With `exact: true` it tests the object's actual triangles (see `pickHit`),
  * so the click always matches what's drawn.
  *
+ * Objects inside groups are found too: the result is the object with the
+ * mesh that was hit (use `pickHit(...).path`, or `obj.parent`, for its groups).
+ *
  * @param {import("../scene.js").Scene} scene - Scene to search
  * @param {number} x - Canvas X in pixels
  * @param {number} y - Canvas Y in pixels
@@ -60,10 +68,10 @@ export function pick(scene, x, y, { filter = () => true, padding = 4, exact = fa
   let best = null;
   let bestDepth = Infinity;
 
-  for (const obj of scene.objects) {
-    if (!filter(obj)) continue;
+  for (const obj of worldObjects(scene)) {
+    if (!obj.mesh || !filter(obj)) continue;
 
-    const depth = worldToCamera(obj.pos, scene.camera).z;
+    const depth = worldToCamera(transformPoint(obj.world, { x: 0, y: 0, z: 0 }), scene.camera).z;
     if (depth < near || depth >= bestDepth) continue;
 
     const box = screenBounds(scene, obj);
@@ -102,10 +110,12 @@ export function pick(scene, x, y, { filter = () => true, padding = 4, exact = fa
  * @param {Object} [opts]
  * @param {(obj:Object) => boolean} [opts.filter] - Only consider objects that pass
  * @param {number} [opts.padding=4] - How many pixels from a line count as a hit (objects without faces)
- * @param {Object[]} [opts.objects=scene.objects] - Objects to test
- * @returns {{ object:Object, face:number, depth:number } | null}
- *   `face` is the index in `mesh.faces` (-1 for a line), `depth` the distance
- *   in front of the camera; null if nothing is hit
+ * @param {Object[]} [opts.objects=scene.objects] - Objects to test (with their children)
+ * @returns {{ object:Object, face:number, depth:number, path:Object[] } | null}
+ *   `object` has the mesh that was hit, `face` is the index in its
+ *   `mesh.faces` (-1 for a line), `depth` the distance in front of the
+ *   camera, `path` the object then its groups up to the top
+ *   (`[part, group, ..., root]`); null if nothing is hit
  */
 export function pickHit(scene, x, y, { filter = () => true, padding = 4, objects = scene.objects } = {}) {
   const { camera, canvas } = scene;
@@ -113,10 +123,10 @@ export function pickHit(scene, x, y, { filter = () => true, padding = 4, objects
   const near = camera.near ?? DEFAULT_NEAR;
   let best = null;
 
-  for (const object of objects) {
-    if (!filter(object) || !object.mesh?.vertices) continue;
+  for (const object of worldObjects(objects)) {
+    if (!object.mesh?.vertices || !filter(object)) continue;
     const mesh = object.mesh;
-    const cam = mesh.vertices.map((v) => worldToCamera(localToWorld(v, object), camera));
+    const cam = mesh.vertices.map((v) => worldToCamera(transformPoint(object.world, v), camera));
     const scr = cam.map((p) => (p.z > near ? cameraToScreen(p, camera, w, h) : null));
     const closer = (depth) => !best || depth < best.depth;
 
@@ -146,6 +156,7 @@ export function pickHit(scene, x, y, { filter = () => true, padding = 4, objects
       }
     }
   }
+  if (best) best.path = ancestors(best.object);
   return best;
 }
 

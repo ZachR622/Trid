@@ -41,13 +41,15 @@ const ball = scene.add({
 ball.rot.y = Math.PI / 4;
 ```
 
+An object can hold other objects in `children`, placed relative to it: see [Groups](./groups). `add` fills in transforms down the whole tree.
+
 ### `scene.remove(obj)`
 
-Takes an object out of the scene. Does nothing if it isn't in it.
+Takes an object out of the scene, or out of its group if it's a [child](./groups). Its own children go with it. Does nothing if it isn't there.
 
 ### `scene.objects`
 
-The array of objects, drawn in order. You can read it or change it directly.
+The array of top-level objects, drawn in order (children right after their parent). You can read it or change it directly. To go through every object, children included, use [`worldObjects(scene)`](./groups#where-things-are-parent-and-world).
 
 ## Running the loop
 

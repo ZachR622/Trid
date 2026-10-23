@@ -1,6 +1,7 @@
 import { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./render/canvasRenderer.js";
 import { loop } from "./render/loop.js";
 import { ToolManager } from "./tools/manager.js";
+import { linkTree } from "./sceneGraph.js";
 import { screenshot, record } from "./export/capture.js";
 
 /**
@@ -71,27 +72,37 @@ export class Scene {
   }
 
   /**
-   * Adds an object to the scene, filling in missing transform fields.
+   * Adds an object to the scene, filling in missing transform fields
+   * (down its `children` too).
    *
-   * @param {{ mesh:{ vertices:{x:number,y:number,z:number}[], edges:number[][] } }} obj - Mesh instance
+   * An object can be a group: give it `children`, objects placed relative
+   * to it, and leave out `mesh` if it's only there to hold them. Moving it
+   * moves them all. See `trid/sceneGraph.js`.
+   *
+   * @example
+   * const car = scene.add({ children: [{ mesh: body }, { mesh: wheel, pos: { x: 0.4, y: -0.2, z: 0 } }] });
+   * car.pos.x += 0.1; // the body and the wheel move together
+   *
+   * @param {Object} obj - An object: `mesh` and/or `children`, plus pos, rot, scale, material...
    * @returns The same object, so it can be kept and animated
    */
   add(obj) {
-    obj.pos ??= { x: 0, y: 0, z: 0 };
-    obj.rot ??= { x: 0, y: 0, z: 0 };
-    obj.scale ??= { x: 1, y: 1, z: 1 };
+    linkTree(obj, null);
     this.objects.push(obj);
     return obj;
   }
 
   /**
-   * Removes an object from the scene. Does nothing if it isn't in it.
+   * Removes an object: from the scene's top level, or from its group's
+   * `children`. Its own children go with it. Does nothing if it isn't there.
    *
-   * @param {Object} obj - Object previously passed to `add`
+   * @param {Object} obj - Object previously added (or a child of one)
    */
   remove(obj) {
-    const i = this.objects.indexOf(obj);
-    if (i !== -1) this.objects.splice(i, 1);
+    const list = obj.parent ? obj.parent.children : this.objects;
+    const i = list?.indexOf(obj) ?? -1;
+    if (i !== -1) list.splice(i, 1);
+    if (obj.parent) obj.parent = null;
   }
 
   /**

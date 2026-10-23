@@ -47,8 +47,8 @@ An **object** places a mesh in the world. It's a plain object too:
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `mesh` | required | The mesh to draw |
-| `pos` | `{ x: 0, y: 0, z: 0 }` | Position in world space |
+| `mesh` | none | The mesh to draw. A [group](./groups) that only holds children can leave it out |
+| `pos` | `{ x: 0, y: 0, z: 0 }` | Position in world space (in its parent's space, inside a group) |
 | `rot` | `{ x: 0, y: 0, z: 0 }` | Rotation around each axis, in radians |
 | `scale` | `{ x: 1, y: 1, z: 1 }` | Scale along each axis |
 | `color` | scene's color | Any CSS color |
@@ -56,6 +56,8 @@ An **object** places a mesh in the world. It's a plain object too:
 | `material` | none | Fill and shade the mesh's faces instead of drawing lines. See [Filled faces](./faces) |
 | `draggable` | `true` | Set `false` to ignore [`DragObject`](./tools#dragobject) |
 | `hoverable` | `true` | Set `false` to ignore [`HoverHighlight`](./tools#hoverhighlight) |
+| `children` | none | Objects placed relative to this one. See [Groups](./groups) |
+| `visible` | `true` | Set `false` to hide it and its children |
 
 `scene.add()` fills in missing `pos`, `rot` and `scale`. Many objects can share one mesh — drawing never modifies a mesh.
 
@@ -67,7 +69,7 @@ Each vertex goes from local space to world space in this order:
 2. **Rotate** around X, then Y, then Z by `rot`
 3. **Translate** by `pos`
 
-So an object always spins around its own center, wherever it sits.
+So an object always spins around its own center, wherever it sits. Inside a [group](./groups), the same steps place it in its parent's space, then the parent's steps place that in the world, and so on up the tree.
 
 ## The camera
 

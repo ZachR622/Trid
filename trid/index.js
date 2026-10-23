@@ -11,6 +11,7 @@
 
 // Scene
 export { Scene } from "./scene.js";
+export { worldObjects, worldMatrix, worldPosition, ancestors, forEachPlaced } from "./sceneGraph.js";
 
 // Shapes and meshes
 export { makeShape, scaleMesh, lathe, extrude, triangulate } from "./render/shapes.js";
@@ -61,6 +62,10 @@ export {
 } from "./math/transform.js";
 export { project, screen } from "./math/projection.js";
 export { matFromEuler, eulerFromMat, matFromAxisAngle, mulMat, mulVec, applyTransformOp } from "./math/rotation.js";
+export {
+  identityMat4, mat4FromTransform, mulMat4, invertMat4, determinantMat4,
+  transformPoint, transformDirection, normalMatrix, transformNormal, transformOpToLocal,
+} from "./math/matrix.js";
 
 // Random numbers and noise
 export { rng, noise2, noise3, fbm2, fbm3 } from "./math/noise.js";

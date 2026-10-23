@@ -134,12 +134,22 @@ export type MappingType = "uv" | "planar" | "box" | "sphere" | "cylinder";
  */
 export type Mapping = MappingType | { type: MappingType; axis?: "x" | "y" | "z" };
 
-/** What you pass to `scene.add`. Missing transform fields get defaults. */
+/**
+ * What you pass to `scene.add`. Missing transform fields get defaults.
+ * Give it `children` to make a group (and leave out `mesh` for a group that only holds them).
+ */
 export interface SceneObjectInput {
-  mesh: Mesh;
+  /** What's drawn. Leave it out for a group that only holds `children` */
+  mesh?: Mesh;
   pos?: Vec3;
   rot?: Vec3;
   scale?: Vec3;
+  /** Objects placed relative to this one: they move, turn and scale with it. Read every frame */
+  children?: SceneObjectInput[];
+  /** Set to false to hide this object and everything under it (default true) */
+  visible?: boolean;
+  /** A name, used by `exportOBJ` and handy for finding objects */
+  name?: string;
   /** Wireframe color (default: the scene's color) */
   color?: string;
   /** Wireframe width (default: the scene's lineWidth) */
@@ -156,7 +166,12 @@ export interface SceneObjectInput {
  * An object in a scene, after `scene.add` filled in its transform.
  * Extra fields you add (like `{ mesh, name: "box" }`) are kept in the type.
  */
-export type SceneObject<T extends SceneObjectInput = SceneObjectInput> = T & Transform;
+export type SceneObject<T extends SceneObjectInput = SceneObjectInput> = T & Transform & {
+  /** The group it's a child of, or null at the top. Kept up to date by the scene (not enumerable) */
+  parent: SceneObject | null;
+  /** World matrix from the last frame: parents' transforms × its own (not enumerable). See `worldMatrix` */
+  world: Mat4;
+};
 
 // ---------------------------------------------------------------------------
 // Scene
@@ -863,6 +878,8 @@ export interface DragObjectOptions {
   filter?: (obj: SceneObject) => boolean;
   /** Pick by triangles instead of bounding boxes (default false, see `pickHit`) */
   exact?: boolean;
+  /** Drag the top-level object (the whole group) of what was clicked (default false) */
+  root?: boolean;
   /** Called when an object is picked */
   onPick?: (obj: SceneObject) => void;
   /** Called each time the object moves */
@@ -877,6 +894,7 @@ export class DragObject implements Tool {
   button: number;
   filter: (obj: SceneObject) => boolean;
   exact: boolean;
+  root: boolean;
   onPick?: (obj: SceneObject) => void;
   onMove?: (obj: SceneObject) => void;
   onDrop?: (obj: SceneObject) => void;
@@ -1085,6 +1103,8 @@ export interface PickHit {
   face: number;
   /** Distance in front of the camera */
   depth: number;
+  /** The object, then its groups up to the top: `[part, group, ..., root]` */
+  path: SceneObject[];
 }
 
 /**
@@ -1131,6 +1151,8 @@ export function drawInstance(
   h: number,
   color: string,
   lineWidth?: number,
+  /** World matrix to place it with (e.g. `obj.world` inside a group); default: its own transform */
+  world?: Mat4,
 ): void;
 /** Turns edge definitions into pairs of vertex indices. */
 export function edgeSegments(edges?: number[][]): Generator<[number, number]>;
@@ -1192,6 +1214,59 @@ export function mulMat(a: Mat3, b: Mat3): Mat3;
 export function mulVec(m: Mat3, v: Vec3): Vec3;
 /** Applies a world-space move / rotate / scale to a transform and returns the new one. */
 export function applyTransformOp(t: Transform, op: TransformOp): Transform;
+
+// ---------------------------------------------------------------------------
+// Groups (scene graph)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every visible object of a scene (or of objects and their subtrees), parents first,
+ * with `parent` and `world` set. Groups without a mesh are included.
+ */
+export function worldObjects(input: Scene | SceneObjectInput | SceneObjectInput[]): SceneObject[];
+/** An object's world matrix right now, from its transform and its parents'. */
+export function worldMatrix(obj: SceneObjectInput): Mat4;
+/** Where an object's origin is in the world right now. */
+export function worldPosition(obj: SceneObjectInput): Vec3;
+/** The chain from an object up to the top: `[obj, parent, ..., root]`. */
+export function ancestors(obj: SceneObject): SceneObject[];
+/**
+ * Calls `fn(obj, world, parent)` for every visible object under some roots, parents first,
+ * without changing anything. `baseOf(root)` is the matrix a root goes under (null: none).
+ */
+export function forEachPlaced(
+  roots: SceneObjectInput[],
+  baseOf: (root: SceneObjectInput) => Mat4 | null,
+  fn: (obj: SceneObjectInput, world: Mat4, parent: SceneObjectInput | null) => void,
+): void;
+
+// ---------------------------------------------------------------------------
+// Matrices
+// ---------------------------------------------------------------------------
+
+/** 4×4 transform matrix, 16 numbers in column-major order (`m[col * 4 + row]`), like WebGL. */
+export type Mat4 = number[];
+
+/** The identity matrix. */
+export function identityMat4(): Mat4;
+/** The matrix of a transform: scale, rotate X → Y → Z, then move. */
+export function mat4FromTransform(t: MeshTransform): Mat4;
+/** a · b (b applied first): a child's world matrix is `mulMat4(parentWorld, childLocal)`. */
+export function mulMat4(a: Mat4, b: Mat4): Mat4;
+/** Inverse of a transform matrix (identity if it flattens space). */
+export function invertMat4(m: Mat4): Mat4;
+/** Determinant of the 3×3 part: < 0 when the matrix mirrors. */
+export function determinantMat4(m: Mat4): number;
+/** A point through a matrix. */
+export function transformPoint(m: Mat4, p: Vec3): Vec3;
+/** A direction or offset through a matrix (not moved). */
+export function transformDirection(m: Mat4, v: Vec3): Vec3;
+/** The 3×3 normal matrix (inverse transpose), column-major. */
+export function normalMatrix(m: Mat4): number[];
+/** A normal through a normal matrix, unit length. */
+export function transformNormal(nm: number[], n: Vec3): Vec3;
+/** A world-space `TransformOp` in a parent's space, for objects inside groups. */
+export function transformOpToLocal(op: TransformOp, parentWorld: Mat4): TransformOp;
 
 // ---------------------------------------------------------------------------
 // Random numbers and noise

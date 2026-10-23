@@ -1,5 +1,7 @@
 import { worldToCamera, cameraForward, cameraRight, cameraUp } from "../math/transform.js";
 import { pick, worldPerPixel } from "./helpers.js";
+import { invertMat4, transformDirection } from "../math/matrix.js";
+import { worldMatrix, worldPosition } from "../sceneGraph.js";
 
 /**
  * Click an object to pick it, then drag to move it.
@@ -11,6 +13,10 @@ import { pick, worldPerPixel } from "./helpers.js";
  * triangles with `exact: true`.
  * Set `obj.draggable = false` to make an object ignore this tool.
  *
+ * Inside a group, the part clicked moves within its group (it follows the
+ * cursor however the group is turned or scaled). With `root: true`, the
+ * whole group moves instead (the top-level object of what was clicked).
+ *
  * Add this tool after a camera tool so clicking an object drags it
  * and clicking empty space still moves the camera.
  */
@@ -21,6 +27,7 @@ export class DragObject {
    * @param {(obj:Object) => boolean} [opts.filter] - Which objects can be dragged
    *   (default: those without `draggable: false`)
    * @param {boolean} [opts.exact=false] - Pick by triangles instead of bounding boxes (see `pickHit`)
+   * @param {boolean} [opts.root=false] - Drag the top-level object (the whole group) of what was clicked
    * @param {(obj:Object) => void} [opts.onPick] - Called when an object is picked
    * @param {(obj:Object) => void} [opts.onMove] - Called each time the object moves
    * @param {(obj:Object) => void} [opts.onDrop] - Called when the object is released
@@ -29,6 +36,7 @@ export class DragObject {
     button = 0,
     filter = obj => obj.draggable !== false,
     exact = false,
+    root = false,
     onPick,
     onMove,
     onDrop,
@@ -36,6 +44,7 @@ export class DragObject {
     this.button = button;
     this.filter = filter;
     this.exact = exact;
+    this.root = root;
     this.onPick = onPick;
     this.onMove = onMove;
     this.onDrop = onDrop;
@@ -47,8 +56,12 @@ export class DragObject {
   pointerDown(e, scene) {
     if (e.button !== this.button) return false;
 
-    const obj = pick(scene, e.x, e.y, { filter: this.filter, exact: this.exact });
+    let obj = pick(scene, e.x, e.y, { filter: this.filter, exact: this.exact });
     if (!obj) return false;
+    if (this.root) {
+      while (obj.parent) obj = obj.parent;
+      if (obj.draggable === false) return false;
+    }
 
     this.dragging = obj;
     this.onPick?.(obj);
@@ -60,23 +73,30 @@ export class DragObject {
     if (!obj) return;
 
     const cam = scene.camera;
-    const depth = worldToCamera(obj.pos, cam).z;
+    const depth = worldToCamera(worldPosition(obj), cam).z;
     const k = worldPerPixel(scene, depth);
 
+    // How far to move in the world
+    let move;
     if (e.shiftKey) {
       // Drag up pushes the object away, drag down pulls it closer
       const f = cameraForward(cam);
       const amount = -e.dy * k;
-      obj.pos.x += f.x * amount;
-      obj.pos.y += f.y * amount;
-      obj.pos.z += f.z * amount;
+      move = { x: f.x * amount, y: f.y * amount, z: f.z * amount };
     } else {
       const r = cameraRight(cam);
       const u = cameraUp(cam);
-      obj.pos.x += (r.x * e.dx - u.x * e.dy) * k;
-      obj.pos.y += (r.y * e.dx - u.y * e.dy) * k;
-      obj.pos.z += (r.z * e.dx - u.z * e.dy) * k;
+      move = {
+        x: (r.x * e.dx - u.x * e.dy) * k,
+        y: (r.y * e.dx - u.y * e.dy) * k,
+        z: (r.z * e.dx - u.z * e.dy) * k,
+      };
     }
+    // Inside a group, `pos` is in the group's space: turn the move into it
+    if (obj.parent) move = transformDirection(invertMat4(worldMatrix(obj.parent)), move);
+    obj.pos.x += move.x;
+    obj.pos.y += move.y;
+    obj.pos.z += move.z;
 
     this.onMove?.(obj);
   }

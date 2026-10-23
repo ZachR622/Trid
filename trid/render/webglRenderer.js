@@ -1,4 +1,6 @@
 import { DEFAULT_FOV, DEFAULT_NEAR } from "../math/transform.js";
+import { normalMatrix, determinantMat4 } from "../math/matrix.js";
+import { worldObjects } from "../sceneGraph.js";
 import { clear, edgeSegments, wireEdges } from "./draw.js";
 import { parseColor } from "./color.js";
 import { DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./canvasRenderer.js";
@@ -10,19 +12,17 @@ import { textureReady, textureSize, textureIsLive, textureVersion } from "../loa
 /** Farthest distance drawn by the WebGL renderer, unless the camera sets `far`. */
 export const DEFAULT_FAR = 1000;
 
-// Trid's transform pipeline, written in GLSL. It matches localToWorld,
-// worldToCamera and project() exactly, so tools and picking line up.
+// Trid's transform pipeline, written in GLSL. It matches the objects' world
+// matrices, worldToCamera and project() exactly, so tools and picking line up.
 const COMMON = `
-uniform vec3 uPos, uRot, uScale;
+uniform mat4 uModel; // the object's world matrix (its parents' transforms included)
 uniform vec3 uCamPos;
 uniform vec2 uCamRot; // yaw, pitch
 uniform float uF, uAspect, uNear, uFar;
 
 vec3 rotX(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c); }
 vec3 rotY(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c); }
-vec3 rotZ(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x * c - p.y * s, p.x * s + p.y * c, p.z); }
-vec3 rotXYZ(vec3 p) { return rotZ(rotY(rotX(p, uRot.x), uRot.y), uRot.z); }
-vec3 toWorld(vec3 v) { return rotXYZ(v * uScale) + uPos; }
+vec3 toWorld(vec3 v) { return (uModel * vec4(v, 1.0)).xyz; }
 vec3 toCamera(vec3 p) { return rotX(rotY(p - uCamPos, uCamRot.x), uCamRot.y); }
 vec4 toClip(vec3 p) {
   float a = (uFar + uNear) / (uFar - uNear);
@@ -40,9 +40,10 @@ varying vec3 vWorld;
 varying vec3 vLocal;
 varying vec2 vUV;
 uniform mat3 uUVTransform; // textureRepeat, textureOffset, textureRotation
+uniform mat3 uNormalMatrix; // keeps normals right on stretched and mirrored objects
 ${COMMON}
 void main() {
-  vNormal = rotXYZ(aNormal / uScale); // inverse scale keeps normals right on stretched objects
+  vNormal = uNormalMatrix * aNormal;
   vLocal = aPos;
   vUV = (uUVTransform * vec3(aUV, 1.0)).xy;
   vWorld = toWorld(aPos);
@@ -108,7 +109,7 @@ ${fx.calls}
   return { source, uniforms: fx.uniforms };
 }
 
-const FACE_UNIFORMS = ["uUVTransform", "uLight", "uAmbient", "uShade", "uTime", "uBackground", "uCamWorld", "uTexture", "uUseTexture"];
+const FACE_UNIFORMS = ["uUVTransform", "uNormalMatrix", "uLight", "uAmbient", "uShade", "uTime", "uBackground", "uCamWorld", "uTexture", "uUseTexture"];
 
 // Each line segment is a thin rectangle facing the screen, `uWidth` pixels wide
 const LINE_VS = `
@@ -144,7 +145,7 @@ void main() {
 }
 `;
 
-const UNIFORMS = ["uPos", "uRot", "uScale", "uCamPos", "uCamRot", "uF", "uAspect", "uNear", "uFar", "uColor"];
+const UNIFORMS = ["uModel", "uCamPos", "uCamRot", "uF", "uAspect", "uNear", "uFar", "uColor"];
 
 /**
  * Draws a scene with WebGL, on the graphics card.
@@ -279,13 +280,17 @@ export class WebGLRenderer {
 
     // Opaque things first; see-through ones after, without writing depth
     const opaque = [], clear2 = [];
-    for (const obj of scene.objects) {
+    // Every object with a mesh, groups' children included, with its world matrix
+    const drawn = worldObjects(scene).filter((o) => o.mesh);
+    for (const obj of drawn) {
       const geo = this._geometry(obj.mesh);
       const lineColor = this._color(ctx, obj.color ?? scene.color);
       const lineWidth = obj.lineWidth ?? scene.lineWidth;
       const mats = materialsOf(obj);
 
       if (mats) {
+        // Normals turn with the object; a mirrored one has its faces' winding reversed
+        const place = { normals: normalMatrix(obj.world), mirrored: determinantMat4(obj.world) < 0 };
         // One draw per group of faces sharing a material (mesh.faceMaterials)
         const groups = geo.groups.map((g) => {
           const k = g.index >= 0 && g.index < mats.length && mats[g.index] ? g.index : 0;
@@ -293,7 +298,7 @@ export class WebGLRenderer {
         });
         for (const g of groups) {
           const fill = this._color(ctx, g.mat.fill ?? (g.mat.texture ? "#ffffff" : scene.color));
-          (fill[3] < 1 ? clear2 : opaque).push({ kind: "face", obj, geo, color: fill, mat: g.mat, first: g.first, count: g.count });
+          (fill[3] < 1 ? clear2 : opaque).push({ kind: "face", obj, geo, color: fill, mat: g.mat, first: g.first, count: g.count, place });
         }
         const lines = (buf) => (lineColor[3] < 1 ? clear2 : opaque).push({ kind: "line", obj, buf, color: lineColor, width: lineWidth });
         if (groups.every((g) => g.mat.wireframe)) lines(this._lineBuffer(geo, "outlines", () => outlinePairs(geo.faceList ?? [])));
@@ -313,7 +318,7 @@ export class WebGLRenderer {
     ctx.drawImage(this.canvas, 0, 0);
 
     // Meshes marked as changed have been sent again
-    for (const obj of scene.objects) if (obj.mesh.dirty) obj.mesh.dirty = false;
+    for (const obj of drawn) if (obj.mesh.dirty) obj.mesh.dirty = false;
 
     if (this._frame % 60 === 0) this._sweep();
   }
@@ -387,10 +392,7 @@ export class WebGLRenderer {
 
     gl.useProgram(prog.program);
     const u = prog.uniforms;
-    const { pos, rot, scale } = d.obj;
-    gl.uniform3f(u.uPos, pos.x, pos.y, pos.z);
-    gl.uniform3f(u.uRot, rot.x, rot.y, rot.z);
-    gl.uniform3f(u.uScale, scale.x, scale.y, scale.z);
+    gl.uniformMatrix4fv(u.uModel, false, d.obj.world);
     gl.uniform3fv(u.uCamPos, view.camPos);
     gl.uniform2fv(u.uCamRot, view.camRot);
     gl.uniform1f(u.uF, view.f);
@@ -405,6 +407,8 @@ export class WebGLRenderer {
     if (isFace) {
       const m = uvTransform(d.mat) ?? [1, 0, 0, 1, 0, 0];
       gl.uniformMatrix3fv(u.uUVTransform, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
+      gl.uniformMatrix3fv(u.uNormalMatrix, false, d.place.normals);
+      gl.frontFace(d.place.mirrored ? gl.CCW : gl.CW);
       gl.uniform3fv(u.uLight, light);
       gl.uniform1f(u.uAmbient, ambient);
       gl.uniform1f(u.uShade, d.mat.shade === false ? 0 : 1);

@@ -15,6 +15,7 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 ## Features
 
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
+- **Groups** — give any object `children` and they move, turn and scale with it (models made of parts, a moon orbiting a planet).
 - **Shapes** — cubes, boxes, spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes and `extrude` for flat ones, or any mesh you define as vertices and edges.
 - **Mesh helpers** — clone, transform, displace, merge and measure meshes; seeded random numbers and smooth noise (`fbm2`, `fbm3`, tileable) for rocks, terrain and procedural textures.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth, with one directional light.
@@ -105,7 +106,6 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 Roughly in order:
 
 - **More import and export formats** — `.mtl` material files for OBJ (colors and textures per part, both ways), STL; basic glTF later
-- **Parent/child transforms** — e.g. a moon orbiting a planet
 - **More tools** — a selection outline, a grid helper
 - **Post effects** (WebGL) — bloom, vignette, outlines, antialiasing and color grading over the whole image
 - **More tests** — `npm test` covers shapes and tools so far; the math functions are next

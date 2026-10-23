@@ -100,6 +100,7 @@ Click an object to pick it, then drag to move it. The object follows the cursor 
 | `button` | `0` | Mouse button that drags (0 left, 1 middle, 2 right) |
 | `filter` | objects without `draggable: false` | `(obj) => boolean`: which objects can be dragged |
 | `exact` | `false` | Pick by triangles instead of bounding boxes (see [`pickHit`](./api#pickhit)) |
+| `root` | `false` | Drag the whole [group](./groups) of the part clicked (its top-level object) |
 | `onPick` | — | `(obj) => void`: called when an object is picked |
 | `onMove` | — | `(obj) => void`: called each time it moves |
 | `onDrop` | — | `(obj) => void`: called when it's released |

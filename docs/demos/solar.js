@@ -7,8 +7,17 @@ export default function (canvas) {
   });
 
   const sun = scene.add({ mesh: makeShape("sphere", { r: 0.3 }), color: "#ffd166" });
-  const planet = scene.add({ mesh: makeShape("sphere", { r: 0.12, rings: 8, segments: 12 }), color: "#6ba8ff" });
-  const moon = scene.add({ mesh: makeShape("sphere", { r: 0.04, rings: 4, segments: 8 }), color: "#ccc" });
+
+  // Groups: the moon turns around the planet, the planet (with its moon) around the sun.
+  // Only angles change each frame; every position follows from the tree.
+  const planet = { mesh: makeShape("sphere", { r: 0.12, rings: 8, segments: 12 }), color: "#6ba8ff" };
+  const moonOrbit = {
+    rot: { x: 0.2, y: 0, z: 0 }, // tilted
+    children: [{ mesh: makeShape("sphere", { r: 0.04, rings: 4, segments: 8 }), color: "#ccc", pos: { x: 0.25, y: 0, z: 0 } }],
+  };
+  const orbit = scene.add({
+    children: [{ pos: { x: 1, y: 0, z: 0 }, children: [planet, moonOrbit] }],
+  });
 
   // The planet's path, as one closed loop
   const path = { vertices: [], edges: [[]] };
@@ -20,14 +29,11 @@ export default function (canvas) {
 
   scene.use(new OrbitCamera());
 
-  scene.start((dt, t) => {
+  scene.start((dt) => {
     sun.rot.y += dt * 0.2;
-    planet.rot.y += dt * 2;
-    planet.pos.x = Math.cos(t * 0.5);
-    planet.pos.z = Math.sin(t * 0.5);
-    moon.pos.x = planet.pos.x + Math.cos(t * 3) * 0.25;
-    moon.pos.y = Math.sin(t * 3) * 0.05;
-    moon.pos.z = planet.pos.z + Math.sin(t * 3) * 0.25;
+    orbit.rot.y -= dt * 0.5;   // the planet and its moon go around the sun
+    planet.rot.y += dt * 2;    // the planet spins (its moon doesn't follow that)
+    moonOrbit.rot.y -= dt * 3; // the moon goes around the planet
   });
 
   return () => scene.destroy();

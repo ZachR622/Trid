@@ -1,4 +1,6 @@
 import { localToWorld, rotateXYZ } from "../math/transform.js";
+import { transformPoint, normalMatrix, transformNormal, determinantMat4 } from "../math/matrix.js";
+import { forEachPlaced, worldMatrix } from "../sceneGraph.js";
 
 /** Deep copy of one mesh field: arrays and plain objects are copied, the rest kept. */
 const copy = (x) => (Array.isArray(x) ? x.map(copy) : x && typeof x === "object" ? { ...x } : x);
@@ -9,6 +11,23 @@ const fullTransform = ({ pos, rot, scale } = {}) => ({
   rot: { x: 0, y: 0, z: 0, ...rot },
   scale: { x: 1, y: 1, z: 1, ...scale },
 });
+
+/** A copy of a mesh with a world matrix baked in (normals turned, faces flipped for mirrors). */
+function bake(mesh, world) {
+  const out = cloneMesh(mesh);
+  for (const v of out.vertices) Object.assign(v, transformPoint(world, v));
+  if (out.normals) {
+    const nm = normalMatrix(world);
+    out.normals = out.normals.map((n) => transformNormal(nm, n));
+  }
+  if (determinantMat4(world) < 0 && out.faces) {
+    const flip = (list) => list?.map((f) => (f ? [...f].reverse() : f));
+    out.faces = flip(out.faces);
+    if (out.faceUVs) out.faceUVs = flip(out.faceUVs);
+    if (out.faceNormals) out.faceNormals = flip(out.faceNormals);
+  }
+  return out;
+}
 
 /**
  * Deep copy of a mesh: vertices, edges, faces, texture coordinates, normals
@@ -109,7 +128,8 @@ export function displaceMesh(mesh, fn) {
  *
  * An object (`{ mesh, pos, rot, scale }`, added to a scene or not) in the
  * list is merged where it stands, with its transform baked in (its mesh
- * isn't changed).
+ * isn't changed). A group is merged with all its children, placed by the
+ * group's own transform (not its parents').
  *
  * With `materialPerMesh`, the faces of the i-th mesh use material i, so an
  * object with `material: [blade, guard, grip]` paints each part its own way.
@@ -128,7 +148,15 @@ export function displaceMesh(mesh, fn) {
  * @returns {import("../index.d.ts").Mesh} A new mesh
  */
 export function mergeMeshes(items, { materialPerMesh = false } = {}) {
-  const meshes = items.map((it) => (it.mesh ? transformMesh(cloneMesh(it.mesh), it) : it));
+  // Meshes as they are; objects and groups baked where they stand, one entry per item
+  const meshes = items.map((it) => {
+    if (it.vertices) return it;
+    const parts = [];
+    forEachPlaced([it], () => null, (obj, world) => {
+      if (obj.mesh) parts.push(bake(obj.mesh, world));
+    });
+    return parts.length === 1 ? parts[0] : mergeMeshes(parts);
+  });
   const some = (k) => meshes.some((m) => m[k]);
 
   const out = { vertices: [], faces: [] };
@@ -198,12 +226,19 @@ export function meshBounds(input) {
   const min = { x: Infinity, y: Infinity, z: Infinity };
   const max = { x: -Infinity, y: -Infinity, z: -Infinity };
   let any = false;
+  // Plain meshes as they are; objects (and their children) where they're drawn
+  const placed = [];
+  const objects = [];
   for (const it of items) {
-    const mesh = it?.mesh ?? it;
-    if (!mesh?.vertices) continue;
-    const placed = it.mesh ? fullTransform(it) : null;
+    if (it?.vertices) placed.push({ mesh: it, world: null });
+    else if (it) objects.push(it);
+  }
+  forEachPlaced(objects, (root) => (root.parent ? worldMatrix(root.parent) : null), (obj, world) => {
+    if (obj.mesh?.vertices) placed.push({ mesh: obj.mesh, world });
+  });
+  for (const { mesh, world } of placed) {
     for (const v of mesh.vertices) {
-      const p = placed ? localToWorld(v, placed) : v;
+      const p = world ? transformPoint(world, v) : v;
       any = true;
       if (p.x < min.x) min.x = p.x;
       if (p.y < min.y) min.y = p.y;
