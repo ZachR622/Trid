@@ -1,5 +1,5 @@
 import { localToWorld, worldToCamera, cameraToScreen, clipNear, rotateXYZ, DEFAULT_NEAR } from "../math/transform.js";
-import { clear, drawInstance, edgeSegments } from "./draw.js";
+import { clear, drawInstance, edgeSegments, wireEdges } from "./draw.js";
 import { parseColor } from "./color.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
 import { textureReady, textureSize, textureIsLive } from "../loaders/texture.js";
@@ -131,7 +131,7 @@ export class CanvasRenderer {
       const lineWidth = obj.lineWidth ?? scene.lineWidth;
 
       if (!mats) {
-        for (const [i, j] of edgeSegments(obj.mesh.edges)) {
+        for (const [i, j] of edgeSegments(wireEdges(obj.mesh))) {
           const seg = clipNear(cam[i], cam[j], near);
           if (!seg) continue;
           items.push({

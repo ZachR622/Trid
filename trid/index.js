@@ -13,7 +13,7 @@
 export { Scene } from "./scene.js";
 
 // Shapes and meshes
-export { makeShape, scaleMesh } from "./render/shapes.js";
+export { makeShape, scaleMesh, lathe, extrude, triangulate } from "./render/shapes.js";
 
 // Renderers
 export { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./render/canvasRenderer.js";
@@ -46,7 +46,7 @@ export {
 } from "./tools/index.js";
 
 // Drawing and the frame loop
-export { clear, point, line, drawWireframe, drawInstance, edgeSegments } from "./render/draw.js";
+export { clear, point, line, drawWireframe, drawInstance, edgeSegments, wireEdges } from "./render/draw.js";
 export { loop } from "./render/loop.js";
 export { parseColor } from "./render/color.js";
 

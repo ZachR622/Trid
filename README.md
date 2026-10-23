@@ -15,7 +15,7 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 ## Features
 
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
-- **Shapes** — cubes, boxes and spheres built in, or any mesh you define as vertices and edges.
+- **Shapes** — cubes, boxes, spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes and `extrude` for flat ones, or any mesh you define as vertices and edges.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth, with one directional light.
 - **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files, or made from the shape (planar, box, sphere and cylinder mapping). Repeat, offset and rotate them, or give each face its own material.
 - **Effects** — stack shader effects like toon, rim and edge glow, gradients and fog on a material, or write your own in GLSL.
@@ -106,6 +106,5 @@ Roughly in order:
 - **More import and export formats** — `.mtl` material files for OBJ (colors and textures per part, both ways), STL; basic glTF later
 - **Parent/child transforms** — e.g. a moon orbiting a planet
 - **More tools** — a gizmo to move, rotate and scale objects with the mouse, a selection outline, a grid/axes helper
-- **More shapes** — cylinder, cone, torus, plane/grid
 - **Post effects** (WebGL) — bloom, vignette, outlines, antialiasing and color grading over the whole image
-- **Tests** for the math functions
+- **More tests** — `npm test` covers shapes and tools so far; the math functions are next

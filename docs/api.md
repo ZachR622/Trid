@@ -18,7 +18,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/normals.js` | [`cornerNormals`, `creaseOf`, `newell`, `DEFAULT_CREASE`](#normals) |
 | `trid/render/effects.js` | [`toon`, `rim`, `edgeGlow`, `unlit`, `gradient`, `fog`](./effects#built-in-effects), [`buildEffects`, `effectsKey`, `uniformType`, `SURFACE_GLSL`](#effects) |
 | `trid/render/color.js` | [`parseColor`](#parsecolor) |
-| `trid/render/shapes.js` | [`makeShape`, `scaleMesh`](./shapes) |
+| `trid/render/shapes.js` | [`makeShape`, `lathe`, `extrude`, `triangulate`, `scaleMesh`](./shapes) |
 | `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |
@@ -100,6 +100,7 @@ line(ctx, p1, p2, color, width = 4)
 drawWireframe(ctx, points2, edges, color, width = 4)
 drawInstance(ctx, inst, camera, w, h, color, lineWidth = 3)
 edgeSegments(edges)
+wireEdges(mesh)
 ```
 
 - **`clear`** fills the whole canvas with `color`.
@@ -107,7 +108,8 @@ edgeSegments(edges)
 - **`line`** draws one line between two screen points.
 - **`drawWireframe`** connects already-projected screen points using index edges (2 indices = segment, 3+ = closed loop). Everything is stroked as one path. No clipping is done.
 - **`drawInstance`** is the main drawing call: it transforms an object's mesh, clips every edge against the camera's near plane, projects it and strokes it as one path. The canvas renderer uses it for scenes with only wireframe objects.
-- **`edgeSegments`** turns edge definitions into `[a, b]` index pairs (a generator), expanding closed loops.
+- **`edgeSegments`** turns edge definitions into `[a, b]` index pairs (a generator), expanding closed loops. Missing `edges` give no pairs.
+- **`wireEdges`** is what a wireframe draws for a mesh: its `edges`, or the outline of each face when it has none.
 
 ### CanvasRenderer
 

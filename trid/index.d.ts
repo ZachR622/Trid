@@ -56,10 +56,11 @@ export interface Camera {
  *
  * An edge with 2 indices is a single segment; with 3 or more it's a closed loop.
  * Faces are clockwise as seen from their front.
+ * Without `edges`, an object with no material draws the outline of each face.
  */
 export interface Mesh {
   vertices: Vec3[];
-  edges: number[][];
+  edges?: number[][];
   faces?: number[][];
   /** Per-corner normals, used by smooth shading */
   normals?: Vec3[];
@@ -228,26 +229,79 @@ export class Scene {
 // ---------------------------------------------------------------------------
 
 export interface ShapeOptions {
-  /** Cube size (default 0.5) */
+  /** Cube size, or plane width (default 0.5 cube, 1 plane) */
   size?: number;
   /** Box width (default 0.6) */
   w?: number;
-  /** Box height (default 0.6) */
+  /** Box height (default 0.6), or cylinder / cone height (default 0.8) */
   h?: number;
   /** Box depth (default 0.6) */
   d?: number;
-  /** Sphere radius (default 0.45) */
+  /** Radius: sphere (0.45), cylinder (0.3), cone base (0.35) */
   r?: number;
   /** Sphere latitude bands (default 12) */
   rings?: number;
-  /** Sphere points per ring (default 24) */
+  /** Points around: sphere (24), cylinder / cone (32), torus (48) */
   segments?: number;
+  /** Cone top radius: 0 = pointed, > 0 = tapered cylinder (default 0) */
+  rTop?: number;
+  /** Torus: distance from the center to the middle of the tube (default 0.35) */
+  R?: number;
+  /** Torus tube radius (default 0.12) */
+  tube?: number;
+  /** Torus points around the tube (default 20) */
+  tubeSegments?: number;
+  /** Plane cells per side (default 8) */
+  div?: number;
+  /** Plane: lifts each vertex, for terrain */
+  height?: (x: number, z: number) => number;
 }
 
-export type ShapeKind = "cube" | "box" | "sphere";
+export type ShapeKind = "cube" | "box" | "sphere" | "cylinder" | "cone" | "torus" | "plane";
 
-/** Creates a built-in mesh (with faces and texture coordinates). */
+/**
+ * Creates a built-in mesh (with edges, faces and texture coordinates), centered
+ * on the origin. Cylinders, cones and tori stand along Y; the plane lies in XZ facing +Y.
+ */
 export function makeShape(kind: ShapeKind, opts?: ShapeOptions): Mesh;
+
+/** A point of a `lathe` profile: distance from the Y axis and height. */
+export interface ProfilePoint {
+  r: number;
+  y: number;
+}
+
+export interface LatheOptions {
+  /** Points around the axis (default 32) */
+  segments?: number;
+  /** Close the bottom with a flat cap (default false) */
+  capBottom?: boolean;
+  /** Close the top with a flat cap (default false) */
+  capTop?: boolean;
+  /** The profile's last point joins its first, for torus-like shapes (default false) */
+  closed?: boolean;
+}
+
+/**
+ * Spins a profile around the Y axis (vases, bottles, columns, chess pieces).
+ * Walk the profile so the outside is on its right: bottom to top for a vase.
+ */
+export function lathe(profile: ProfilePoint[], opts?: LatheOptions): Mesh;
+
+/** A 2D point (x right, y up). */
+export interface Point2 {
+  x: number;
+  y: number;
+}
+
+/**
+ * Turns a flat outline in the XY plane into a solid `depth` thick along Z
+ * (default 0.2), centered on the origin. Either direction, concave is fine, no holes.
+ */
+export function extrude(outline: Point2[], depth?: number): Mesh;
+
+/** Cuts a counter-clockwise polygon into counter-clockwise triangles (ear clipping). */
+export function triangulate(pts: Point2[]): number[][];
 
 /** Scales a mesh's vertices in place. Returns the same mesh. */
 export function scaleMesh<M extends { vertices: Vec3[] }>(mesh: M, sx?: number, sy?: number, sz?: number): M;
@@ -669,6 +723,12 @@ export interface OrbitCameraOptions {
   pan?: boolean;
   /** Allow zooming (default true) */
   zoom?: boolean;
+  /** Turn around the target on its own, paused while dragging (default false) */
+  autoRotate?: boolean;
+  /** Auto-rotate speed in radians per second; negative turns the other way (default 0.5) */
+  autoRotateSpeed?: number;
+  /** Seconds to wait after a drag before auto-rotating again (default 0) */
+  autoRotateDelay?: number;
 }
 
 /** Mouse camera controls that turn around a target point. */
@@ -688,6 +748,9 @@ export class OrbitCamera implements Tool {
   rotate: boolean;
   pan: boolean;
   zoom: boolean;
+  autoRotate: boolean;
+  autoRotateSpeed: number;
+  autoRotateDelay: number;
   blockContextMenu: boolean;
   /** Places the camera from the target, distance, yaw and pitch. */
   apply(camera: Camera): void;
@@ -884,7 +947,9 @@ export function drawInstance(
   lineWidth?: number,
 ): void;
 /** Turns edge definitions into pairs of vertex indices. */
-export function edgeSegments(edges: number[][]): Generator<[number, number]>;
+export function edgeSegments(edges?: number[][]): Generator<[number, number]>;
+/** The lines a wireframe draws for a mesh: its `edges`, or its face outlines when it has none. */
+export function wireEdges(mesh: { edges?: number[][]; faces?: number[][] }): number[][];
 
 /** Runs `update` every animation frame. Returns a function that stops it. */
 export function loop(update: (dt: number, time: number) => void, opts?: { maxDt?: number }): () => void;

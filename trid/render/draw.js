@@ -59,17 +59,28 @@ export function line(ctx, p1, p2, color, width = 4) {
  * - An edge with 3+ indices is a closed loop: the last index
  *   connects back to the first
  *
- * @param {number[][]} edges - Edge definitions using vertex indices
+ * @param {number[][]} [edges] - Edge definitions using vertex indices (none: no segments)
  * @returns {Generator<[number, number]>} Index pairs to connect
  */
 export function* edgeSegments(edges) {
-  for (const e of edges) {
+  for (const e of edges ?? []) {
     const closed = e.length > 2;
     const count = closed ? e.length : e.length - 1;
     for (let i = 0; i < count; i++) {
       yield [e[i], e[(i + 1) % e.length]];
     }
   }
+}
+
+/**
+ * The lines to draw for a mesh shown as a wireframe: its `edges`, or the
+ * outline of each face when it has no `edges` (a face-only mesh).
+ *
+ * @param {{ edges?: number[][], faces?: number[][] }} mesh
+ * @returns {number[][]} Edge definitions (faces are closed loops)
+ */
+export function wireEdges(mesh) {
+  return mesh.edges ?? mesh.faces ?? [];
 }
 
 /**
@@ -115,7 +126,7 @@ export function drawWireframe(ctx, points2, edges, color, width = 4) {
  *
  * @param {CanvasRenderingContext2D} ctx - Canvas 2D context
  * @param {{
- *   mesh:{ vertices:{x:number,y:number,z:number}[], edges:number[][] },
+ *   mesh:{ vertices:{x:number,y:number,z:number}[], edges?:number[][], faces?:number[][] },
  *   pos:{x:number,y:number,z:number},
  *   rot:{x:number,y:number,z:number},
  *   scale:{x:number,y:number,z:number}
@@ -134,7 +145,7 @@ export function drawInstance(ctx, inst, camera, w, h, color, lineWidth = 3) {
   ctx.strokeStyle = color;
 
   ctx.beginPath();
-  for (const [i, j] of edgeSegments(inst.mesh.edges)) {
+  for (const [i, j] of edgeSegments(wireEdges(inst.mesh))) {
     const seg = clipNear(ptsCam[i], ptsCam[j], near);
     if (!seg) continue;
     const a = cameraToScreen(seg[0], camera, w, h);

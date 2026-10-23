@@ -1,12 +1,12 @@
 # Shapes & meshes
 
-Build meshes with `makeShape`, reshape them with `scaleMesh`, or write your own from vertices and edges.
+Build meshes with `makeShape`, spin a profile with `lathe`, thicken an outline with `extrude`, reshape them with `scaleMesh`, or write your own from vertices and edges.
 
 ```js
-import { makeShape, scaleMesh } from "./trid/render/shapes.js";
+import { makeShape, lathe, extrude, scaleMesh } from "./trid/index.js";
 ```
 
-<Demo src="shapes" hint="cube · box · sphere · custom pyramid — drag to orbit" />
+<Demo src="shapes" hint="cube · box · sphere · custom pyramid / cylinder · cone · torus · plane — drag to orbit" />
 
 <<< @/demos/shapes.js
 
@@ -19,12 +19,65 @@ Returns a new mesh centered on the origin, with `vertices`, `edges`, `faces` and
 | `"cube"` | `size` (0.5) | Cube with sides of `size` |
 | `"box"` | `w` (0.6), `h` (0.6), `d` (0.6) | Box of width (X), height (Y), depth (Z) |
 | `"sphere"` | `r` (0.45), `rings` (12), `segments` (24) | Sphere of latitude and longitude lines |
+| `"cylinder"` | `r` (0.3), `h` (0.8), `segments` (32) | Capped cylinder standing along Y |
+| `"cone"` | `r` (0.35), `h` (0.8), `segments` (32), `rTop` (0) | Cone with its tip up; with `rTop` > 0, a tapered cylinder |
+| `"torus"` | `R` (0.35), `tube` (0.12), `segments` (48), `tubeSegments` (20) | Ring lying flat in XZ. `R` goes from the center to the middle of the tube |
+| `"plane"` | `size` (1), `div` (8), `height` (none) | Flat grid in XZ facing +Y, `div` cells per side |
+
+`segments` is always the number of points around (the Y axis, or the sphere's circles). Cylinders, cones and tori are built with [`lathe`](#lathe-profile-opts).
+
+### Plane heights
+
+`height(x, z)` returns the height of each grid point, which turns the plane into a terrain:
+
+```js
+const hills = makeShape("plane", {
+  size: 2, div: 40,
+  height: (x, z) => 0.1 * Math.sin(x * 4) * Math.cos(z * 3),
+});
+```
 
 ### Sphere details
 
 - `rings` is the number of latitude *bands* from pole to pole (minimum 2), so it draws `rings - 1` circles.
 - `segments` is the number of points on each circle, and the number of meridian lines.
 - Each pole is a single vertex. Fewer rings and segments draw faster and look more stylized.
+
+## `lathe(profile, opts?)`
+
+Spins a profile around the Y axis, like a potter's wheel: vases, bottles, cups, columns, chess pieces. The profile is a list of `{ r, y }` points: the distance from the axis and the height.
+
+<Demo src="lathe" hint="a lathe vase and an extruded star — drag to orbit" />
+
+<<< @/demos/lathe.js
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `segments` | `32` | Points around the axis |
+| `capBottom` | `false` | Close the bottom with a flat disc |
+| `capTop` | `false` | Close the top with a flat disc |
+| `closed` | `false` | Join the last point back to the first (a ring, like a torus) |
+
+::: tip Which way to walk the profile
+Walk it so the **outside is on your right** in the (r, y) plane: bottom to top for a vase, or, for a closed ring, counter-clockwise (like the torus). Walked the other way, the faces point inward.
+:::
+
+A point with `r: 0` closes that end to a tip, with no cap needed. Texture coordinates go around (u) and along the profile by its length (v); caps map the texture as a disc.
+
+## `extrude(outline, depth = 0.2)`
+
+Turns a flat outline in the XY plane into a solid `depth` thick along Z, centered on the origin: blades, axes, keys, stars, letters, floor plans. The outline is a list of `{ x, y }` points. It may go either way round and may be concave, but can't have holes or cross itself.
+
+```js
+// A sword blade, thin along Z
+const blade = extrude([
+  { x: -0.04, y: 0 }, { x: 0.04, y: 0 }, { x: 0.04, y: 0.8 }, { x: 0, y: 0.9 }, { x: -0.04, y: 0.8 },
+], 0.015);
+```
+
+The front and back map the texture over the outline's bounding box; the sides wrap it along the outline. Rotate the object (or bake it with `scaleMesh`) to stand it another way.
+
+`triangulate(points)` is the ear-clipping function `extrude` uses to cut the outline into triangles, if you need it for your own meshes. Give it a counter-clockwise outline; it returns index triples.
 
 ## `scaleMesh(mesh, sx = 1, sy = 1, sz = 1)`
 
@@ -43,7 +96,11 @@ Every object sharing that mesh changes too. To stretch a single object, change i
 
 A mesh is just `{ vertices, edges }`, plus `faces` if you want to [fill it](./faces#faces-in-a-mesh). Edges with 2 indices are segments; edges with 3 or more are closed loops. See [Meshes](./concepts#meshes).
 
+`edges` can be left out on a mesh that has `faces`: an object with no material then draws the outline of each face. Pass `edges: []` to draw no lines at all.
+
 ### Example: a floor grid
+
+(`makeShape("plane")` does this too; this shows how to build lines by hand.)
 
 ```js
 function makeGrid(size = 2, divisions = 10) {

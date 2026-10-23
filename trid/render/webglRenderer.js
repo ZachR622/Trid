@@ -1,5 +1,5 @@
 import { DEFAULT_FOV, DEFAULT_NEAR } from "../math/transform.js";
-import { clear, edgeSegments } from "./draw.js";
+import { clear, edgeSegments, wireEdges } from "./draw.js";
 import { parseColor } from "./color.js";
 import { DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./canvasRenderer.js";
 import { uvsFor, uvTransform, mappingKey } from "./uvMapping.js";
@@ -288,7 +288,7 @@ export class WebGLRenderer {
       } else {
         (lineColor[3] < 1 ? clear2 : opaque).push({
           kind: "line", obj, color: lineColor, width: lineWidth,
-          buf: this._lineBuffer(geo, "edges", () => edgeSegments(obj.mesh.edges ?? [])),
+          buf: this._lineBuffer(geo, "edges", () => edgeSegments(wireEdges(obj.mesh))),
         });
       }
     }

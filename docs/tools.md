@@ -47,8 +47,11 @@ Turns the camera around a target point. It starts from wherever the camera curre
 | `minDistance` | `0.1` | Closest zoom |
 | `maxDistance` | `100` | Farthest zoom |
 | `rotate`, `pan`, `zoom` | `true` | Turn each control off with `false` |
+| `autoRotate` | `false` | Turn around the target on its own (paused while dragging) |
+| `autoRotateSpeed` | `0.5` | Radians per second; negative turns the other way |
+| `autoRotateDelay` | `0` | Seconds to wait after a drag before turning again |
 
-`target`, `distance`, `yaw` and `pitch` are public properties you can change at any time. Pitch is kept just under ±90° so the view never flips.
+`target`, `distance`, `yaw`, `pitch` and the `autoRotate` options are public properties you can change at any time. Pitch is kept just under ±90° so the view never flips.
 
 ::: warning
 OrbitCamera places the camera **every frame**. To move the view in code, change the tool's properties (e.g. `orbit.yaw += dt`), not `scene.camera` — direct camera changes are overwritten.

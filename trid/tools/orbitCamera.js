@@ -13,6 +13,9 @@ const MAX_PITCH = Math.PI / 2 - 0.01;
  * The tool drives `scene.camera` (x, y, z, yaw, pitch). Its own
  * `target`, `distance`, `yaw` and `pitch` can be changed at any time.
  * Don't use it together with another tool that moves the camera.
+ *
+ * With `autoRotate: true` the camera also turns around the target on its
+ * own, pausing while the user drags.
  */
 export class OrbitCamera {
   /**
@@ -28,6 +31,9 @@ export class OrbitCamera {
    * @param {boolean} [opts.rotate=true] - Allow orbiting
    * @param {boolean} [opts.pan=true] - Allow panning
    * @param {boolean} [opts.zoom=true] - Allow zooming
+   * @param {boolean} [opts.autoRotate=false] - Turn around the target on its own (paused while dragging)
+   * @param {number} [opts.autoRotateSpeed=0.5] - Auto-rotate speed in radians per second (negative: other way)
+   * @param {number} [opts.autoRotateDelay=0] - Seconds to wait after a drag before auto-rotating again
    */
   constructor({
     target = { x: 0, y: 0, z: 0 },
@@ -41,6 +47,9 @@ export class OrbitCamera {
     rotate = true,
     pan = true,
     zoom = true,
+    autoRotate = false,
+    autoRotateSpeed = 0.5,
+    autoRotateDelay = 0,
   } = {}) {
     this.target = target;
     this.distance = distance;
@@ -53,9 +62,13 @@ export class OrbitCamera {
     this.rotate = rotate;
     this.pan = pan;
     this.zoom = zoom;
+    this.autoRotate = autoRotate;
+    this.autoRotateSpeed = autoRotateSpeed;
+    this.autoRotateDelay = autoRotateDelay;
 
     this.blockContextMenu = true;
     this._mode = null;
+    this._idle = 0; // seconds since the last drag ended
   }
 
   attach(scene) {
@@ -117,6 +130,7 @@ export class OrbitCamera {
 
   pointerUp() {
     this._mode = null;
+    this._idle = 0;
   }
 
   wheel(e, scene) {
@@ -127,6 +141,10 @@ export class OrbitCamera {
   }
 
   update(dt, scene) {
+    if (this.autoRotate && !this._mode) {
+      this._idle += dt;
+      if (this._idle >= this.autoRotateDelay) this.yaw += this.autoRotateSpeed * dt;
+    }
     this.apply(scene.camera);
   }
 }
