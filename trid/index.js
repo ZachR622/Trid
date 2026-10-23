@@ -34,7 +34,7 @@ export { cornerNormals, creaseOf, newell, DEFAULT_CREASE } from "./render/normal
 
 // Loading files
 export { parseOBJ, loadOBJ, readOBJFile, pickOBJFile, fitMesh } from "./loaders/obj.js";
-export { loadTexture, textureReady, textureSize, textureIsLive } from "./loaders/texture.js";
+export { loadTexture, textureReady, textureSize, textureIsLive, updateTexture, textureVersion } from "./loaders/texture.js";
 
 // Exporting
 export { exportOBJ } from "./export/obj.js";

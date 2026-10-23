@@ -177,7 +177,9 @@ From `trid/loaders/texture.js`. Using textures is explained on the [Textures](./
 - **`loadTexture(url)`** returns a promise for a loaded `<img>` (with CORS enabled).
 - **`textureReady(src)`** says whether an image, canvas or video has pixels to draw yet.
 - **`textureSize(src)`** returns `{ w, h }` in pixels.
-- **`textureIsLive(src)`** is `true` for canvases and videos, which renderers read again every frame.
+- **`textureIsLive(src, material?)`** is `true` for textures read again every frame: videos, or any source whose material has `liveTexture: true` (`liveTexture: false` freezes a video).
+- **`updateTexture(src)`** tells the renderers a canvas (or image) changed: it's read again once, on the next frame. See [Changing a canvas](./textures#changing-a-canvas).
+- **`textureVersion(src)`** is how many times `updateTexture` was called for a source (0 when never); renderers compare it with the version they read last.
 
 ### Texture mapping
 

@@ -106,6 +106,11 @@ export interface Material {
   smooth?: boolean | number;
   /** Image drawn on the faces (needs texture coordinates). `fill` tints it. */
   texture?: TextureSource;
+  /**
+   * Read the texture again every frame (default: only videos). For a canvas redrawn every
+   * frame; for one redrawn now and then, call `updateTexture(canvas)` instead.
+   */
+  liveTexture?: boolean;
   /** Keep texture pixels sharp instead of smoothing them (default false) */
   pixelated?: boolean;
   /** Effects applied in order, like `[toon(), rim()]` */
@@ -385,6 +390,8 @@ export class CanvasRenderer implements Renderer {
 export interface WebGLRendererOptions {
   /** Smooth edges (default true) */
   antialias?: boolean;
+  /** Free meshes and textures not drawn for this many frames (default 300, about 5 s). Infinity: never */
+  releaseAfter?: number;
 }
 
 /** Draws a scene with WebGL and a depth buffer. */
@@ -396,7 +403,13 @@ export class WebGLRenderer implements Renderer {
   /** The hidden canvas WebGL draws on. */
   canvas: HTMLCanvasElement;
   gl: WebGLRenderingContext | WebGL2RenderingContext;
+  /** Frames a mesh or texture can go undrawn before it's freed (Infinity: never). */
+  releaseAfter: number;
+  /** What's on the graphics card right now. */
+  readonly memory: { meshes: number; buffers: number; textures: number };
   render(scene: Scene): void;
+  /** Frees a mesh's buffers or a texture now; it's sent again if drawn again. */
+  release(item: Mesh | TextureSource): void;
   /** Frees the graphics card memory. The renderer can't be used afterwards. */
   dispose(): void;
 }
@@ -608,8 +621,15 @@ export function loadTexture(url: string): Promise<HTMLImageElement>;
 export function textureReady(src: TextureSource | null | undefined): boolean;
 /** Pixel size of a texture source. */
 export function textureSize(src: TextureSource): { w: number; h: number };
-/** Whether a source can change over time (canvas, video). */
-export function textureIsLive(src: TextureSource): boolean;
+/** Whether a texture is read again every frame: videos, or any source whose material has `liveTexture: true`. */
+export function textureIsLive(src: TextureSource, material?: { liveTexture?: boolean }): boolean;
+/**
+ * Tells the renderers a texture changed (call it after drawing on a canvas used as a texture):
+ * it's read again once, on the next frame. Canvases are otherwise read only once.
+ */
+export function updateTexture(src: TextureSource): void;
+/** How many times `updateTexture` was called for a source (0 when never). */
+export function textureVersion(src: TextureSource): number;
 
 // ---------------------------------------------------------------------------
 // Exporting

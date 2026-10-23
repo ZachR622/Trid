@@ -33,6 +33,7 @@ const scene = new Scene(canvas, {
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `antialias` | `true` | Smooth edges |
+| `releaseAfter` | `300` | Free meshes and textures not drawn for this many frames (about 5 s at 60 fps). `Infinity` keeps everything until `dispose()`. See [Graphics card memory](#graphics-card-memory) |
 
 ### How it fits in
 
@@ -52,6 +53,20 @@ Replacing the arrays (`mesh.vertices = [...]`) or adding and removing items is n
 ### Far distance
 
 The depth buffer needs a limit: nothing farther than `camera.far` (default `1000`) is drawn. Raise it for huge scenes.
+
+### Graphics card memory
+
+Each mesh and texture drawn is copied to the graphics card. When one hasn't been drawn for `releaseAfter` frames (about 5 seconds by default), its copy is freed, so code that keeps making new meshes or textures (`obj.mesh = makeShape(...)` on every change, a generator, a model editor, an OBJ uploader used many times) doesn't fill the card's memory. If a freed mesh or texture is drawn again, it's simply sent again.
+
+To free one right away, without waiting:
+
+```js
+scene.remove(obj);
+renderer.release(obj.mesh);             // its buffers
+renderer.release(obj.material.texture); // its image
+```
+
+`renderer.memory` says what's on the card right now: `{ meshes, buffers, textures }`. Handy to check that a long-running page stays flat.
 
 ### Cleaning up
 

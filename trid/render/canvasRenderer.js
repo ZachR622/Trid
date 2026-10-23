@@ -2,7 +2,7 @@ import { localToWorld, worldToCamera, cameraToScreen, clipNear, rotateXYZ, DEFAU
 import { clear, drawInstance, edgeSegments, wireEdges } from "./draw.js";
 import { parseColor } from "./color.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
-import { textureReady, textureSize, textureIsLive } from "../loaders/texture.js";
+import { textureReady, textureSize, textureIsLive, textureVersion } from "../loaders/texture.js";
 import { uvsFor, uvTransform, applyUVTransform } from "./uvMapping.js";
 
 export { newell };
@@ -44,6 +44,8 @@ export const DEFAULT_AMBIENT = 0.25;
  *   shapes look round. `true` keeps edges sharper than 60° hard; a number sets that angle.
  * @property {CanvasImageSource} [texture] - Image drawn on the faces (needs texture coordinates:
  *   built-in shapes and OBJ files with `vt` have them). `fill` tints it (default white).
+ * @property {boolean} [liveTexture] - Read the texture again every frame (default: only for videos).
+ *   For a canvas redrawn every frame; for one redrawn now and then, call `updateTexture(canvas)` instead
  * @property {boolean} [pixelated=false] - Keep texture pixels sharp instead of smoothing them
  * @property {import("./uvMapping.js").Mapping} [mapping="uv"] - Where texture coordinates come
  *   from: the mesh's own ("uv"), or made from its shape ("planar", "box", "sphere", "cylinder")
@@ -86,7 +88,7 @@ export class CanvasRenderer {
     this._splits = new WeakMap();
     this._colors = new Map();
     this._start = performance.now();
-    this._patterns = new Map(); // texture source → canvas pattern
+    this._patterns = new WeakMap(); // texture source → canvas pattern (freed with the source)
     this._warned = new WeakSet();
     this._frame = 0;
   }
@@ -244,7 +246,7 @@ export class CanvasRenderer {
               items.push({
                 depth: c.z,
                 poly: [screen[0], screen[k], screen[k + 1]],
-                texture: { src: L.tex, uvs: [ts[0], ts[k], ts[k + 1]], pixelated: !!L.mat.pixelated, tint: fill },
+                texture: { src: L.tex, uvs: [ts[0], ts[k], ts[k + 1]], pixelated: !!L.mat.pixelated, live: textureIsLive(L.tex, L.mat), tint: fill },
                 lit: [lit[0], lit[k], lit[k + 1]],
                 outline, lineWidth,
                 edges: n === 3 ? edges : fan,
@@ -493,7 +495,7 @@ export class CanvasRenderer {
    * triangle's corners, tinted by the fill color, then darkened by the light.
    */
   _drawTextured(ctx, it) {
-    const { src, uvs, pixelated, tint } = it.texture;
+    const { src, uvs, pixelated, live, tint } = it.texture;
     const { w: W, h: H } = textureSize(src);
     const [p0, p1, p2] = it.poly;
 
@@ -519,7 +521,7 @@ export class CanvasRenderer {
       const dx1 = p1.x - p0.x, dy1 = p1.y - p0.y, dx2 = p2.x - p0.x, dy2 = p2.y - p0.y;
       const a = (dx1 * dv2 - dx2 * dv1) / det, b = (dy1 * dv2 - dy2 * dv1) / det;
       const c = (dx2 * du1 - dx1 * du2) / det, d = (dy2 * du1 - dy1 * du2) / det;
-      const pattern = this._pattern(ctx, src);
+      const pattern = this._pattern(ctx, src, live);
       pattern.setTransform(new DOMMatrix([a, b, c, d, p0.x - a * U[0] - c * V[0], p0.y - b * U[0] - d * V[0]]));
       ctx.imageSmoothingEnabled = !pixelated;
       ctx.fillStyle = pattern;
@@ -553,11 +555,15 @@ export class CanvasRenderer {
     ctx.fill();
   }
 
-  /** A repeating pattern for a texture (made again each frame for canvases and videos). */
-  _pattern(ctx, src) {
+  /**
+   * A repeating pattern for a texture. A pattern is a copy of the image, so
+   * it's made again after `updateTexture`, and every frame for live ones.
+   */
+  _pattern(ctx, src, live) {
     let p = this._patterns.get(src);
-    if (!p || (textureIsLive(src) && p.frame !== this._frame)) {
-      p = { pattern: ctx.createPattern(src, "repeat"), frame: this._frame };
+    const version = textureVersion(src);
+    if (!p || p.version !== version || (live && p.frame !== this._frame)) {
+      p = { pattern: ctx.createPattern(src, "repeat"), frame: this._frame, version };
       this._patterns.set(src, p);
     }
     return p.pattern;

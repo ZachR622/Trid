@@ -5,7 +5,7 @@ import { DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./canvasRenderer.js
 import { uvsFor, uvTransform, mappingKey } from "./uvMapping.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
 import { SURFACE_GLSL, buildEffects, effectsKey } from "./effects.js";
-import { textureReady, textureSize, textureIsLive } from "../loaders/texture.js";
+import { textureReady, textureSize, textureIsLive, textureVersion } from "../loaders/texture.js";
 
 /** Farthest distance drawn by the WebGL renderer, unless the camera sets `far`. */
 export const DEFAULT_FAR = 1000;
@@ -160,6 +160,12 @@ const UNIFORMS = ["uPos", "uRot", "uScale", "uCamPos", "uCamRot", "uF", "uAspect
  *
  * Meshes are sent to the graphics card once and reused. After changing
  * a mesh's vertices, edges or faces in place, set `mesh.dirty = true`.
+ * Textures are sent once too (videos every frame): after redrawing a canvas,
+ * call `updateTexture(canvas)`.
+ *
+ * Meshes and textures that haven't been drawn for `releaseAfter` frames
+ * are freed from the graphics card, so replacing them (`obj.mesh = newMesh`)
+ * doesn't fill its memory. They're sent again if they come back.
  *
  * @example
  * const scene = new Scene(canvas, { renderer: new WebGLRenderer() });
@@ -178,9 +184,13 @@ export class WebGLRenderer {
   /**
    * @param {Object} [opts]
    * @param {boolean} [opts.antialias=true] - Smooth edges
+   * @param {number} [opts.releaseAfter=300] - Free meshes and textures not drawn for this many frames
+   *   (about 5 s at 60 fps). `Infinity` keeps everything until `dispose()`
    * @throws {Error} If WebGL isn't available (check `WebGLRenderer.isSupported()` first)
    */
-  constructor({ antialias = true } = {}) {
+  constructor({ antialias = true, releaseAfter = 300 } = {}) {
+    /** Frames a mesh or texture can go undrawn before it's freed (Infinity: never). */
+    this.releaseAfter = releaseAfter;
     /** The hidden canvas WebGL draws on. */
     this.canvas = document.createElement("canvas");
     this._options = { antialias, alpha: true, premultipliedAlpha: true, depth: true };
@@ -210,6 +220,9 @@ export class WebGLRenderer {
     this._buffers = new Set();
     this._textures = new WeakMap(); // image / canvas / video → GL texture
     this._glTextures = new Set();
+    // Last frame each mesh / texture source was drawn, to free the ones no longer used
+    this._meshUse = new Map();
+    this._textureUse = new Map();
     this._warned = new WeakSet();
     this._frame = 0;
 
@@ -301,6 +314,48 @@ export class WebGLRenderer {
 
     // Meshes marked as changed have been sent again
     for (const obj of scene.objects) if (obj.mesh.dirty) obj.mesh.dirty = false;
+
+    if (this._frame % 60 === 0) this._sweep();
+  }
+
+  /**
+   * What the renderer keeps on the graphics card right now.
+   *
+   * @returns {{ meshes:number, buffers:number, textures:number }}
+   */
+  get memory() {
+    return { meshes: this._meshUse.size, buffers: this._buffers.size, textures: this._glTextures.size };
+  }
+
+  /**
+   * Frees a mesh's buffers or a texture's image on the graphics card now,
+   * instead of waiting for `releaseAfter`. If it's drawn again, it's sent again.
+   *
+   * @param {Object} item - A mesh, or a texture source (image, canvas, video)
+   */
+  release(item) {
+    if (!item || this._disposed) return;
+    const geo = this._meshes.get(item);
+    if (geo) {
+      for (const b of buffersOf(geo)) this._free(b);
+      this._meshes.delete(item);
+    }
+    this._meshUse.delete(item);
+    const t = this._textures.get(item);
+    if (t) {
+      this.gl.deleteTexture(t.tex);
+      this._glTextures.delete(t.tex);
+      this._textures.delete(item);
+    }
+    this._textureUse.delete(item);
+  }
+
+  /** Frees what hasn't been drawn for `releaseAfter` frames. */
+  _sweep() {
+    if (!(this.releaseAfter < Infinity)) return;
+    const oldest = this._frame - this.releaseAfter;
+    for (const [item, frame] of this._meshUse) if (frame < oldest) this.release(item);
+    for (const [item, frame] of this._textureUse) if (frame < oldest) this.release(item);
   }
 
   /** Frees the graphics card memory. The renderer can't be used afterwards. */
@@ -312,6 +367,8 @@ export class WebGLRenderer {
     for (const t of this._glTextures) gl.deleteTexture(t);
     this._glTextures.clear();
     this._buffers.clear();
+    this._meshUse.clear();
+    this._textureUse.clear();
     for (const p of new Set(this._faces.values())) gl.deleteProgram(p.program);
     gl.deleteProgram(this._line.program);
     gl.getExtension("WEBGL_lose_context")?.loseContext();
@@ -364,7 +421,7 @@ export class WebGLRenderer {
       if (a.aNormal >= 0) gl.vertexAttribPointer(a.aNormal, 3, gl.FLOAT, false, 32, 12);
       if (a.aUV >= 0) gl.vertexAttribPointer(a.aUV, 2, gl.FLOAT, false, 32, 24);
       const tex = d.mat.texture
-        ? this._texture(d.mat.texture, !!d.mat.pixelated, d.obj.mesh, !!uvsFor(d.obj.mesh, d.mat.mapping).faceUVs)
+        ? this._texture(d.mat.texture, d.mat, d.obj.mesh, !!uvsFor(d.obj.mesh, d.mat.mapping).faceUVs)
         : null;
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -417,8 +474,9 @@ export class WebGLRenderer {
    * (canvases and videos: every frame). Null while it isn't ready,
    * or if the mesh has no texture coordinates.
    */
-  _texture(src, pixelated, mesh, hasUVs) {
+  _texture(src, mat, mesh, hasUVs) {
     const gl = this.gl;
+    const pixelated = !!mat.pixelated;
     if (!textureReady(src)) return null;
     if (!hasUVs) {
       if (!this._warned.has(mesh)) {
@@ -429,24 +487,29 @@ export class WebGLRenderer {
     }
 
     let t = this._textures.get(src);
-    const live = textureIsLive(src);
-    if (!t || live || t.failed) {
+    const live = textureIsLive(src, mat);
+    const version = textureVersion(src);
+    this._textureUse.set(src, this._frame);
+    // Sent once, then again after updateTexture(src), or every frame when live
+    if (!t || live || t.version !== version || t.failed) {
       if (t?.failed) return null;
       let { w, h } = textureSize(src);
       if (!t) {
-        t = { tex: gl.createTexture(), frame: -1 };
+        t = { tex: gl.createTexture(), frame: -1, version: -1 };
         this._textures.set(src, t);
         this._glTextures.add(t.tex);
       }
       if (t.frame !== this._frame) {
+        const changed = t.version !== version;
         t.frame = this._frame;
+        t.version = version;
         gl.bindTexture(gl.TEXTURE_2D, t.tex);
         // Bigger than the graphics card allows: upload a smaller copy
         let pixels = src;
         const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
         if (w > max || h > max) {
           const k = max / Math.max(w, h);
-          if (!t.small || live) t.small = shrink(src, Math.floor(w * k), Math.floor(h * k), t.small);
+          if (!t.small || live || changed) t.small = shrink(src, Math.floor(w * k), Math.floor(h * k), t.small);
           if (!t.warned) {
             t.warned = true;
             console.warn(`Trid: a ${w} × ${h} texture is bigger than this graphics card allows (${max}), so it's drawn at ${t.small.width} × ${t.small.height}`);
@@ -496,14 +559,13 @@ export class WebGLRenderer {
 
   /** Graphics card buffers for a mesh, built once and rebuilt when it changes. */
   _geometry(mesh) {
+    this._meshUse.set(mesh, this._frame);
     let geo = this._meshes.get(mesh);
     const stale = !geo || mesh.dirty || geo.vertices !== mesh.vertices || geo.faceList !== mesh.faces
       || geo.edgeList !== mesh.edges || geo.faceMats !== mesh.faceMaterials || geo.counts !== countsOf(mesh);
     if (!stale) return geo;
 
-    if (geo) {
-      for (const b of [...geo.lines.values(), ...geo.faceBuffers.values(), ...geo.groupOutlines.values()]) this._free(b);
-    }
+    if (geo) for (const b of buffersOf(geo)) this._free(b);
     const faces = mesh.faces ?? [];
 
     // Faces grouped by material index, in the order the face buffers store them
@@ -629,6 +691,11 @@ export class WebGLRenderer {
     }
     return c;
   }
+}
+
+/** Every graphics card buffer of a mesh's geometry. */
+function buffersOf(geo) {
+  return [...geo.lines.values(), ...geo.faceBuffers.values(), ...geo.groupOutlines.values()];
 }
 
 /** A short string that changes when a mesh's arrays grow or shrink. */

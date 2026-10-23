@@ -20,11 +20,32 @@ scene.add({ mesh: makeShape("cube"), material: { texture: crate } });
 | Source | Notes |
 | --- | --- |
 | An image (`<img>`, `loadTexture(url)`) | Uploaded once |
-| A `<canvas>` | Read again every frame, so you can draw on it to animate |
+| A `<canvas>` | Uploaded once. After drawing on it again, call `updateTexture(canvas)`, or set `liveTexture: true` to read it every frame. See [Changing a canvas](#changing-a-canvas) |
 | A `<video>` | Read every frame, so the video plays on the object |
 | An `ImageBitmap` | Uploaded once |
 
 Until an image has loaded, the object is drawn with its fill color. You can also set or change `material.texture` at any time.
+
+### Changing a canvas
+
+A canvas is read **once**, the first time it's drawn: that keeps it fast (no upload every frame) and sharp (the WebGL renderer makes mipmaps for it, so it doesn't shimmer far away). When you draw on it again, tell Trid:
+
+```js
+paint(canvas);           // your drawing code
+updateTexture(canvas);   // read again on the next frame, everywhere it's used
+```
+
+For a canvas you redraw **every frame** (a clock, a mini game, a video effect), set `liveTexture: true` on its material instead, as the demo above does:
+
+```js
+scene.add({ mesh, material: { texture: canvas, liveTexture: true } });
+```
+
+::: warning Changed in 0.3
+Before 0.3, every canvas was read again every frame. If a canvas texture stopped changing after you updated, add `updateTexture(canvas)` after drawing, or `liveTexture: true`.
+:::
+
+Paint a canvas **before** the first frame that draws it, or call `updateTexture` once it's painted: a canvas drawn later (after an image loads, for example) would otherwise stay blank.
 
 `loadTexture(url)` returns a promise for the loaded image. It asks for permission to use images from other sites (CORS): images from your own site always work, while images from other sites only work if that site allows it.
 
@@ -35,6 +56,7 @@ Until an image has loaded, the object is drawn with its fill color. You can also
 | `texture` | none | The image |
 | `fill` | `"#ffffff"` with a texture | Multiplies the texture's colors. White keeps them as they are; any other color tints them |
 | `pixelated` | `false` | Keep pixels sharp (for pixel art) instead of smoothing them |
+| `liveTexture` | `true` for videos | Read the texture again every frame. For a canvas you redraw every frame; `false` freezes a video |
 | `mapping` | `"uv"` | Where texture coordinates come from. See [Texture mapping](#texture-mapping) |
 | `textureRepeat` | `1` | How many times the image repeats across: a number, or `{ u, v }` |
 | `textureOffset` | `{ u: 0, v: 0 }` | Moves the image; 1 is its whole width or height |

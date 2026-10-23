@@ -15,13 +15,14 @@ export default function (canvas) {
     globe.material.texture = grid;
   });
 
-  // 2. A canvas you draw on: it's read again every frame, so it can move
+  // 2. A canvas redrawn every frame: liveTexture reads it again each frame
+  //    (a canvas painted once needs nothing; one redrawn now and then: updateTexture(canvas))
   const live = document.createElement("canvas");
   live.width = live.height = 128;
   const g = live.getContext("2d");
   const screen = scene.add({
     mesh: makeShape("box", { w: 0.55, h: 0.45, d: 0.1 }), pos: { x: 0.36, y: 0, z: 0 },
-    material: { texture: live },
+    material: { texture: live, liveTexture: true },
   });
 
   // 3. Pixel art: an 8 × 8 image, kept sharp
