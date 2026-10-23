@@ -110,7 +110,28 @@ Trid flips Z when it loads an OBJ file (see [Loading OBJ files](./obj#what-gets-
 | `lines` | `true` | Write edges that aren't the side of a face |
 | `precision` | `6` | Decimals kept in numbers. Fewer makes smaller files |
 | `header` | `"Exported by Trid"` | Comment at the top of the file; `""` for none |
+| `mtllib` | none | Name of an `.mtl` file to link. Every material then gets a name (see below) |
 
-::: tip Colors and textures
-OBJ files only hold shapes. Colors and textures go in a separate `.mtl` file, which `exportOBJ` doesn't write yet. Material names are kept, so you can set them up again in the other program.
-:::
+## Colors and textures (MTL)
+
+OBJ files only hold shapes; colors and textures go in a separate `.mtl` file next to it, and the textures in image files. `exportModel` gives you all of them:
+
+```js
+const files = await exportModel(scene, { name: "sword" });
+// sword.obj, sword.mtl, sword_blade.png...
+for (const f of files) await download(f.data, f.name);
+```
+
+Save them in the same folder (or zip them into one download) and the model opens with its colors and textures in Blender and other 3D programs.
+
+Or write the two text files yourself:
+
+```js
+download(exportOBJ(scene, { mtllib: "scene.mtl" }), "scene.obj");
+download(exportMTL(scene), "scene.mtl");
+```
+
+- Each material object gets **one name**, used by the OBJ's `usemtl` lines and the MTL's `newmtl` blocks: its `name` field, or the object's name (`sword`, or `sword_1` for an object's second material). Materials shared by several objects are written once.
+- The MTL has each material's fill (`Kd`; white under a texture), see-through fills as `d`, and the texture's file name (`map_Kd`), `name.png` by default. Pass `textureFile: (name, texture) => "textures/" + name + ".png"` to change it.
+- `objMaterials(input)` lists the materials with their names, textures and file names, to save the textures yourself. `textureToBlob(texture)` turns one into a PNG.
+- `exportMTL` also takes plain descriptions: `exportMTL([{ name: "red", fill: "#f00" }, { name: "skin", texture: "skin.png" }])`.

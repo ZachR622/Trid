@@ -56,7 +56,20 @@ input.addEventListener("change", async () => {
 
 ## Materials
 
-When a file uses more than one material name (`usemtl`), the mesh gets `materialNames`, in the order they first appear, and `faceMaterials`, the index of each face's name. Give the object a list of materials in the same order:
+### From the .mtl file
+
+Most OBJ files come with a `.mtl` file (named on their `mtllib` line) that holds each part's color and texture. `loadOBJ(url, { materials: true })` reads it and loads the textures, into `mesh.materials`, one per name:
+
+```js
+const chair = await loadOBJ("models/chair.obj", { fit: 1, materials: true });
+scene.add({ mesh: chair, material: chair.materials });
+```
+
+Texture files are found next to the `.mtl` file. A missing file only gives a warning in the console (that part keeps a plain color). From an upload (`readOBJFile`), the browser can't read the other files, so set the materials yourself as below. `parseMTL(text)` reads an MTL file's text: `{ name: { fill, opacity, textureFile } }`.
+
+### Setting them yourself
+
+When a file uses material names (`usemtl`), the mesh gets `materialNames`, in the order they first appear, and `faceMaterials`, the index of each face's name. Give the object a list of materials in the same order:
 
 ```js
 const car = await loadOBJ("car.obj", { fit: 1 });

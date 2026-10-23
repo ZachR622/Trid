@@ -22,8 +22,11 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/meshUtils.js` | [`cloneMesh`, `transformMesh`, `displaceMesh`, `mergeMeshes`, `meshBounds`](./shapes#mesh-helpers) |
 | `trid/math/noise.js` | [`rng`, `noise2`, `noise3`, `fbm2`, `fbm3`](./noise) |
 | `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
-| `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
+| `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `loadMaterials`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |
+| `trid/export/mtl.js` | [`exportMTL`, `exportModel`, `objMaterials`, `textureToBlob`](./export#colors-and-textures-mtl) |
+| `trid/loaders/mtl.js` | [`parseMTL`](./obj#from-the-mtl-file) |
+| `trid/render/proceduralTextures.js` | [`makeTexture`, `texturePixels`, `colorBytes`, `TEXTURE_STYLES`](./textures#procedural-textures) |
 | `trid/export/capture.js` | [`screenshot`, `record`, `download`](./export) |
 | `trid/tools/index.js` | [Tools](./tools), [`pick`, `pickHit`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
 | `trid/sceneGraph.js` | [`worldObjects`, `worldMatrix`, `worldPosition`, `ancestors`, `forEachPlaced`](./groups#where-things-are-parent-and-world) |

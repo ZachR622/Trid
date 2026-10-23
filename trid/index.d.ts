@@ -318,7 +318,16 @@ export interface Point2 {
  * Turns a flat outline in the XY plane into a solid `depth` thick along Z
  * (default 0.2), centered on the origin. Either direction, concave is fine, no holes.
  */
-export function extrude(outline: Point2[], depth?: number): Mesh;
+export interface ExtrudeOptions {
+  /** How much the edges between sides and front / back are cut, up to half the depth (default 0) */
+  bevel?: number;
+  /** Steps around a bevel: 1 = flat chamfer, more = rounded (default 1) */
+  bevelSegments?: number;
+  /** Size of the back compared to the front, around the outline's middle (default 1) */
+  taper?: number;
+}
+
+export function extrude(outline: Point2[], depth?: number, opts?: ExtrudeOptions): Mesh;
 
 /** Cuts a counter-clockwise polygon into counter-clockwise triangles (ear clipping). */
 export function triangulate(pts: Point2[]): number[][];
@@ -610,14 +619,35 @@ export function newell(pts: Vec3[]): Vec3;
 /** A mesh loaded from an OBJ file. Always has faces. */
 export interface ObjMesh extends Mesh {
   faces: number[][];
-  /** Material names from `usemtl` lines, when the file uses more than one */
+  /** Material names from `usemtl` lines, in the order they first appear */
   materialNames?: string[];
+  /** The .mtl file the OBJ names (`mtllib`) */
+  mtllib?: string;
+  /** With `loadOBJ(url, { materials: true })`: one material per `materialNames` entry, from the .mtl file */
+  materials?: Material[];
 }
 
 export interface ObjOptions {
   /** Center the model and scale it so its largest side is this long */
   fit?: number;
+  /** `loadOBJ` only: also load the .mtl file and its textures into `mesh.materials` (default false) */
+  materials?: boolean;
 }
+
+/** A material from an MTL file. */
+export interface MtlMaterial {
+  name: string;
+  /** "#rrggbb" from `Kd`, or "rgba(...)" when see-through */
+  fill?: string;
+  /** From `d` / `Tr`, 0 to 1 */
+  opacity?: number;
+  /** The texture's file name (`map_Kd`), relative to the .mtl file */
+  textureFile?: string;
+}
+/** Parses the text of an MTL file: materials by name. */
+export function parseMTL(text: string): Record<string, MtlMaterial>;
+/** The materials of a parsed OBJ from its .mtl file (one per `materialNames` entry), textures loaded. */
+export function loadMaterials(mesh: ObjMesh, base: URL | string): Promise<Material[]>;
 
 /** Parses the text of an OBJ file. */
 export function parseOBJ(text: string, opts?: ObjOptions): ObjMesh;
@@ -664,7 +694,36 @@ export interface ExportOBJOptions {
   precision?: number;
   /** Comment at the top of the file; "" for none (default "Exported by Trid") */
   header?: string;
+  /** Link this .mtl file and name every material (the names `exportMTL` writes) */
+  mtllib?: string;
 }
+
+/** A material description for `exportMTL`. */
+export interface MtlDescription {
+  name: string;
+  fill?: string;
+  opacity?: number;
+  /** Texture file name */
+  texture?: string;
+}
+
+/** The materials an export names, with each texture's file name. */
+export function objMaterials(
+  input: OBJExportable | OBJExportable[] | Scene,
+  opts?: { textureFile?: (name: string, texture: TextureSource) => string },
+): { name: string; material: Material | null; texture: TextureSource | null; file: string | null }[];
+/** Writes an MTL file: for what `exportOBJ` takes (same names), or for plain descriptions. */
+export function exportMTL(
+  input: OBJExportable | OBJExportable[] | Scene | MtlDescription[],
+  opts?: { textureFile?: (name: string, texture: TextureSource) => string; header?: string },
+): string;
+/** A texture image as a PNG (or other) file. */
+export function textureToBlob(src: TextureSource, type?: string): Promise<Blob>;
+/** Every file of a model: name.obj, name.mtl and one PNG per texture. */
+export function exportModel(
+  input: OBJExportable | OBJExportable[] | Scene,
+  opts?: { name?: string; obj?: ExportOBJOptions },
+): Promise<{ name: string; data: string | Blob }[]>;
 
 /** Something exportOBJ can write: a mesh, or an object placed in a scene. */
 export type OBJExportable = Mesh | (SceneObjectInput & Partial<Transform> & { name?: string });
@@ -1214,6 +1273,45 @@ export function mulMat(a: Mat3, b: Mat3): Mat3;
 export function mulVec(m: Mat3, v: Vec3): Vec3;
 /** Applies a world-space move / rotate / scale to a transform and returns the new one. */
 export function applyTransformOp(t: Transform, op: TransformOp): Transform;
+
+// ---------------------------------------------------------------------------
+// Procedural textures
+// ---------------------------------------------------------------------------
+
+export type TextureStyle = "noise" | "marble" | "wood" | "bricks" | "checker" | "bark" | "spots" | "stripes" | "solid";
+/** The built-in styles of `makeTexture`. */
+export const TEXTURE_STYLES: TextureStyle[];
+
+export interface MakeTextureOptions {
+  /** Width and height in pixels (default 256) */
+  size?: number;
+  /** [first, second]: hex, rgb() / rgba(), CSS names or [r, g, b, a?] (default: suits the style) */
+  colors?: (string | number[])[];
+  /** How many times the pattern repeats across, a whole number (default 4) */
+  scale?: number;
+  /** Another whole number gives another texture of the same style (default 0) */
+  seed?: number;
+  /** Fine speckles on top, 0 to 1 (default 0) */
+  grain?: number;
+  /** Paint into this canvas instead of a new one (calls `updateTexture` for you) */
+  canvas?: HTMLCanvasElement | OffscreenCanvas;
+}
+
+/**
+ * Paints a seamless procedural texture on a canvas. `style` is a built-in style, or
+ * `(u, v) => t` (0: first color, 1: second).
+ */
+export function makeTexture(
+  style?: TextureStyle | ((u: number, v: number) => number),
+  opts?: MakeTextureOptions,
+): HTMLCanvasElement | OffscreenCanvas;
+/** The pixels of a procedural texture (RGBA, top row first), without a canvas. */
+export function texturePixels(
+  style?: TextureStyle | ((u: number, v: number) => number),
+  opts?: Omit<MakeTextureOptions, "canvas">,
+): { width: number; height: number; data: Uint8ClampedArray };
+/** [r, g, b, a] (0..255, a 0..1) from a color string or array. */
+export function colorBytes(color: string | number[]): [number, number, number, number];
 
 // ---------------------------------------------------------------------------
 // Groups (scene graph)

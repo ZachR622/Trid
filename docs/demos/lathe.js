@@ -10,7 +10,7 @@ const vase = lathe([
 const star = extrude(Array.from({ length: 10 }, (_, i) => {
   const a = Math.PI / 2 + (i / 10) * Math.PI * 2, r = i % 2 ? 0.17 : 0.4;
   return { x: Math.cos(a) * r, y: Math.sin(a) * r };
-}), 0.12);
+}), 0.12, { bevel: 0.03, bevelSegments: 3 });
 
 export default function (canvas) {
   const scene = new Scene(canvas, {

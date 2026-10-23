@@ -19,11 +19,11 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 - **Shapes** — cubes, boxes, spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes and `extrude` for flat ones, or any mesh you define as vertices and edges.
 - **Mesh helpers** — clone, transform, displace, merge and measure meshes; seeded random numbers and smooth noise (`fbm2`, `fbm3`, tileable) for rocks, terrain and procedural textures.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth, with one directional light.
-- **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files, or made from the shape (planar, box, sphere and cylinder mapping). Repeat, offset and rotate them, or give each face its own material.
+- **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files, or made from the shape (planar, box, sphere and cylinder mapping). Repeat, offset and rotate them, or give each face its own material. Or paint one in code: wood, marble, bricks and more, all seamless.
 - **Effects** — stack shader effects like toon, rim and edge glow, gradients and fog on a material, or write your own in GLSL.
 - **Two renderers** — the canvas 2D context by default, or `WebGLRenderer` for exact depth and big models, with the same scene code.
-- **OBJ files** — load models from a URL, or let users drop their own `.obj` files on the canvas.
-- **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` writes meshes, objects or whole scenes as OBJ files.
+- **OBJ files** — load models from a URL (with their `.mtl` colors and textures), or let users drop their own `.obj` files on the canvas.
+- **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` / `exportModel` write meshes, objects or whole scenes as OBJ files with their MTL materials and textures.
 - **Camera** — position, yaw, pitch and field of view, with near-plane clipping.
 - **Tools** — orbit and fly cameras, object dragging, hover highlight, a move / rotate / scale gizmo, a view axes gizmo, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles. Writing your own is a plain object with a few methods.
 - **Pure math** — every transform and projection step is exported, so you can use the pipeline piece by piece.
@@ -105,7 +105,7 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 
 Roughly in order:
 
-- **More import and export formats** — `.mtl` material files for OBJ (colors and textures per part, both ways), STL; basic glTF later
+- **More import and export formats** — STL; basic glTF later
 - **More tools** — a selection outline, a grid helper
 - **Post effects** (WebGL) — bloom, vignette, outlines, antialiasing and color grading over the whole image
 - **More tests** — `npm test` covers shapes and tools so far; the math functions are next

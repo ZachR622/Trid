@@ -364,65 +364,132 @@ export function triangulate(pts) {
  * centered on the origin: blades, axes, keys, stars, letters, floor plans.
  * The outline may go either way round and may be concave (no holes).
  *
+ * Options:
+ * - `bevel`: cuts the edges between the sides and the front / back by this
+ *   much, so they catch the light (and a blade gets a thin edge). Up to half
+ *   the depth.
+ * - `bevelSegments`: 1 is a flat chamfer, more makes a rounded edge.
+ * - `taper`: size of the back compared to the front (1 = same, 0.5 = half
+ *   as big), scaled around the middle of the outline's bounding box.
+ *
  * Texture coordinates: the front and back map the outline's bounding box,
- * the sides wrap u along the outline and v across the depth. Edges are the
- * front and back outlines plus a line at each corner.
+ * the sides wrap u along the outline and v from front to back. Edges are
+ * the outline at each step plus a line along each corner.
  *
  * @example
  * const star = Array.from({ length: 10 }, (_, i) => {
  *   const a = (i / 10) * Math.PI * 2, r = i % 2 ? 0.2 : 0.5;
  *   return { x: Math.cos(a) * r, y: Math.sin(a) * r };
  * });
- * scene.add({ mesh: extrude(star, 0.15), material: { fill: "#fc5" } });
+ * scene.add({ mesh: extrude(star, 0.15, { bevel: 0.03, bevelSegments: 3 }), material: { fill: "#fc5", smooth: true } });
  *
  * @param {{x:number, y:number}[]} outline - The flat shape (3 points or more)
  * @param {number} [depth=0.2] - Thickness along Z
+ * @param {Object} [opts]
+ * @param {number} [opts.bevel=0] - How much the edges are cut (clamped to half the depth)
+ * @param {number} [opts.bevelSegments=1] - Steps around a bevel (1 = flat chamfer)
+ * @param {number} [opts.taper=1] - Size of the back compared to the front
  * @returns {import("../index.d.ts").Mesh}
  */
-export function extrude(outline, depth = 0.2) {
+export function extrude(outline, depth = 0.2, { bevel = 0, bevelSegments = 1, taper = 1 } = {}) {
   const pts = signedArea(outline) < 0 ? [...outline].reverse() : outline;
   const n = pts.length;
+  const half = depth / 2;
+  const b = Math.max(0, Math.min(bevel, half));
+  const steps = Math.max(1, Math.floor(bevelSegments));
+
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const x0 = Math.min(...xs), y0 = Math.min(...ys);
+  const w = Math.max(...xs) - x0 || 1, h = Math.max(...ys) - y0 || 1;
+  const cx = x0 + w / 2, cy = y0 + h / 2;
+
+  // The profile from front (-z) to back (+z): how far each ring is pulled in, and its z.
+  // A bevel is a quarter circle (or a chamfer) at each end.
+  const profile = [];
+  if (b > 0) {
+    for (let i = 0; i <= steps; i++) {
+      const a = (i / steps) * (Math.PI / 2);
+      profile.push({ inset: steps === 1 ? b * (1 - i) : b * (1 - Math.sin(a)), z: -half + (steps === 1 ? b * i : b * (1 - Math.cos(a))) });
+    }
+    // Skip the straight middle when the bevels meet
+    const backStart = b < half - 1e-9 ? 0 : 1;
+    for (let i = backStart; i <= steps; i++) {
+      const a = (i / steps) * (Math.PI / 2);
+      profile.push({ inset: steps === 1 ? b * i : b * (1 - Math.cos(a)), z: half - (steps === 1 ? b * (1 - i) : b * (1 - Math.sin(a))) });
+    }
+  } else {
+    profile.push({ inset: 0, z: -half }, { inset: 0, z: half });
+  }
+
+  // Inward direction at each corner (the outline is counter-clockwise, so inside is on the left)
+  const inward = pts.map((p, i) => {
+    const prev = pts[(i + n - 1) % n], next = pts[(i + 1) % n];
+    const n1 = leftNormal(prev, p), n2 = leftNormal(p, next);
+    let mx = n1.x + n2.x, my = n1.y + n2.y;
+    const ml = Math.hypot(mx, my) || 1;
+    mx /= ml; my /= ml;
+    // Miter: longer at sharp corners, but capped so they don't spike
+    const k = Math.min(3, 1 / Math.max(0.2, mx * n1.x + my * n1.y));
+    return { x: mx * k, y: my * k };
+  });
+
   const vertices = [];
   const faces = [];
   const uvs = [];
   const faceUVs = [];
   const uv = (u, v) => uvs.push({ u, v }) - 1;
-
-  // 0..n-1 at the front (-z), n..2n-1 at the back (+z)
-  for (const p of pts) vertices.push({ x: p.x, y: p.y, z: -depth / 2 });
-  for (const p of pts) vertices.push({ x: p.x, y: p.y, z: depth / 2 });
-
-  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
-  const x0 = Math.min(...xs), y0 = Math.min(...ys);
-  const w = Math.max(...xs) - x0 || 1, h = Math.max(...ys) - y0 || 1;
-  const capUV = (i) => uv((pts[i].x - x0) / w, (pts[i].y - y0) / h);
+  // Ring r is vertices r*n .. r*n+n-1
+  for (const { inset, z } of profile) {
+    const t = depth > 0 ? (z + half) / depth : 0;
+    const k = 1 + (taper - 1) * t;
+    for (let i = 0; i < n; i++) {
+      const x = pts[i].x + inward[i].x * inset, y = pts[i].y + inward[i].y * inset;
+      vertices.push({ x: cx + (x - cx) * k, y: cy + (y - cy) * k, z });
+    }
+  }
+  const last = (profile.length - 1) * n;
 
   // Caps: counter-clockwise outlines look clockwise from the back (+z), so the
   // back cap keeps that order and the front cap (seen from -z) is reversed
-  for (const [a, b, c] of triangulate(pts)) {
-    faces.push([n + a, n + b, n + c]);
-    faceUVs.push([capUV(a), capUV(b), capUV(c)]);
-    faces.push([c, b, a]);
-    faceUVs.push([capUV(c), capUV(b), capUV(a)]);
+  const capUV = (i) => uv((pts[i].x - x0) / w, (pts[i].y - y0) / h);
+  for (const [a, c1, c2] of triangulate(profile[0].inset > 0 ? vertices.slice(0, n) : pts)) {
+    faces.push([last + a, last + c1, last + c2]);
+    faceUVs.push([capUV(a), capUV(c1), capUV(c2)]);
+    faces.push([c2, c1, a]);
+    faceUVs.push([capUV(c2), capUV(c1), capUV(a)]);
   }
 
-  // Sides, u by length along the outline
+  // Sides between each pair of rings, u by length along the outline, v by length along the profile
   const len = [0];
   for (let i = 0; i < n; i++) len.push(len[i] + Math.hypot(pts[(i + 1) % n].x - pts[i].x, pts[(i + 1) % n].y - pts[i].y));
   const total = len[n] || 1;
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    const ua = len[i] / total, ub = len[i + 1] / total;
-    faces.push([n + j, n + i, i, j]);
-    faceUVs.push([uv(ub, 1), uv(ua, 1), uv(ua, 0), uv(ub, 0)]);
+  const along = [0];
+  for (let r = 1; r < profile.length; r++) {
+    along.push(along[r - 1] + Math.hypot(profile[r].inset - profile[r - 1].inset, profile[r].z - profile[r - 1].z));
+  }
+  const vTotal = along[along.length - 1] || 1;
+  for (let r = 0; r < profile.length - 1; r++) {
+    const f0 = r * n, f1 = (r + 1) * n;
+    const va = along[r] / vTotal, vb = along[r + 1] / vTotal;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const ua = len[i] / total, ub = len[i + 1] / total;
+      faces.push([f1 + j, f1 + i, f0 + i, f0 + j]);
+      faceUVs.push([uv(ub, vb), uv(ua, vb), uv(ua, va), uv(ub, va)]);
+    }
   }
 
   const edges = [
-    pts.map((_, i) => i),
-    pts.map((_, i) => n + i),
-    ...pts.map((_, i) => [i, n + i]),
+    ...profile.map((_, r) => pts.map((_, i) => r * n + i)),
+    ...pts.flatMap((_, i) => profile.slice(1).map((_, r) => [r * n + i, (r + 1) * n + i])),
   ];
   return { vertices, edges, faces, uvs, faceUVs };
+}
+
+/** Unit normal on the left of the edge a → b (inside, for a counter-clockwise outline). */
+function leftNormal(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1;
+  return { x: -dy / l, y: dx / l };
 }
 
 /**

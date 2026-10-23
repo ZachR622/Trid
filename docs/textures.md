@@ -49,6 +49,48 @@ Paint a canvas **before** the first frame that draws it, or call `updateTexture`
 
 `loadTexture(url)` returns a promise for the loaded image. It asks for permission to use images from other sites (CORS): images from your own site always work, while images from other sites only work if that site allows it.
 
+## Procedural textures
+
+`makeTexture(style, options)` paints a pattern in code and returns a canvas, ready to use as a `texture`: no image files needed. Every style **tiles with no seam**, so it wraps around spheres and lathes cleanly and repeats with `textureRepeat`.
+
+<Demo src="procedural" hint="noise · marble · wood · bricks · checker / bark · spots · stripes · solid with grain — drag to orbit" />
+
+<<< @/demos/procedural.js
+
+```js
+const floor = makeTexture("wood", { colors: ["#a87447", "#6b4426"], scale: 3, grain: 0.15 });
+scene.add({ mesh: makeShape("plane", { size: 4 }), material: { texture: floor, textureRepeat: 4 } });
+```
+
+| Style | Looks like | `scale` is |
+| --- | --- | --- |
+| `"noise"` | Soft clouds | Blobs across |
+| `"marble"` | Veined stone | Veins across |
+| `"wood"` | Boards with rings and grain (running along v) | Rings across, ×2 |
+| `"bricks"` | A brick wall, each brick its own shade | Bricks across (twice as many rows) |
+| `"checker"` | A checkerboard | Squares across (made even) |
+| `"bark"` | Rough ridges running along v | Ridges across, ×3 |
+| `"spots"` | Blotches | Spots across |
+| `"stripes"` | Wavy stripes across v | Stripes |
+| `"solid"` | The first color only (rough with `grain`) | — |
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `size` | `256` | Width and height in pixels. A power of two (128, 256, 512...) works best with WebGL 1 |
+| `colors` | suits the style | `[first, second]`: hex, `rgb()` / `rgba()`, CSS names or `[r, g, b, a?]` |
+| `scale` | `4` | How many times the pattern repeats across (a whole number, so it tiles) |
+| `seed` | `0` | Another whole number gives another texture of the same style |
+| `grain` | `0` | Fine speckles on top, from 0 to 1 |
+| `canvas` | a new one | Paint into this canvas instead. `updateTexture` is called for you |
+
+`style` can also be your own function `(u, v) => t`, from 0 (first color) to 1 (second), for u and v from 0 to 1. Build it from the [noise functions](./noise) with a `period` and it tiles too:
+
+```js
+const lava = makeTexture((u, v) => fbm2(u * 4, v * 4, { period: 4 }) > 0.5 ? 1 : 0, { colors: ["#300", "#f60"] });
+```
+
+`texturePixels(style, options)` gives the same pixels without a canvas (`{ width, height, data }`), for a worker or your own processing.
+
 ## Material options
 
 | Option | Default | Meaning |

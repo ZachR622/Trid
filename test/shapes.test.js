@@ -121,3 +121,33 @@ test("the outward check itself: trid's sphere passes, a flipped one fails", () =
   const flipped = { ...s, faces: s.faces.map((f) => [...f].reverse()) };
   assert.equal(outwardShare(flipped, () => ({ x: 0, y: 0, z: 0 })), 0);
 });
+
+test("extrude bevel: valid, closed and outward, chamfered or rounded, either direction", () => {
+  for (const outline of [square, [...square].reverse(), star]) {
+    for (const opts of [{ bevel: 0.05 }, { bevel: 0.05, bevelSegments: 4 }, { bevel: 1, bevelSegments: 3 }]) {
+      const m = extrude(outline, 0.2, opts);
+      assertValid(m);
+      assert.equal(outwardShare(m, () => ({ x: 0, y: 0, z: 0 })), 1, JSON.stringify(opts));
+      // Stays inside the plain extrusion's box
+      const zs = m.vertices.map((v) => v.z);
+      assert.ok(Math.max(...zs) <= 0.1 + 1e-12 && Math.min(...zs) >= -0.1 - 1e-12);
+    }
+  }
+  // Rings: front, bevel steps, back. A chamfer adds one ring at each end
+  assert.equal(extrude(square, 0.2, { bevel: 0.05 }).vertices.length, 4 * 4);
+  assert.equal(extrude(square, 0.2, { bevel: 0.05, bevelSegments: 3 }).vertices.length, 4 * 8);
+  // A bevel of half the depth or more meets in the middle (no doubled ring)
+  assert.equal(extrude(square, 0.2, { bevel: 5 }).vertices.length, 4 * 3);
+  // The front face is pulled in by the bevel
+  const front = extrude(square, 0.2, { bevel: 0.05 }).vertices.slice(0, 4);
+  for (const v of front) { assert.ok(Math.abs(Math.abs(v.x) - 0.45) < 1e-9); assert.ok(Math.abs(v.z + 0.1) < 1e-12); }
+});
+
+test("extrude taper shrinks the back around the outline's middle", () => {
+  const m = extrude([{ x: 1, y: 1 }, { x: 3, y: 1 }, { x: 3, y: 2 }, { x: 1, y: 2 }], 0.2, { taper: 0.5 });
+  assertValid(m);
+  const back = m.vertices.filter((v) => v.z > 0);
+  const xs = back.map((v) => v.x), ys = back.map((v) => v.y);
+  assert.deepEqual([Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)], [1.5, 2.5, 1.25, 1.75]);
+  assert.deepEqual(extrude(square, 0.2).vertices, extrude(square, 0.2, { taper: 1, bevel: 0 }).vertices);
+});

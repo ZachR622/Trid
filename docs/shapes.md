@@ -69,11 +69,17 @@ A point with `r: 0` closes that end to a tip, with no cap needed. Texture coordi
 Turns a flat outline in the XY plane into a solid `depth` thick along Z, centered on the origin: blades, axes, keys, stars, letters, floor plans. The outline is a list of `{ x, y }` points. It may go either way round and may be concave, but can't have holes or cross itself.
 
 ```js
-// A sword blade, thin along Z
+// A sword blade, thin along Z, with sharpened edges
 const blade = extrude([
   { x: -0.04, y: 0 }, { x: 0.04, y: 0 }, { x: 0.04, y: 0.8 }, { x: 0, y: 0.9 }, { x: -0.04, y: 0.8 },
-], 0.015);
+], 0.015, { bevel: 0.0075 });
 ```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `bevel` | `0` | Cuts the edges between the sides and the front / back by this much, so they catch the light. Up to half the depth: a bevel of half the depth makes a sharp edge (a blade) |
+| `bevelSegments` | `1` | `1` is a flat chamfer; more steps make a rounded edge |
+| `taper` | `1` | Size of the back compared to the front (`0.5` = half as big), around the middle of the outline's bounding box |
 
 The front and back map the texture over the outline's bounding box; the sides wrap it along the outline. Rotate the object (or bake it with `scaleMesh`) to stand it another way.
 

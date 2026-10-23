@@ -27,6 +27,9 @@ export {
   buildEffects, effectsKey, uniformType, SURFACE_GLSL,
 } from "./render/effects.js";
 
+// Procedural textures
+export { makeTexture, texturePixels, colorBytes, TEXTURE_STYLES } from "./render/proceduralTextures.js";
+
 // Texture mapping
 export { computeUVs, mapUVs, uvsFor, uvTransform, applyUVTransform, mappingOf, mappingKey, MAPPINGS } from "./render/uvMapping.js";
 
@@ -34,11 +37,13 @@ export { computeUVs, mapUVs, uvsFor, uvTransform, applyUVTransform, mappingOf, m
 export { cornerNormals, creaseOf, newell, DEFAULT_CREASE } from "./render/normals.js";
 
 // Loading files
-export { parseOBJ, loadOBJ, readOBJFile, pickOBJFile, fitMesh } from "./loaders/obj.js";
+export { parseOBJ, loadOBJ, loadMaterials, readOBJFile, pickOBJFile, fitMesh } from "./loaders/obj.js";
+export { parseMTL } from "./loaders/mtl.js";
 export { loadTexture, textureReady, textureSize, textureIsLive, updateTexture, textureVersion } from "./loaders/texture.js";
 
 // Exporting
 export { exportOBJ } from "./export/obj.js";
+export { exportMTL, objMaterials, exportModel, textureToBlob } from "./export/mtl.js";
 export { screenshot, record, download } from "./export/capture.js";
 
 // Tools

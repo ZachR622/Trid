@@ -1,9 +1,13 @@
+import { parseMTL } from "./mtl.js";
+import { loadTexture } from "./texture.js";
+
 /**
  * Wavefront OBJ loading.
  *
  * Reads vertex positions (`v`), texture coordinates (`vt`), normals
- * (`vn`), faces (`f`), polylines (`l`) and material names (`usemtl`).
- * Everything else (.mtl files, groups) is ignored for now.
+ * (`vn`), faces (`f`), polylines (`l`), material names (`usemtl`) and the
+ * material file's name (`mtllib`). `loadOBJ(url, { materials: true })` also
+ * reads that .mtl file and its textures. Groups (`g`, `o`) are ignored.
  *
  * OBJ files are right-handed with +Z toward the viewer. Trid is
  * left-handed with the camera looking down +Z, so Z is flipped on
@@ -24,10 +28,15 @@
  * @property {string[]} [materialNames] - Material names from `usemtl` lines, in the order they first appear
  * @property {number[]} [faceMaterials] - For each face, its index in `materialNames`. Give the
  *   object a list of materials in the same order to color or texture each part.
+ * @property {string} [mtllib] - The .mtl file the OBJ names (`mtllib`), if any
+ * @property {Object[]} [materials] - With `loadOBJ(url, { materials: true })`: one Trid material per
+ *   entry of `materialNames`, from the .mtl file (fill, texture). Use it as the object's `material`
  *
  * @typedef {Object} ObjOptions
  * @property {number} [fit] - If set, center the model on the origin and scale it
  *   so its largest side is this long. Handy because OBJ files come in any size.
+ * @property {boolean} [materials=false] - `loadOBJ` only: also load the .mtl file and its
+ *   textures, into `mesh.materials`
  */
 
 /**
@@ -49,6 +58,7 @@ export function parseOBJ(text, { fit } = {}) {
   const materialNames = [];
   const faceMaterials = []; // per face: index in materialNames
   let material = 0;
+  let mtllib;
 
   const src = text.split(/\r?\n/);
 
@@ -66,6 +76,8 @@ export function parseOBJ(text, { fit } = {}) {
       uvs.push({ u: +(parts[1] ?? 0), v: +(parts[2] ?? 0) });
     } else if (kind === "vn") {
       normals.push({ x: +(parts[1] ?? 0), y: +(parts[2] ?? 0), z: -(parts[3] ?? 0) });
+    } else if (kind === "mtllib") {
+      mtllib ??= parts.slice(1).join(" ");
     } else if (kind === "usemtl") {
       const name = parts.slice(1).join(" ");
       material = materialNames.indexOf(name);
@@ -138,11 +150,12 @@ export function parseOBJ(text, { fit } = {}) {
     mesh.uvs = uvs;
     mesh.faceUVs = faceUVs;
   }
-  // Parts using different materials
-  if (materialNames.length > 1) {
+  // Material names (a list of materials on the object then colors each part)
+  if (materialNames.length > 0) {
     mesh.materialNames = materialNames;
     mesh.faceMaterials = faceMaterials;
   }
+  if (mtllib) mesh.mtllib = mtllib;
   if (fit != null) fitMesh(mesh, fit);
   return mesh;
 }
@@ -187,10 +200,49 @@ export function fitMesh(mesh, size = 1) {
  * @param {ObjOptions} [opts]
  * @returns {Promise<ObjMesh>}
  */
-export async function loadOBJ(url, opts) {
+export async function loadOBJ(url, opts = {}) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Could not load ${url} (${res.status})`);
-  return parseOBJ(await res.text(), opts);
+  const mesh = parseOBJ(await res.text(), opts);
+  if (opts.materials) mesh.materials = await loadMaterials(mesh, new URL(url, location.href));
+  return mesh;
+}
+
+/**
+ * The materials of a loaded OBJ, from its .mtl file: one per name in
+ * `mesh.materialNames`, with the texture images loaded. Missing files only
+ * give a warning (the part keeps a plain fill).
+ *
+ * @param {ObjMesh} mesh - Parsed with `parseOBJ`
+ * @param {URL|string} base - Where the OBJ file is (file names are relative to it)
+ * @returns {Promise<Object[]>}
+ */
+export async function loadMaterials(mesh, base) {
+  const names = mesh.materialNames ?? [];
+  if (!mesh.mtllib) return names.map((name) => ({ name, fill: "#cccccc" }));
+  let lib = {};
+  const mtlURL = new URL(mesh.mtllib, base);
+  try {
+    const res = await fetch(mtlURL);
+    if (!res.ok) throw new Error(`${res.status}`);
+    lib = parseMTL(await res.text());
+  } catch (err) {
+    console.warn(`Trid: couldn't load the material file ${mtlURL} (${err.message})`);
+  }
+  return Promise.all(names.map(async (name) => {
+    const m = lib[name] ?? {};
+    const material = { name, fill: m.fill ?? (m.textureFile ? "#ffffff" : "#cccccc") };
+    if (m.textureFile) {
+      const file = new URL(m.textureFile.replace(/\\/g, "/"), mtlURL);
+      try {
+        material.texture = await loadTexture(file.href);
+        material.fill = "#ffffff"; // MTL's Kd under a texture is usually a tint nobody meant
+      } catch (err) {
+        console.warn(`Trid: couldn't load the texture ${file} (${err.message})`);
+      }
+    }
+    return material;
+  }));
 }
 
 /**
