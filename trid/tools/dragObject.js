@@ -7,7 +7,8 @@ import { pick, worldPerPixel } from "./helpers.js";
  * - Drag: moves the object parallel to the screen, following the cursor
  * - Shift + drag: moves it toward or away from the camera instead
  *
- * Objects are picked with `pick` (screen-space bounding box).
+ * Objects are picked with `pick`: by screen-space bounding box, or by their
+ * triangles with `exact: true`.
  * Set `obj.draggable = false` to make an object ignore this tool.
  *
  * Add this tool after a camera tool so clicking an object drags it
@@ -19,6 +20,7 @@ export class DragObject {
    * @param {number} [opts.button=0] - Mouse button that drags (0 left, 1 middle, 2 right)
    * @param {(obj:Object) => boolean} [opts.filter] - Which objects can be dragged
    *   (default: those without `draggable: false`)
+   * @param {boolean} [opts.exact=false] - Pick by triangles instead of bounding boxes (see `pickHit`)
    * @param {(obj:Object) => void} [opts.onPick] - Called when an object is picked
    * @param {(obj:Object) => void} [opts.onMove] - Called each time the object moves
    * @param {(obj:Object) => void} [opts.onDrop] - Called when the object is released
@@ -26,12 +28,14 @@ export class DragObject {
   constructor({
     button = 0,
     filter = obj => obj.draggable !== false,
+    exact = false,
     onPick,
     onMove,
     onDrop,
   } = {}) {
     this.button = button;
     this.filter = filter;
+    this.exact = exact;
     this.onPick = onPick;
     this.onMove = onMove;
     this.onDrop = onDrop;
@@ -43,7 +47,7 @@ export class DragObject {
   pointerDown(e, scene) {
     if (e.button !== this.button) return false;
 
-    const obj = pick(scene, e.x, e.y, { filter: this.filter });
+    const obj = pick(scene, e.x, e.y, { filter: this.filter, exact: this.exact });
     if (!obj) return false;
 
     this.dragging = obj;

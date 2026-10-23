@@ -99,11 +99,12 @@ Click an object to pick it, then drag to move it. The object follows the cursor 
 | --- | --- | --- |
 | `button` | `0` | Mouse button that drags (0 left, 1 middle, 2 right) |
 | `filter` | objects without `draggable: false` | `(obj) => boolean`: which objects can be dragged |
+| `exact` | `false` | Pick by triangles instead of bounding boxes (see [`pickHit`](./api#pickhit)) |
 | `onPick` | — | `(obj) => void`: called when an object is picked |
 | `onMove` | — | `(obj) => void`: called each time it moves |
 | `onDrop` | — | `(obj) => void`: called when it's released |
 
-`tool.dragging` is the object being dragged, or `null`. Objects are found with [`pick`](./api#pick), which uses screen-space bounding boxes.
+`tool.dragging` is the object being dragged, or `null`. Objects are found with [`pick`](./api#pick): by screen-space bounding box, or by their triangles with `exact: true`.
 
 ## HoverHighlight
 
@@ -113,6 +114,7 @@ Recolors the object under the pointer, and puts its own color back when the poin
 | --- | --- | --- |
 | `color` | `"#ffffff"` | Highlight color |
 | `filter` | objects without `hoverable: false` | `(obj) => boolean`: which objects can be highlighted |
+| `exact` | `false` | Pick by triangles instead of bounding boxes (see [`pickHit`](./api#pickhit)) |
 | `onChange` | — | `(obj) => void`: called when the hovered object changes (`obj` is `null` when nothing is hovered) |
 
 `tool.hovered` is the object under the pointer, or `null`.
@@ -133,6 +135,76 @@ Draws the frames per second in a corner of the canvas. The value is averaged and
 ## ObjUploader
 
 Loads `.obj` files dropped on the canvas, or picked with `tool.open()`. See [Loading OBJ files](./obj#objuploader).
+
+## ViewGizmo
+
+The X, Y and Z axes in a corner of the canvas, turning with the camera, like Blender's navigation gizmo. Axes pointing away from you are dimmed; the dots without a letter are the negative ends. **Click an axis** and the `OrbitCamera` turns smoothly to look along it.
+
+```js
+scene.use(new OrbitCamera());
+const gizmo = scene.use(new ViewGizmo({ corner: "top-right" })); // after the camera
+gizmo.lookAlong({ x: 0, y: 1, z: 0 }); // look down from above, from code
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `orbit` | the scene's first `OrbitCamera` | Camera controls to turn. Without one, the gizmo only shows the axes |
+| `corner` | `"top-right"` | `"top-right"`, `"top-left"`, `"bottom-right"` or `"bottom-left"` |
+| `size` | `42` | Radius in CSS pixels |
+| `margin` | `14` | Distance from the corner in CSS pixels: a number, or `{ x, y }` |
+| `duration` | `0.35` | Seconds the camera takes to turn |
+
+Set `gizmo.visible = false` to hide it without removing it. `gizmo.contains(x, y)` tells whether a canvas pixel is on it. While it turns the camera, auto-rotate waits (see `autoRotateDelay`).
+
+## TransformGizmo
+
+Handles to move, rotate and scale objects with the mouse. It works on one or more `targets` at once, around their shared center (the middle of their bounding box).
+
+<Demo src="gizmo" hint="Click a shape to select it · drag a handle · 1 move, 2 rotate, 3 scale · click the corner axes to turn the view" />
+
+<<< @/demos/gizmo.js
+
+| Mode | Handles | Drag |
+| --- | --- | --- |
+| `"move"` | X, Y, Z arrows | Moves along that world axis |
+| `"rotate"` | X, Y, Z rings | Turns around that axis. The ring follows the mouse from any angle; where rings cross, the one facing you wins |
+| `"scale"` | X, Y, Z handles with square ends, and a center square | Stretches along that axis; the center square scales evenly (×2 per 100 px dragged right, smaller to the left) |
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `mode` | `"move"` | `"move"`, `"rotate"` or `"scale"`; change `gizmo.mode` at any time |
+| `targets` | `[]` | Objects it edits; change `gizmo.targets` at any time. No targets: no handles |
+| `size` | `70` | Handle length in CSS pixels (the same on screen at any distance) |
+| `apply` | `true` | Change the targets' `pos`, `rot` and `scale` while dragging |
+| `onGrab` | — | `(targets) => void`: a handle was grabbed |
+| `onChange` | — | `(op, targets) => void`: while dragging, the operation since the grab |
+| `onDrop` | — | `(op, targets) => void`: on release, the whole operation |
+
+`gizmo.dragging` is `true` while a handle is held, and `gizmo.visible = false` hides it. Clicks that miss the handles fall through to the tools below (the camera), so add the gizmo **after** the camera tool.
+
+### Applying the changes yourself
+
+Stretching a rotated object along a world axis can't be stored as `scale` (that would shear it), so the gizmo stretches the object's own axis that points most along it. A rotation turns both the position (around the center) and `rot`.
+
+With `apply: false`, the gizmo changes nothing and only reports operations, so an app can apply them to its own data (an undo stack, a model made of parts, a server). Each operation is relative to the grab, so apply it to the transform you saved in `onGrab`:
+
+```js
+let saved = [];
+const gizmo = scene.use(new TransformGizmo({
+  apply: false,
+  onGrab: (targets) => (saved = targets.map((t) => ({ pos: { ...t.pos }, rot: { ...t.rot }, scale: { ...t.scale } }))),
+  onChange: (op, targets) => targets.forEach((t, i) => Object.assign(t, applyTransformOp(saved[i], op))),
+  onDrop: (op) => history.push(op),
+}));
+```
+
+An operation is one of:
+
+```js
+{ mode: "move",   delta }                // a world-space vector
+{ mode: "rotate", axis, angle, center }  // right-handed, radians, around the unit axis
+{ mode: "scale",  axis, factor, center } // axis null: uniform
+```
 
 ## All together
 

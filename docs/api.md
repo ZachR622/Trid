@@ -25,7 +25,8 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |
 | `trid/export/capture.js` | [`screenshot`, `record`, `download`](./export) |
-| `trid/tools/index.js` | [Tools](./tools), [`pick`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
+| `trid/tools/index.js` | [Tools](./tools), [`pick`, `pickHit`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
+| `trid/math/rotation.js` | [`matFromEuler`, `eulerFromMat`, `matFromAxisAngle`, `mulMat`, `mulVec`, `applyTransformOp`](#rotations) |
 
 ## Math
 
@@ -224,14 +225,24 @@ From `trid/tools/helpers.js` (also exported by `trid/tools/index.js`).
 ### pick
 
 ```js
-pick(scene, x, y, { filter, padding = 4 } = {})  // → object or null
+pick(scene, x, y, { filter, padding = 4, exact = false } = {})  // → object or null
 ```
 
 Returns the object under canvas pixel (`x`, `y`). An object is hit when the point is inside its screen-space bounding box, grown by `padding` pixels. If several are hit, the one whose center is closest to the camera wins. `filter(obj)` can exclude objects.
 
 ::: info
-Bounding boxes are approximate: clicking the empty corner around a sphere still picks it.
+Bounding boxes are approximate: clicking the empty corner around a sphere still picks it, and of two objects overlapping on screen, the one with the nearer center wins even where the other is in front. Pass `exact: true` to test triangles instead (same as [`pickHit`](#pickhit)).
 :::
+
+### pickHit
+
+```js
+pickHit(scene, x, y, { filter, padding = 4, objects = scene.objects } = {})  // → { object, face, depth } or null
+```
+
+Exact picking: the nearest object whose drawn surface is under the pixel. Every face is projected with the renderers' own math and tested triangle by triangle, so a click always matches what's drawn: through a ring's hole, a sword guard in front of its blade. `face` is the index in `mesh.faces` that was hit, `depth` the distance in front of the camera. Objects without faces (wireframes) are hit within `padding` pixels of one of their lines (`face` is then `-1`).
+
+Faces with a corner behind the camera's near plane are skipped. It's one pass over the objects' vertices per call: fine for clicks and hover on models of a few thousand faces.
 
 ### screenBounds
 
@@ -248,6 +259,29 @@ worldPerPixel(scene, depth)  // → number
 ```
 
 How many world units one canvas pixel covers at `depth` units in front of the camera. Multiply pointer `dx` / `dy` by it to make something follow the cursor exactly.
+
+## Rotations
+
+From `trid/math/rotation.js`. 3×3 rotation matrices (row-major, `m[row][col]`, applied as M · v), built from `rotateXYZ` itself so they always match the renderers, and the operations `TransformGizmo` reports.
+
+```js
+matFromEuler(rot)              // → matrix that rotateXYZ(p, rot) applies
+eulerFromMat(m)                // → rot angles for a matrix (handles looking straight along Y)
+matFromAxisAngle(axis, angle)  // → right-handed turn around a unit axis
+mulMat(a, b)                   // → a · b (b applied first)
+mulVec(m, v)                   // → m · v
+applyTransformOp(t, op)        // → new { pos, rot, scale }
+```
+
+Combine rotations with matrices, then turn the result back into an object's `rot`:
+
+```js
+// Turn an object 90° around the world Y axis, whatever its current rotation
+const turn = matFromAxisAngle({ x: 0, y: 1, z: 0 }, Math.PI / 2);
+obj.rot = eulerFromMat(mulMat(turn, matFromEuler(obj.rot)));
+```
+
+`applyTransformOp(t, op)` applies a [TransformGizmo operation](./tools#applying-the-changes-yourself) to a transform and returns the new one (the input isn't changed).
 
 ## ToolManager
 

@@ -100,6 +100,15 @@ export class OrbitCamera {
     camera.z = this.target.z - f.z * this.distance;
   }
 
+  /**
+   * Restarts the auto-rotate wait (`autoRotateDelay`), as if the user had
+   * just dragged. For other tools that turn the camera, so auto-rotate
+   * doesn't fight them.
+   */
+  holdAutoRotate() {
+    this._idle = 0;
+  }
+
   pointerDown(e) {
     const panButton = e.button === 1 || e.button === 2 || (e.button === 0 && e.shiftKey);
 

@@ -14,11 +14,13 @@ export class HoverHighlight {
    * @param {string} [opts.color="#ffffff"] - Highlight color
    * @param {(obj:Object) => boolean} [opts.filter] - Which objects can be highlighted
    *   (default: those without `hoverable: false`)
+   * @param {boolean} [opts.exact=false] - Pick by triangles instead of bounding boxes (see `pickHit`)
    * @param {(obj:Object|null) => void} [opts.onChange] - Called when the hovered object changes
    */
-  constructor({ color = "#ffffff", filter = obj => obj.hoverable !== false, onChange } = {}) {
+  constructor({ color = "#ffffff", filter = obj => obj.hoverable !== false, exact = false, onChange } = {}) {
     this.color = color;
     this.filter = filter;
+    this.exact = exact;
     this.onChange = onChange;
 
     /** The object under the pointer, or null. */
@@ -28,7 +30,7 @@ export class HoverHighlight {
   }
 
   pointerMove(e, scene) {
-    this._set(pick(scene, e.x, e.y, { filter: this.filter }));
+    this._set(pick(scene, e.x, e.y, { filter: this.filter, exact: this.exact }));
   }
 
   pointerLeave() {

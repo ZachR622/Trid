@@ -43,7 +43,8 @@ export { screenshot, record, download } from "./export/capture.js";
 // Tools
 export {
   OrbitCamera, FlyCamera, DragObject, HoverHighlight, FpsMeter, ObjUploader,
-  ToolManager, pick, screenBounds, worldPerPixel,
+  ViewGizmo, TransformGizmo,
+  ToolManager, pick, pickHit, screenBounds, worldPerPixel,
 } from "./tools/index.js";
 
 // Drawing and the frame loop
@@ -59,6 +60,7 @@ export {
   DEFAULT_FOV, DEFAULT_NEAR,
 } from "./math/transform.js";
 export { project, screen } from "./math/projection.js";
+export { matFromEuler, eulerFromMat, matFromAxisAngle, mulMat, mulVec, applyTransformOp } from "./math/rotation.js";
 
 // Random numbers and noise
 export { rng, noise2, noise3, fbm2, fbm3 } from "./math/noise.js";

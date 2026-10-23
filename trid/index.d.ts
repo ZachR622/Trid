@@ -801,6 +801,8 @@ export class OrbitCamera implements Tool {
   blockContextMenu: boolean;
   /** Places the camera from the target, distance, yaw and pitch. */
   apply(camera: Camera): void;
+  /** Restarts the auto-rotate wait, as if the user had just dragged (for tools that turn the camera). */
+  holdAutoRotate(): void;
   attach(scene: Scene): void;
   pointerDown(e: ToolPointerEvent): boolean;
   pointerMove(e: ToolPointerEvent, scene: Scene): void;
@@ -839,6 +841,8 @@ export interface DragObjectOptions {
   button?: number;
   /** Which objects can be dragged (default: those without `draggable: false`) */
   filter?: (obj: SceneObject) => boolean;
+  /** Pick by triangles instead of bounding boxes (default false, see `pickHit`) */
+  exact?: boolean;
   /** Called when an object is picked */
   onPick?: (obj: SceneObject) => void;
   /** Called each time the object moves */
@@ -852,6 +856,7 @@ export class DragObject implements Tool {
   constructor(opts?: DragObjectOptions);
   button: number;
   filter: (obj: SceneObject) => boolean;
+  exact: boolean;
   onPick?: (obj: SceneObject) => void;
   onMove?: (obj: SceneObject) => void;
   onDrop?: (obj: SceneObject) => void;
@@ -868,6 +873,8 @@ export interface HoverHighlightOptions {
   color?: string;
   /** Which objects can be highlighted (default: those without `hoverable: false`) */
   filter?: (obj: SceneObject) => boolean;
+  /** Pick by triangles instead of bounding boxes (default false, see `pickHit`) */
+  exact?: boolean;
   /** Called when the hovered object changes */
   onChange?: (obj: SceneObject | null) => void;
 }
@@ -877,6 +884,7 @@ export class HoverHighlight implements Tool {
   constructor(opts?: HoverHighlightOptions);
   color: string;
   filter: (obj: SceneObject) => boolean;
+  exact: boolean;
   onChange?: (obj: SceneObject | null) => void;
   /** The object under the pointer, or null. */
   hovered: SceneObject | null;
@@ -944,6 +952,97 @@ export class ObjUploader implements Tool {
   draw(ctx: CanvasRenderingContext2D, scene: Scene): void;
 }
 
+export interface ViewGizmoOptions {
+  /** Camera controls to turn (default: the scene's first OrbitCamera). Without one, it only shows the axes */
+  orbit?: OrbitCamera;
+  /** Where it sits (default "top-right") */
+  corner?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+  /** Radius in CSS pixels (default 42) */
+  size?: number;
+  /** Distance from the canvas corner in CSS pixels (default 14) */
+  margin?: number | { x: number; y: number };
+  /** Seconds the camera takes to turn to a clicked axis (default 0.35) */
+  duration?: number;
+}
+
+/**
+ * The X, Y, Z axes in a corner, turning with the camera; click one to look along it.
+ * Add it after the OrbitCamera.
+ */
+export class ViewGizmo implements Tool {
+  constructor(opts?: ViewGizmoOptions);
+  orbit: OrbitCamera | null;
+  corner: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+  size: number;
+  margin: { x: number; y: number };
+  duration: number;
+  /** Hide or show the gizmo without removing the tool. */
+  visible: boolean;
+  /** Whether a canvas pixel is on the gizmo (as last drawn). */
+  contains(x: number, y: number): boolean;
+  /** Turns the camera smoothly to look at its target from `dir` ({ x: 0, y: 1, z: 0 }: from above). */
+  lookAlong(dir: Vec3): void;
+  attach(scene: Scene): void;
+  detach(): void;
+  pointerDown(e: ToolPointerEvent): boolean;
+  update(dt: number, scene: Scene): void;
+  draw(ctx: CanvasRenderingContext2D, scene: Scene): void;
+}
+
+export type TransformMode = "move" | "rotate" | "scale";
+
+/** A move, rotate or scale in world space, as `TransformGizmo` reports it. */
+export type TransformOp =
+  | { mode: "move"; delta: Vec3 }
+  /** A right-handed turn of `angle` radians around the unit `axis`, about `center` */
+  | { mode: "rotate"; axis: Vec3; angle: number; center: Vec3 }
+  /** `factor` about `center`: uniform when `axis` is null, otherwise along that unit axis */
+  | { mode: "scale"; axis: Vec3 | null; factor: number; center: Vec3 };
+
+export interface TransformGizmoOptions {
+  /** Default "move" */
+  mode?: TransformMode;
+  /** Objects it edits (default none) */
+  targets?: SceneObject[];
+  /** Handle length in CSS pixels (default 70) */
+  size?: number;
+  /** Change the targets' transforms while dragging (default true) */
+  apply?: boolean;
+  /** A handle was grabbed */
+  onGrab?: (targets: SceneObject[]) => void;
+  /** While dragging: the operation since the grab */
+  onChange?: (op: TransformOp, targets: SceneObject[]) => void;
+  /** On release: the whole operation */
+  onDrop?: (op: TransformOp, targets: SceneObject[]) => void;
+}
+
+/**
+ * Move arrows, rotate rings or scale handles on one or more objects, around their
+ * shared center. Add it after the camera tool.
+ */
+export class TransformGizmo implements Tool {
+  constructor(opts?: TransformGizmoOptions);
+  mode: TransformMode;
+  targets: SceneObject[];
+  size: number;
+  apply: boolean;
+  onGrab?: (targets: SceneObject[]) => void;
+  onChange?: (op: TransformOp, targets: SceneObject[]) => void;
+  onDrop?: (op: TransformOp, targets: SceneObject[]) => void;
+  /** Hide the handles (and ignore clicks) without removing the tool. */
+  visible: boolean;
+  /** True while a handle is being dragged. */
+  readonly dragging: boolean;
+  /** Middle of the targets' bounding box in world space, or null. */
+  center(): Vec3 | null;
+  draw(ctx: CanvasRenderingContext2D, scene: Scene): void;
+  pointerDown(e: ToolPointerEvent, scene: Scene): boolean;
+  pointerMove(e: ToolPointerEvent, scene: Scene): void;
+  pointerUp(): void;
+  pointerLeave(scene: Scene): void;
+  detach(scene: Scene): void;
+}
+
 export interface ScreenBox {
   minX: number;
   minY: number;
@@ -956,8 +1055,28 @@ export function pick(
   scene: Scene,
   x: number,
   y: number,
-  opts?: { filter?: (obj: SceneObject) => boolean; padding?: number },
+  opts?: { filter?: (obj: SceneObject) => boolean; padding?: number; exact?: boolean },
 ): SceneObject | null;
+
+/** What `pickHit` found. */
+export interface PickHit {
+  object: SceneObject;
+  /** Index in `mesh.faces`, or -1 for a line of a wireframe */
+  face: number;
+  /** Distance in front of the camera */
+  depth: number;
+}
+
+/**
+ * Exact picking: the nearest object whose triangles (or, without faces, lines
+ * within `padding` pixels) are under a canvas pixel.
+ */
+export function pickHit(
+  scene: Scene,
+  x: number,
+  y: number,
+  opts?: { filter?: (obj: SceneObject) => boolean; padding?: number; objects?: SceneObject[] },
+): PickHit | null;
 
 /** Screen-space bounding box of an object, or null if it's all behind the camera. */
 export function screenBounds(scene: Scene, obj: SceneObject): ScreenBox | null;
@@ -1033,6 +1152,26 @@ export function rotateXYZ(p: Vec3, rot: Vec3): Vec3;
 export function project(p: Vec3, fov?: number, aspect?: number): Vec2;
 /** Normalized coordinates to canvas pixels. */
 export function screen(p: Vec2, w: number, h: number): Vec2;
+
+// ---------------------------------------------------------------------------
+// Rotations
+// ---------------------------------------------------------------------------
+
+/** 3×3 matrix, row-major (m[row][col]), applied as M · v. */
+export type Mat3 = [[number, number, number], [number, number, number], [number, number, number]];
+
+/** The matrix `rotateXYZ(p, rot)` applies. */
+export function matFromEuler(rot: Vec3): Mat3;
+/** Angles for `rotateXYZ` (an object's `rot`) from a rotation matrix; the inverse of `matFromEuler`. */
+export function eulerFromMat(m: Mat3): Vec3;
+/** A right-handed turn of `angle` radians around a unit `axis`. */
+export function matFromAxisAngle(axis: Vec3, angle: number): Mat3;
+/** Matrix product a · b (b is applied first). */
+export function mulMat(a: Mat3, b: Mat3): Mat3;
+/** m · v */
+export function mulVec(m: Mat3, v: Vec3): Vec3;
+/** Applies a world-space move / rotate / scale to a transform and returns the new one. */
+export function applyTransformOp(t: Transform, op: TransformOp): Transform;
 
 // ---------------------------------------------------------------------------
 // Random numbers and noise

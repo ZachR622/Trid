@@ -24,7 +24,7 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 - **OBJ files** — load models from a URL, or let users drop their own `.obj` files on the canvas.
 - **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` writes meshes, objects or whole scenes as OBJ files.
 - **Camera** — position, yaw, pitch and field of view, with near-plane clipping.
-- **Tools** — orbit and fly cameras, object dragging, hover highlight, an FPS meter and an OBJ uploader, one line each. Writing your own is a plain object with a few methods.
+- **Tools** — orbit and fly cameras, object dragging, hover highlight, a move / rotate / scale gizmo, a view axes gizmo, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles. Writing your own is a plain object with a few methods.
 - **Pure math** — every transform and projection step is exported, so you can use the pipeline piece by piece.
 
 ## Install
@@ -106,6 +106,6 @@ Roughly in order:
 
 - **More import and export formats** — `.mtl` material files for OBJ (colors and textures per part, both ways), STL; basic glTF later
 - **Parent/child transforms** — e.g. a moon orbiting a planet
-- **More tools** — a gizmo to move, rotate and scale objects with the mouse, a selection outline, a grid/axes helper
+- **More tools** — a selection outline, a grid helper
 - **Post effects** (WebGL) — bloom, vignette, outlines, antialiasing and color grading over the whole image
 - **More tests** — `npm test` covers shapes and tools so far; the math functions are next
