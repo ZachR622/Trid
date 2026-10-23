@@ -16,6 +16,7 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
 - **Shapes** — cubes, boxes, spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes and `extrude` for flat ones, or any mesh you define as vertices and edges.
+- **Mesh helpers** — clone, transform, displace, merge and measure meshes; seeded random numbers and smooth noise (`fbm2`, `fbm3`, tileable) for rocks, terrain and procedural textures.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth, with one directional light.
 - **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files, or made from the shape (planar, box, sphere and cylinder mapping). Repeat, offset and rotate them, or give each face its own material.
 - **Effects** — stack shader effects like toon, rim and edge glow, gradients and fog on a material, or write your own in GLSL.

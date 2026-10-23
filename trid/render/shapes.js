@@ -452,6 +452,7 @@ export function scaleMesh(mesh, sx = 1, sy = 1, sz = 1) {
     v.y *= sy;
     v.z *= sz;
   }
+  mesh.dirty = true; // so the WebGL renderer uploads the new positions
   return mesh;
 }
 

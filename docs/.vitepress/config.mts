@@ -36,6 +36,7 @@ export default defineConfig({
         items: [
           { text: "Scene", link: "/scene" },
           { text: "Shapes & meshes", link: "/shapes" },
+          { text: "Random & noise", link: "/noise" },
           { text: "Filled faces", link: "/faces" },
           { text: "Renderers", link: "/renderers" },
           { text: "Textures", link: "/textures" },

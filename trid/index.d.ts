@@ -306,6 +306,53 @@ export function triangulate(pts: Point2[]): number[][];
 /** Scales a mesh's vertices in place. Returns the same mesh. */
 export function scaleMesh<M extends { vertices: Vec3[] }>(mesh: M, sx?: number, sy?: number, sz?: number): M;
 
+/** A transform to bake into a mesh; parts left out change nothing. A scene object fits. */
+export interface MeshTransform {
+  pos?: Partial<Vec3>;
+  rot?: Partial<Vec3>;
+  scale?: Partial<Vec3>;
+}
+
+/** Deep copy of a mesh (vertices, edges, faces, UVs, normals, materials). */
+export function cloneMesh<M extends Mesh>(mesh: M): M;
+
+/**
+ * Bakes a transform into a mesh's vertices, in place (scale, rotate X→Y→Z, move).
+ * Normals turn with it; a mirroring scale reverses the faces. Returns the same mesh.
+ */
+export function transformMesh<M extends Mesh>(mesh: M, transform: MeshTransform): M;
+
+/**
+ * Moves every vertex to `fn(vertex, index)`, in place. Removes the mesh's own normals
+ * (they no longer fit), so the renderers compute new ones. Returns the same mesh.
+ */
+export function displaceMesh<M extends Mesh>(mesh: M, fn: (v: Vec3, index: number) => Vec3): M;
+
+export interface MergeOptions {
+  /** Faces of the i-th mesh use material i (default false: keep each mesh's faceMaterials) */
+  materialPerMesh?: boolean;
+}
+
+/**
+ * Joins meshes into a new one, keeping faces, edges, UVs, normals and materials.
+ * Scene objects in the list are merged where they stand (transform baked in).
+ */
+export function mergeMeshes(items: (Mesh | SceneObjectInput)[], opts?: MergeOptions): Mesh;
+
+/** A box around some geometry. */
+export interface Bounds {
+  min: Vec3;
+  max: Vec3;
+  center: Vec3;
+  size: Vec3;
+}
+
+/**
+ * The box around a mesh, a scene object, a list of them or a Scene (objects measured
+ * where they stand). Null when there are no vertices.
+ */
+export function meshBounds(input: Mesh | SceneObjectInput | (Mesh | SceneObjectInput)[] | Scene): Bounds | null;
+
 // ---------------------------------------------------------------------------
 // Renderers
 // ---------------------------------------------------------------------------
@@ -986,3 +1033,33 @@ export function rotateXYZ(p: Vec3, rot: Vec3): Vec3;
 export function project(p: Vec3, fov?: number, aspect?: number): Vec2;
 /** Normalized coordinates to canvas pixels. */
 export function screen(p: Vec2, w: number, h: number): Vec2;
+
+// ---------------------------------------------------------------------------
+// Random numbers and noise
+// ---------------------------------------------------------------------------
+
+/** A seeded random generator (mulberry32): each call returns the next number in [0, 1). */
+export function rng(seed?: number): () => number;
+
+export interface NoiseOptions {
+  /** Whole number; another seed gives other noise (default 0) */
+  seed?: number;
+  /** Repeat every this many units, a whole number, for seamless textures (default 0: never) */
+  period?: number;
+}
+
+export interface FbmOptions extends NoiseOptions {
+  /** Layers of detail (default 5) */
+  octaves?: number;
+  /** Strength of each layer compared to the one before (default 0.5) */
+  gain?: number;
+}
+
+/** Smooth 2D value noise in [0, 1). */
+export function noise2(x: number, y: number, opts?: NoiseOptions): number;
+/** Smooth 3D value noise in [0, 1). */
+export function noise3(x: number, y: number, z: number, opts?: NoiseOptions): number;
+/** Fractal 2D noise: octaves of noise2, each twice as fine. About [0, 1), averaging 0.5. */
+export function fbm2(x: number, y: number, opts?: FbmOptions): number;
+/** Fractal 3D noise: octaves of noise3, each twice as fine. About [0, 1), averaging 0.5. */
+export function fbm3(x: number, y: number, z: number, opts?: FbmOptions): number;

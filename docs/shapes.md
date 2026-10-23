@@ -1,9 +1,9 @@
 # Shapes & meshes
 
-Build meshes with `makeShape`, spin a profile with `lathe`, thicken an outline with `extrude`, reshape them with `scaleMesh`, or write your own from vertices and edges.
+Build meshes with `makeShape`, spin a profile with `lathe`, thicken an outline with `extrude`, change them with the [mesh helpers](#mesh-helpers), or write your own from vertices and edges.
 
 ```js
-import { makeShape, lathe, extrude, scaleMesh } from "./trid/index.js";
+import { makeShape, lathe, extrude, scaleMesh, transformMesh, mergeMeshes } from "./trid/index.js";
 ```
 
 <Demo src="shapes" hint="cube · box · sphere · custom pyramid / cylinder · cone · torus · plane — drag to orbit" />
@@ -91,6 +91,76 @@ const egg = scaleMesh(makeShape("sphere", { r: 0.3 }), 1, 1.4, 1);
 ::: warning It changes the mesh in place
 Every object sharing that mesh changes too. To stretch a single object, change its `scale` instead - that's cheaper and reversible.
 :::
+
+## Mesh helpers
+
+Functions that copy, change, join and measure meshes. `transformMesh`, `displaceMesh` and `scaleMesh` change the mesh **in place** (every object sharing it changes too) and mark it `dirty`, so the WebGL renderer uploads it again. Use `cloneMesh` first to keep the original.
+
+### `cloneMesh(mesh)`
+
+A deep copy: vertices, edges, faces, texture coordinates, normals and materials.
+
+```js
+const big = scaleMesh(cloneMesh(rockMesh), 2, 2, 2); // rockMesh is unchanged
+```
+
+### `transformMesh(mesh, { pos?, rot?, scale? })`
+
+Bakes a transform into the vertices: scale, then rotate (X, then Y, then Z), then move, the same order objects use, so a baked mesh drawn at the origin looks exactly like the original drawn with that transform. Parts left out change nothing (`{ pos: { y: 1 } }` only moves up).
+
+- The mesh's own normals (from OBJ files) turn with it.
+- A mirroring scale (`scale: { x: -1, y: 1, z: 1 }`) reverses the faces, so they still face outward.
+- Pass a scene object to bake its `pos`, `rot` and `scale`, then reset them on the object, or it's transformed twice.
+
+### `displaceMesh(mesh, fn)`
+
+Moves each vertex to `fn(vertex, index)`: lumps on a rock, waves on a plane, a bend or a twist. The function gets a copy of the vertex and returns the new position. The mesh's own normals no longer fit the new shape, so they're removed and the renderers compute new ones.
+
+```js
+// Twist a box around Y: the higher the vertex, the more it turns
+displaceMesh(makeShape("box", { w: 0.3, h: 1, d: 0.3 }), (v) => {
+  const a = v.y * 2, c = Math.cos(a), s = Math.sin(a);
+  return { x: v.x * c - v.z * s, y: v.y, z: v.x * s + v.z * c };
+});
+```
+
+Displace with [noise](./noise) for natural shapes. Faces are only as smooth as the mesh is fine, so start from a shape with enough vertices (`rings`, `segments`, `div`).
+
+### `mergeMeshes(items, opts?)`
+
+Joins meshes into a new one: one object to draw and move instead of many, or one mesh to export. Faces, edges, texture coordinates, normals and materials are kept. The inputs aren't changed.
+
+An object in the list (`{ mesh, pos, rot, scale }`, in a scene or not) is merged where it stands, with its transform baked in.
+
+```js
+// A sword from parts, each with its own material
+const sword = mergeMeshes([
+  { mesh: blade, pos: { x: 0, y: 0.45, z: 0 } },
+  { mesh: guard, pos: { x: 0, y: 0, z: 0 } },
+  { mesh: grip,  pos: { x: 0, y: -0.12, z: 0 } },
+], { materialPerMesh: true });
+
+scene.add({ mesh: sword, material: [{ fill: "#ccd" }, { fill: "#c90" }, { fill: "#642" }] });
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `materialPerMesh` | `false` | The faces of the i-th mesh use material i of the object's [material list](./textures#a-texture-per-face). Without it, each mesh keeps its own `faceMaterials` (OBJ material names are joined into one list) |
+
+A mesh without `edges` keeps showing its face outlines in the merged wireframe.
+
+### `meshBounds(input)`
+
+The box around a mesh, an object, a list of them or a whole `Scene`: `{ min, max, center, size }`. Objects are measured where they stand, with their transform. Returns `null` when there's nothing to measure.
+
+```js
+// Point the camera at everything
+const { center, size } = meshBounds(scene);
+orbit.target = center;
+orbit.distance = Math.max(size.x, size.y, size.z) * 2;
+```
+
+To center a mesh and scale it to a size, use `fitMesh(mesh, size)` from the [OBJ loader](./obj).
 
 ## Custom meshes
 

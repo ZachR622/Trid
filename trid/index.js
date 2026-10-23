@@ -14,6 +14,7 @@ export { Scene } from "./scene.js";
 
 // Shapes and meshes
 export { makeShape, scaleMesh, lathe, extrude, triangulate } from "./render/shapes.js";
+export { cloneMesh, transformMesh, displaceMesh, mergeMeshes, meshBounds } from "./render/meshUtils.js";
 
 // Renderers
 export { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./render/canvasRenderer.js";
@@ -58,3 +59,6 @@ export {
   DEFAULT_FOV, DEFAULT_NEAR,
 } from "./math/transform.js";
 export { project, screen } from "./math/projection.js";
+
+// Random numbers and noise
+export { rng, noise2, noise3, fbm2, fbm3 } from "./math/noise.js";
