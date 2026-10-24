@@ -29,10 +29,14 @@
  * @property {{x,y,z}} position - World position
  * @property {{x,y,z}} local - Position in the mesh's own space
  * @property {{x,y,z}} view - Unit direction from the point to the camera
- * @property {{x,y,z}} lightDir - Unit direction light comes from
- * @property {number} diffuse - How much the point faces the light (0..1)
- * @property {number} light - Brightness Trid used: ambient + (1 - ambient) × diffuse
- * @property {number} ambient - The scene's ambient level
+ * @property {{x,y,z}} lightDir - Unit direction the scene's first directional light comes from
+ * @property {number} diffuse - How much of the light comes from the lights rather than the
+ *   ambient, 0..1. With the default single light: how much the point faces it
+ * @property {number} light - Brightness Trid used (the brightest channel of `lightColor`):
+ *   ambient + (1 - ambient) × diffuse with the default lights
+ * @property {number[]} lightColor - The light reaching the point, [r, g, b] (all the
+ *   scene's lights added up; can go above 1). Trid's color is `base × lightColor`
+ * @property {number} ambient - The scene's ambient level (brightest channel)
  * @property {number} depth - Distance to the camera
  * @property {number} time - Seconds since the renderer started
  * @property {number[]} background - The scene's background color [r, g, b, a]
@@ -50,6 +54,7 @@ struct Surface {
   vec3 lightDir;
   float diffuse;
   float light;
+  vec3 lightColor;
   float ambient;
   float depth;
   float time;
@@ -59,6 +64,7 @@ struct Surface {
 
 /**
  * Cartoon look: the light comes in a few hard steps instead of a smooth fade.
+ * Colored lights keep their color; only the brightness is stepped.
  *
  * @param {Object} [opts]
  * @param {number} [opts.steps=3] - Number of brightness levels
@@ -71,12 +77,14 @@ export function toon({ steps = 3 } = {}) {
 vec4 effect(vec4 color, Surface s) {
   float level = min(floor(s.diffuse * uSteps), uSteps - 1.0) / max(uSteps - 1.0, 1.0);
   float b = s.ambient + (1.0 - s.ambient) * level;
-  return vec4(s.base.rgb * b, color.a);
+  vec3 hue = s.lightColor / max(s.light, 1e-4); // the light's color at full brightness
+  return vec4(s.base.rgb * hue * b, color.a);
 }`,
     canvas: (color, s, u) => {
       const level = Math.min(Math.floor(s.diffuse * u.uSteps), u.uSteps - 1) / Math.max(u.uSteps - 1, 1);
       const b = s.ambient + (1 - s.ambient) * level;
-      return [s.base[0] * b, s.base[1] * b, s.base[2] * b, color[3]];
+      const k = b / Math.max(s.light, 1e-4);
+      return [0, 1, 2].map((i) => s.base[i] * s.lightColor[i] * k).concat(color[3]);
     },
   };
 }
@@ -170,14 +178,13 @@ export function gradient({
 vec4 effect(vec4 color, Surface s) {
   float t = clamp((s.${p}[${k}] - uMin) / (uMax - uMin), 0.0, 1.0);
   vec3 c = mix(uFrom.rgb, uTo.rgb, t);
-  return vec4(c * mix(1.0, s.light, uLit), color.a);
+  return vec4(c * mix(vec3(1.0), s.lightColor, uLit), color.a);
 }`,
     canvas: (color, s, u) => {
       const v = s[p][axis] ?? s[p].y;
       const t = Math.min(1, Math.max(0, (v - u.uMin) / (u.uMax - u.uMin)));
       const a = s.rgba(u.uFrom), b = s.rgba(u.uTo);
-      const l = u.uLit ? s.light : 1;
-      return [0, 1, 2].map((i) => (a[i] + (b[i] - a[i]) * t) * l).concat(color[3]);
+      return [0, 1, 2].map((i) => (a[i] + (b[i] - a[i]) * t) * (u.uLit ? s.lightColor[i] : 1)).concat(color[3]);
     },
   };
 }

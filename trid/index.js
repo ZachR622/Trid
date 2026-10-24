@@ -15,17 +15,24 @@ export { worldObjects, worldMatrix, worldPosition, ancestors, forEachPlaced } fr
 
 // Shapes and meshes
 export { makeShape, scaleMesh, lathe, extrude, triangulate } from "./render/shapes.js";
+export { gridMesh, gridHelper } from "./render/grid.js";
 export { cloneMesh, transformMesh, displaceMesh, mergeMeshes, meshBounds } from "./render/meshUtils.js";
 
 // Renderers
 export { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./render/canvasRenderer.js";
 export { WebGLRenderer, DEFAULT_FAR } from "./render/webglRenderer.js";
 
+// Lights
+export { defaultLights, sceneLights, lightAt, lightLevels, rangeFade, MAX_LIGHTS } from "./render/lights.js";
+
 // Effects
 export {
   toon, rim, edgeGlow, unlit, gradient, fog,
   buildEffects, effectsKey, uniformType, SURFACE_GLSL,
 } from "./render/effects.js";
+
+// Post effects
+export { vignette, bloom, grade, grain, postPasses, activePost, runCanvasPost, FRAME_GLSL } from "./render/post.js";
 
 // Procedural textures
 export { makeTexture, texturePixels, colorBytes, TEXTURE_STYLES } from "./render/proceduralTextures.js";
@@ -50,7 +57,7 @@ export { screenshot, record, download } from "./export/capture.js";
 export {
   OrbitCamera, FlyCamera, DragObject, HoverHighlight, FpsMeter, ObjUploader,
   ViewGizmo, TransformGizmo,
-  ToolManager, pick, pickHit, screenBounds, worldPerPixel,
+  ToolManager, pick, pickHit, isPickable, screenBounds, worldPerPixel,
 } from "./tools/index.js";
 
 // Drawing and the frame loop

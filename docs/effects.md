@@ -89,15 +89,18 @@ The `glsl` code must define **`vec4 effect(vec4 color, Surface s)`**: it gets th
 | `s.position` | `vec3` | World position |
 | `s.local` | `vec3` | Position in the mesh's own space (moves with the object) |
 | `s.view` | `vec3` | Unit direction from the point to the camera |
-| `s.lightDir` | `vec3` | Unit direction the light comes from |
-| `s.diffuse` | `float` | How much the point faces the light, 0 to 1 |
-| `s.light` | `float` | The brightness Trid used: ambient + (1 − ambient) × diffuse |
-| `s.ambient` | `float` | The scene's ambient level |
+| `s.lightDir` | `vec3` | Unit direction the scene's first directional light comes from |
+| `s.diffuse` | `float` | How much of the light comes from the lights rather than the ambient, 0 to 1. With the default single light: how much the point faces it |
+| `s.light` | `float` | The brightness Trid used (the brightest channel of `s.lightColor`). With the default lights: ambient + (1 − ambient) × diffuse |
+| `s.lightColor` | `vec3` | The light reaching the point, every [light](./lights) added up, as a color (can go above 1) |
+| `s.ambient` | `float` | The scene's ambient level (brightest channel) |
 | `s.depth` | `float` | Distance to the camera |
 | `s.time` | `float` | Seconds since the renderer started, for animation |
 | `s.background` | `vec4` | The scene's background color |
 
-The color that reaches the first effect is `s.base` × `s.light`.
+The color that reaches the first effect is `s.base` × `s.lightColor` (the same as `s.base` × `s.light` with white lights).
+
+In the canvas version, `s.lightColor` is an array `[r, g, b]`.
 
 ### Uniforms
 

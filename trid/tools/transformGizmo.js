@@ -2,7 +2,7 @@ import { cameraForward, worldToCamera, worldToScreen, DEFAULT_NEAR } from "../ma
 import { applyTransformOp, matFromAxisAngle, mulVec } from "../math/rotation.js";
 import { meshBounds } from "../render/meshUtils.js";
 import { transformOpToLocal } from "../math/matrix.js";
-import { worldMatrix, ancestors } from "../sceneGraph.js";
+import { worldMatrix, worldPosition, ancestors } from "../sceneGraph.js";
 import { worldPerPixel } from "./helpers.js";
 
 const AXES = [
@@ -16,8 +16,9 @@ const UNIFORM = 3;
 const RING = 64;
 
 /**
- * Move, rotate and scale handles on one or more objects, around their
- * shared center (the middle of their bounding box). One tool, three modes:
+ * Move, rotate and scale handles on one or more objects, around a pivot:
+ * by default the middle of their bounding box (see `pivot`). One tool,
+ * three modes:
  *
  * - `"move"`: X, Y, Z arrows; drag one to move along that world axis
  * - `"rotate"`: X, Y, Z rings; drag along a ring to turn around that axis.
@@ -33,6 +34,16 @@ const RING = 64;
  * By default it changes the targets' `pos`, `rot` and `scale`. With
  * `apply: false` it only reports what the drag does (a `TransformOp`,
  * applied with `applyTransformOp`) so an app can apply it to its own data.
+ *
+ * The pivot is where the handles sit and what rotate and scale turn and
+ * grow around (it's the ops' `center`):
+ * - `"bounds"` (default): the middle of the targets' bounding box
+ * - `"origin"`: the targets' origins (their `pos`, in the world; the average
+ *   of them for several targets)
+ * - a point `{ x, y, z }` in the world. It moves with the targets when the
+ *   gizmo moves them, so the handles stay on it
+ * - a function `(targets) => point | null`, asked every frame (for a pivot
+ *   an app keeps in its own data)
  *
  * Add it **after** the camera tool: tools added later get clicks first, so
  * grabbing a handle doesn't also orbit. Clicks that miss the handles fall
@@ -51,15 +62,18 @@ export class TransformGizmo {
    * @param {Object[]} [opts.targets=[]] - Objects it edits (change `targets` at any time)
    * @param {number} [opts.size=70] - Handle length in CSS pixels (same on screen at any distance)
    * @param {boolean} [opts.apply=true] - Change the targets' transforms while dragging
+   * @param {"bounds"|"origin"|{x:number,y:number,z:number}|((targets:Object[]) => ({x:number,y:number,z:number}|null))} [opts.pivot="bounds"]
+   *   Where the handles sit and what rotate / scale go around (change `pivot` at any time)
    * @param {(targets:Object[]) => void} [opts.onGrab] - A handle was grabbed
    * @param {(op:Object, targets:Object[]) => void} [opts.onChange] - While dragging: the operation since the grab
    * @param {(op:Object, targets:Object[]) => void} [opts.onDrop] - On release: the whole operation
    */
-  constructor({ mode = "move", targets = [], size = 70, apply = true, onGrab, onChange, onDrop } = {}) {
+  constructor({ mode = "move", targets = [], size = 70, apply = true, pivot = "bounds", onGrab, onChange, onDrop } = {}) {
     this.mode = mode;
     this.targets = targets;
     this.size = size;
     this.apply = apply;
+    this.pivot = pivot;
     this.onGrab = onGrab;
     this.onChange = onChange;
     this.onDrop = onDrop;
@@ -74,9 +88,22 @@ export class TransformGizmo {
     this._cursor = false; // whether this tool set the canvas cursor
   }
 
-  /** Middle of the targets' bounding box in world space, or null. */
+  /** The pivot in world space (see `pivot`), or null when there are no targets. */
   center() {
-    return this.targets.length ? meshBounds(this.targets)?.center ?? null : null;
+    if (!this.targets.length) return null;
+    const p = this.pivot;
+    if (typeof p === "function") return p(this.targets) ?? null;
+    if (p && typeof p === "object") return { x: p.x, y: p.y, z: p.z };
+    if (p === "origin") {
+      const sum = { x: 0, y: 0, z: 0 };
+      for (const t of this.targets) {
+        const o = worldPosition(t);
+        sum.x += o.x; sum.y += o.y; sum.z += o.z;
+      }
+      const n = this.targets.length;
+      return { x: sum.x / n, y: sum.y / n, z: sum.z / n };
+    }
+    return meshBounds(this.targets)?.center ?? null;
   }
 
   /** Length of the handles in world units at a point, so they keep the same size on screen. */
@@ -186,6 +213,8 @@ export class TransformGizmo {
       parents: this.targets.map((t) => (t.parent ? worldMatrix(t.parent) : null)),
       // A target inside another target already moves with it
       moves: this.targets.map((t) => !ancestors(t).slice(1).some((a) => this.targets.includes(a))),
+      // A fixed pivot point, to move along with the targets
+      pivot: this.pivot && typeof this.pivot === "object" ? { ...this.pivot } : null,
       op: null,
     };
     this.dragging = true;
@@ -227,6 +256,11 @@ export class TransformGizmo {
       op = { mode: "scale", axis: AXES[d.id].dir, factor: Math.max(0.05, 1 + along()), center: d.center };
     }
     d.op = op;
+    if (d.pivot && op.mode === "move" && this.pivot && typeof this.pivot === "object") {
+      this.pivot.x = d.pivot.x + op.delta.x;
+      this.pivot.y = d.pivot.y + op.delta.y;
+      this.pivot.z = d.pivot.z + op.delta.z;
+    }
     if (this.apply) {
       this.targets.forEach((t, i) => {
         if (!d.moves[i]) return;
