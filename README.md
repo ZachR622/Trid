@@ -115,7 +115,7 @@ Uses Node's built-in test runner (Node 21+), so there's nothing to install. The 
 
 ## Upgrading
 
-### From 0.3 to the next version
+### From 0.3 to 0.4
 
 - **Lights are a list**: `scene.lights`. A scene still starts with one directional light and an ambient level, and looks the same. `scene.light` and `scene.ambient` are now shortcuts for the first directional light's direction and the first ambient light's intensity.
 - Setting `scene.ambient` after the scene is made no longer dims the directional light (it used to be `1 - ambient` all the time; now that's only how the default lights start). To keep the old look, also set `scene.lights[1].intensity = 1 - ambient`.
