@@ -22,6 +22,8 @@ new Scene(canvas, options?)
 | `camera` | `{ z: -1 }` | The [camera](./concepts#the-camera) object |
 | `light` | `{ x: -0.5, y: 1, z: -0.8 }` | Direction light comes from, for [filled faces](./faces#light) |
 | `ambient` | `0.25` | Brightness of faces turned away from the light (0..1) |
+| `lights` | an ambient + a directional light | Every [light](./lights), instead of `light` and `ambient` |
+| `post` | `[]` | [Post effects](./post) run on the picture, in order |
 | `renderer` | a new `CanvasRenderer` | What draws the scene, for example a `WebGLRenderer`. See [Renderers](./renderers) |
 
 The canvas can be resized with CSS (for example `width: 100%`). Drawing stays at `width` × `height`, and tools still get pointer positions in canvas pixels.
@@ -128,6 +130,8 @@ These can all be changed at any time and take effect on the next frame:
 | `background` | Clear color |
 | `color` | Default wireframe color |
 | `lineWidth` | Default wireframe thickness |
-| `light`, `ambient` | Lighting for [filled faces](./faces#light) |
+| `lights` | Every [light](./lights): a plain array, edit it freely |
+| `light`, `ambient` | Shortcuts for the first directional light's direction and the first ambient light's intensity |
+| `post` | [Post effects](./post), run in order before tools draw |
 | `renderer` | What draws the scene |
 | `canvas`, `ctx` | The canvas and its 2D context (read them, don't replace them) |

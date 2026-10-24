@@ -1,4 +1,5 @@
-import { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT } from "./render/canvasRenderer.js";
+import { CanvasRenderer } from "./render/canvasRenderer.js";
+import { DEFAULT_LIGHT, DEFAULT_AMBIENT, defaultLights } from "./render/lights.js";
 import { loop } from "./render/loop.js";
 import { ToolManager } from "./tools/manager.js";
 import { linkTree } from "./sceneGraph.js";
@@ -17,6 +18,10 @@ import { screenshot, record } from "./export/capture.js";
  * otherwise the scene's defaults are used. An object with a
  * `material` draws its mesh's faces (filled and shaded) instead of
  * only lines: `{ mesh, material: { fill: "#E9806E" } }`.
+ *
+ * Lights are a list, `scene.lights` (see `trid/render/lights.js`): by
+ * default an ambient light and one directional light. Post effects
+ * (bloom, vignette...) are a list too, `scene.post` (see `trid/render/post.js`).
  *
  * Tools (camera controls, dragging, overlays...) are added with
  * `use`. See `trid/tools/`.
@@ -37,8 +42,11 @@ export class Scene {
    * @param {number} [opts.lineWidth=3] - Default wireframe width
    * @param {import("./math/transform.js").Camera} [opts.camera={ z: -1 }] - Camera
    * @param {{x:number,y:number,z:number}} [opts.light] - Direction light comes from
-   *   (default: above, left and in front)
-   * @param {number} [opts.ambient=0.25] - Brightness of faces turned away from the light (0..1)
+   *   (default: above, left and in front). Ignored when `lights` is given
+   * @param {number} [opts.ambient=0.25] - Brightness of faces turned away from the light (0..1).
+   *   The directional light gets `1 - ambient`. Ignored when `lights` is given
+   * @param {Object[]} [opts.lights] - Every light (see trid/render/lights.js), instead of `light` and `ambient`
+   * @param {Object[]} [opts.post=[]] - Post effects run on the picture (see trid/render/post.js)
    * @param {{ render(scene:Scene): void, dispose?(): void }} [opts.renderer] - What draws the scene
    *   (default: a new `CanvasRenderer`; or a `WebGLRenderer`)
    */
@@ -49,8 +57,10 @@ export class Scene {
     color = "#ffffff",
     lineWidth = 3,
     camera = { z: -1 },
-    light = { ...DEFAULT_LIGHT },
+    light = DEFAULT_LIGHT,
     ambient = DEFAULT_AMBIENT,
+    lights,
+    post = [],
     renderer = new CanvasRenderer(),
   } = {}) {
     this.canvas = canvas;
@@ -62,8 +72,10 @@ export class Scene {
     this.color = color;
     this.lineWidth = lineWidth;
     this.camera = camera;
-    this.light = light;
-    this.ambient = ambient;
+    /** Every light. Edit it freely: push, splice, change fields; it's read every frame. */
+    this.lights = lights ?? defaultLights(light, ambient);
+    /** Post effects, run in order on the picture before tools draw. */
+    this.post = post;
     this.renderer = renderer;
     this.objects = [];
     this.tools = new ToolManager(this);
@@ -192,6 +204,36 @@ export class Scene {
     this.stop();
     this.tools.clear();
     this.renderer.dispose?.();
+  }
+
+  /**
+   * Shortcut for the direction of the first directional light in `lights`
+   * (null if there's none). Change its fields, or set a new direction;
+   * setting one when there's no directional light adds one.
+   */
+  get light() {
+    return this.lights.find((l) => l?.type === "directional")?.direction ?? null;
+  }
+
+  set light(direction) {
+    const l = this.lights.find((x) => x?.type === "directional");
+    if (l) l.direction = direction;
+    else if (direction) this.lights.push({ type: "directional", direction, color: "#ffffff", intensity: 1 - this.ambient });
+  }
+
+  /**
+   * Shortcut for the intensity of the first ambient light in `lights`
+   * (0 if there's none). Setting it when there's none adds one. It only
+   * changes the ambient light: the directional light keeps its intensity.
+   */
+  get ambient() {
+    return this.lights.find((l) => l?.type === "ambient")?.intensity ?? 0;
+  }
+
+  set ambient(value) {
+    const l = this.lights.find((x) => x?.type === "ambient");
+    if (l) l.intensity = value;
+    else this.lights.unshift({ type: "ambient", color: "#ffffff", intensity: value });
   }
 
   /** Whether the frame loop is running. */

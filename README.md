@@ -18,14 +18,16 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 - **Groups** — give any object `children` and they move, turn and scale with it (models made of parts, a moon orbiting a planet).
 - **Shapes** — cubes, boxes, spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes and `extrude` for flat ones, or any mesh you define as vertices and edges.
 - **Mesh helpers** — clone, transform, displace, merge and measure meshes; seeded random numbers and smooth noise (`fbm2`, `fbm3`, tileable) for rocks, terrain and procedural textures.
-- **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth, with one directional light.
+- **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth.
+- **Lights** — ambient, directional and point lights, with colors and intensities, as many as you need (up to 8 at once besides ambient).
 - **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files, or made from the shape (planar, box, sphere and cylinder mapping). Repeat, offset and rotate them, or give each face its own material. Or paint one in code: wood, marble, bricks and more, all seamless.
 - **Effects** — stack shader effects like toon, rim and edge glow, gradients and fog on a material, or write your own in GLSL.
+- **Post effects** — bloom, vignette, color grading and film grain over the whole picture, or your own full-screen shaders (several passes if needed).
 - **Two renderers** — the canvas 2D context by default, or `WebGLRenderer` for exact depth and big models, with the same scene code.
 - **OBJ files** — load models from a URL (with their `.mtl` colors and textures), or let users drop their own `.obj` files on the canvas.
 - **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` / `exportModel` write meshes, objects or whole scenes as OBJ files with their MTL materials and textures.
 - **Camera** — position, yaw, pitch and field of view, with near-plane clipping.
-- **Tools** — orbit and fly cameras, object dragging, hover highlight, a move / rotate / scale gizmo, a view axes gizmo, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles. Writing your own is a plain object with a few methods.
+- **Tools** — orbit and fly cameras, object dragging, hover highlight, a move / rotate / scale gizmo (with a pivot of your choice), a view axes gizmo, a floor grid, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles, with the hit point and texture coordinates under the mouse. Writing your own is a plain object with a few methods.
 - **Pure math** — every transform and projection step is exported, plus 4×4 matrices and rotations, so you can use the pipeline piece by piece.
 
 ## Install
@@ -83,7 +85,7 @@ Or let users load their own: `scene.use(new ObjUploader())` accepts dropped `.ob
 | `trid/scene.js` | The `Scene` class |
 | `trid/sceneGraph.js` | Groups: `children`, world matrices |
 | `trid/math/` | Transforms, camera directions, projection, matrices, rotations, random numbers and noise |
-| `trid/render/` | Renderers (Canvas 2D, WebGL), effects, shapes, mesh helpers, procedural textures, drawing, frame loop |
+| `trid/render/` | Renderers (Canvas 2D, WebGL), lights, effects, post effects, shapes, grids, mesh helpers, procedural textures, drawing, frame loop |
 | `trid/loaders/` | OBJ, MTL and texture loading |
 | `trid/export/` | Screenshots, video recording, OBJ and MTL export |
 | `trid/tools/` | Camera, object, gizmo and overlay tools |
@@ -109,9 +111,16 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 npm test
 ```
 
-Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes, mesh helpers, noise, textures, OBJ / MTL, picking, tools, groups and matrices, and the WebGL renderer's GPU memory on a fake WebGL context.
+Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes, mesh helpers, noise, textures, OBJ / MTL, picking, tools, groups and matrices, lights, post effects, grids, and the WebGL renderer's GPU memory on a fake WebGL context.
 
 ## Upgrading
+
+### From 0.3 to 0.4
+
+- **Lights are a list**: `scene.lights`. A scene still starts with one directional light and an ambient level, and looks the same. `scene.light` and `scene.ambient` are now shortcuts for the first directional light's direction and the first ambient light's intensity.
+- Setting `scene.ambient` after the scene is made no longer dims the directional light (it used to be `1 - ambient` all the time; now that's only how the default lights start). To keep the old look, also set `scene.lights[1].intensity = 1 - ambient`.
+- `scene.light` is `null` for a scene whose `lights` have no directional light.
+- Effects get `s.lightColor`, and `toon` and `gradient` are tinted by colored lights (no change with white lights).
 
 ### From 0.2 to 0.3
 
@@ -125,6 +134,6 @@ Uses Node's built-in test runner (Node 21+), so there's nothing to install. The 
 Roughly in order:
 
 - **More import and export formats** — STL; basic glTF later
-- **More tools** — a selection outline, a grid helper
-- **Post effects** (WebGL) — bloom, vignette, outlines, antialiasing and color grading over the whole image
+- **More tools** — a selection outline
+- **More post effects** — outlines (from depth), antialiasing (FXAA)
 - **More tests** — the canvas renderer's drawing and the remaining math functions

@@ -168,15 +168,49 @@ orbit.distance = Math.max(size.x, size.y, size.z) * 2;
 
 To center a mesh and scale it to a size, use `fitMesh(mesh, size)` from the [OBJ loader](./obj).
 
+## Floor grids
+
+<Demo src="grid" hint="drag to orbit" />
+
+### `gridHelper(opts?)`
+
+A floor grid like 3D editors have, as one object to `scene.add`: thin minor lines, brighter major lines, the axes through the origin in color (X red, Y green, Z blue, like the gizmos), fading out toward the edge.
+
+```js
+scene.add(gridHelper({ size: 4, divisions: 40 }));
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `size` | `4` | Width of the whole grid |
+| `divisions` | `40` | Cells along each side |
+| `major` | `10` | A major line every this many cells (`0`: none) |
+| `plane` | `"xz"` | The plane it lies in: `"xz"` (a floor), `"xy"` or `"yz"` |
+| `color` | `"rgba(255, 255, 255, 0.12)"` | Minor lines |
+| `majorColor` | `"rgba(255, 255, 255, 0.25)"` | Major lines |
+| `axes` | `true` | Draw the axes; or their colors, like `{ x: "#f00" }`; `false` for none |
+| `fade` | `true` | Fade toward the edge, in a circle. A number sets where the fade starts (0 = center, 1 = edge; `true` = 0.5). Needs colors written as hex, `rgb()` or `rgba()` |
+| `lineWidth` | `1` | Line width in pixels |
+
+It's a group (`children` are line-only meshes, one per color and fade step), so move, turn or hide it like any object. It has `pickable: false`, so [picking](./api#pickhit) never finds it.
+
+### `gridMesh(opts?)`
+
+Just the lines: a square grid centered on the origin, `divisions + 1` lines each way, as a line-only mesh. Options `size` (4), `divisions` (40) and `plane` (`"xz"`).
+
+```js
+scene.add({ mesh: gridMesh({ size: 2, divisions: 10 }), color: "#333" });
+```
+
 ## Custom meshes
 
 A mesh is just `{ vertices, edges }`, plus `faces` if you want to [fill it](./faces#faces-in-a-mesh). Edges with 2 indices are segments; edges with 3 or more are closed loops. See [Meshes](./concepts#meshes).
 
 `edges` can be left out on a mesh that has `faces`: an object with no material then draws the outline of each face. Pass `edges: []` to draw no lines at all.
 
-### Example: a floor grid
+### Example: lines by hand
 
-(`makeShape("plane")` does this too; this shows how to build lines by hand.)
+(`gridMesh()` does this, see [Floor grids](#floor-grids); this shows how to build lines yourself.)
 
 ```js
 function makeGrid(size = 2, divisions = 10) {

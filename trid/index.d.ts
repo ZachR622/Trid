@@ -162,6 +162,8 @@ export interface SceneObjectInput {
   draggable?: boolean;
   /** Set to false to make `HoverHighlight` ignore this object */
   hoverable?: boolean;
+  /** Set to false so `pick` / `pickHit` never find this object or its children (helpers like a grid) */
+  pickable?: boolean;
 }
 
 /**
@@ -198,10 +200,17 @@ export interface SceneOptions {
   lineWidth?: number;
   /** Camera (default { z: -1 }) */
   camera?: Camera;
-  /** Direction light comes from (default: above, left and in front) */
+  /** Direction light comes from (default: above, left and in front). Ignored when `lights` is given */
   light?: Vec3;
-  /** Brightness of faces turned away from the light, 0..1 (default 0.25) */
+  /**
+   * Brightness of faces turned away from the light, 0..1 (default 0.25).
+   * The directional light gets `1 - ambient`. Ignored when `lights` is given
+   */
   ambient?: number;
+  /** Every light, instead of `light` and `ambient` */
+  lights?: Light[];
+  /** Post effects run on the picture, in order (default none) */
+  post?: PostEffect[];
   /** What draws the scene (default: a new CanvasRenderer) */
   renderer?: Renderer;
 }
@@ -216,7 +225,19 @@ export class Scene {
   color: string;
   lineWidth: number;
   camera: Camera;
-  light: Vec3;
+  /** Every light. Edit it freely; it's read every frame */
+  lights: Light[];
+  /** Post effects, run in order on the picture before tools draw */
+  post: PostEffect[];
+  /**
+   * Shortcut for the first directional light's direction (null if there's none).
+   * Setting it when there's none adds one.
+   */
+  light: Vec3 | null;
+  /**
+   * Shortcut for the first ambient light's intensity (0 if there's none).
+   * Setting it when there's none adds one; the directional light keeps its intensity.
+   */
   ambient: number;
   renderer: Renderer;
   objects: SceneObject[];
@@ -384,6 +405,106 @@ export interface Bounds {
  */
 export function meshBounds(input: Mesh | SceneObjectInput | (Mesh | SceneObjectInput)[] | Scene): Bounds | null;
 
+export type GridPlane = "xz" | "xy" | "yz";
+
+/** A square grid of lines centered on the origin, as a line-only mesh. */
+export function gridMesh(opts?: { size?: number; divisions?: number; plane?: GridPlane }): Mesh;
+
+export interface GridHelperOptions {
+  /** Width of the whole grid (default 4) */
+  size?: number;
+  /** Cells along each side (default 40) */
+  divisions?: number;
+  /** A major line every this many cells, 0 for none (default 10) */
+  major?: number;
+  /** The plane it lies in (default "xz", a floor) */
+  plane?: GridPlane;
+  /** Minor lines (default "rgba(255, 255, 255, 0.12)") */
+  color?: string;
+  /** Major lines (default "rgba(255, 255, 255, 0.25)") */
+  majorColor?: string;
+  /** Draw the axes through the origin (default true), or their colors like `{ x: "#f00" }` */
+  axes?: boolean | { x?: string; y?: string; z?: string };
+  /** Fade toward the edge (default true); a number is where the fade starts (0 = center, 1 = edge) */
+  fade?: boolean | number;
+  /** Line width in pixels (default 1) */
+  lineWidth?: number;
+}
+
+/** A floor grid with major lines, colored axes and a fade: a group to `scene.add`, never picked. */
+export function gridHelper(opts?: GridHelperOptions): SceneObjectInput & { pickable: false; children: SceneObjectInput[] };
+
+// ---------------------------------------------------------------------------
+// Lights
+// ---------------------------------------------------------------------------
+
+/** Light from everywhere: lights every side of every face the same. */
+export interface AmbientLight {
+  type: "ambient";
+  /** Any CSS color (default white) */
+  color?: string;
+  /** Multiplies the color (default 1) */
+  intensity?: number;
+  /** Set to false to turn it off without removing it */
+  enabled?: boolean;
+}
+
+/** Light from far away in one direction, like the sun. */
+export interface DirectionalLight {
+  type: "directional";
+  /** Direction light comes from (any length) */
+  direction: Vec3;
+  color?: string;
+  intensity?: number;
+  enabled?: boolean;
+}
+
+/** Light from a point, like a bulb. */
+export interface PointLight {
+  type: "point";
+  /** World position */
+  position: Vec3;
+  color?: string;
+  intensity?: number;
+  /** Fades out smoothly and reaches nothing past this distance (default: no fading) */
+  range?: number;
+  enabled?: boolean;
+}
+
+export type Light = AmbientLight | DirectionalLight | PointLight;
+
+/** Most directional + point lights the renderers use; extra ones are ignored. */
+export const MAX_LIGHTS: number;
+
+/** The default lights: ambient at `ambient`, white directional from `direction` at `1 - ambient`. */
+export function defaultLights(direction?: Vec3, ambient?: number): Light[];
+
+/** A scene's lights ready for shading (used by the renderers). */
+export interface SceneLights {
+  /** Summed ambient color [r, g, b] */
+  ambient: [number, number, number];
+  /** Brightest channel of `ambient` */
+  ambientLevel: number;
+  lights: { point: boolean; dir: Vec3 | null; pos: Vec3 | null; color: [number, number, number]; range: number }[];
+  /** Unit direction of the first directional light */
+  mainDir: Vec3;
+}
+
+/** A scene's lights, colors parsed and multiplied by intensity, directions unit length. */
+export function sceneLights(
+  scene: { lights?: Light[]; light?: Vec3 | null; ambient?: number },
+  rgba: (css: string) => number[],
+): SceneLights;
+
+/** The light reaching a point, [r, g, b] (can go above 1). */
+export function lightAt(lights: SceneLights, normal: Vec3, position: Vec3): [number, number, number];
+
+/** Brightness (brightest channel) and diffuse share (0..1) of a light color. */
+export function lightLevels(color: number[], ambientLevel: number): { light: number; diffuse: number };
+
+/** How much of a point light reaches `dist` away (1 up close, 0 at `range`; range 0 = no fading). */
+export function rangeFade(dist: number, range: number): number;
+
 // ---------------------------------------------------------------------------
 // Renderers
 // ---------------------------------------------------------------------------
@@ -464,13 +585,15 @@ export interface Surface {
   local: Vec3;
   /** Unit direction from the point to the camera */
   view: Vec3;
-  /** Unit direction light comes from */
+  /** Unit direction the scene's first directional light comes from */
   lightDir: Vec3;
-  /** How much the point faces the light (0..1) */
+  /** How much of the light comes from the lights rather than the ambient, 0..1 (one light: how much the point faces it) */
   diffuse: number;
-  /** Brightness Trid used: ambient + (1 - ambient) × diffuse */
+  /** Brightness Trid used (brightest channel of `lightColor`): ambient + (1 - ambient) × diffuse with the default lights */
   light: number;
-  /** The scene's ambient level */
+  /** The light reaching the point, [r, g, b] (every light added up; can go above 1). Trid's color is `base × lightColor` */
+  lightColor: [number, number, number];
+  /** The scene's ambient level (brightest channel) */
   ambient: number;
   /** Distance to the camera */
   depth: number;
@@ -562,6 +685,89 @@ export function uniformType(value: unknown): "float" | "vec2" | "vec3" | "vec4" 
 
 /** The GLSL declaration of `Surface`, shared by every effect. */
 export const SURFACE_GLSL: string;
+
+// ---------------------------------------------------------------------------
+// Post effects
+// ---------------------------------------------------------------------------
+
+/** What a post effect's `canvas` function knows about the picture. */
+export interface PostFrame {
+  width: number;
+  height: number;
+  /** Seconds since the renderer started */
+  time: number;
+  /** The scene's background color */
+  background: RGBA;
+  /** The canvas being changed */
+  canvas: HTMLCanvasElement;
+  /** Turns a uniform value (CSS color, array) into RGBA 0..1 */
+  rgba(value: UniformValue): RGBA;
+}
+
+/** One pass of a post effect. */
+export interface PostPass {
+  /** GLSL defining `vec4 post(vec4 color, Frame f)` */
+  glsl: string;
+  /** Size of this pass's picture, relative to the canvas (default 1) */
+  scale?: number;
+}
+
+/** A shader run on the whole picture after the scene is drawn. */
+export interface PostEffect<U extends Record<string, UniformValue> = Record<string, UniformValue>> {
+  name?: string;
+  /** GLSL defining `vec4 post(vec4 color, Frame f)`: one pass (WebGL renderer) */
+  glsl?: string;
+  /** Instead of `glsl`: passes run in order (each can read the last with `frame(uv)`, the start with `source(uv)`) */
+  passes?: PostPass[];
+  /** Changes the 2D canvas directly: used by the canvas renderer (and by WebGL for effects without GLSL) */
+  canvas?(ctx: CanvasRenderingContext2D, frame: PostFrame, uniforms: U): void;
+  /** Settings read every frame */
+  uniforms?: U;
+  /** Set to false to turn it off without removing it */
+  enabled?: boolean;
+}
+
+/** Darkens the corners of the picture. */
+export function vignette(opts?: { strength?: number; radius?: number; softness?: number; color?: string }): PostEffect<{
+  uStrength: number;
+  uRadius: number;
+  uSoftness: number;
+  uColor: string;
+}>;
+
+/** Glow around the bright parts. */
+export function bloom(opts?: { threshold?: number; strength?: number; radius?: number }): PostEffect<{
+  uThreshold: number;
+  uStrength: number;
+  uRadius: number;
+}>;
+
+/** Brightness, contrast, saturation and a tint, in that order. */
+export function grade(opts?: { brightness?: number; contrast?: number; saturation?: number; tint?: string }): PostEffect<{
+  uBrightness: number;
+  uContrast: number;
+  uSaturation: number;
+  uTint: string;
+}>;
+
+/** Film grain: random noise over the picture. */
+export function grain(opts?: { amount?: number; size?: number; animated?: boolean }): PostEffect<{
+  uAmount: number;
+  uGrain: number;
+  uAnimated: boolean;
+}>;
+
+/** A post effect's passes (empty when it only has a canvas version). */
+export function postPasses(effect: PostEffect): { glsl: string; scale: number }[];
+
+/** The effects of a list that are on. */
+export function activePost(list: PostEffect[] | undefined): PostEffect[];
+
+/** Runs post effects' `canvas` functions on a scene's canvas (used by the renderers). */
+export function runCanvasPost(scene: Scene, list: PostEffect[] | undefined, start: number): void;
+
+/** The GLSL declaration of `Frame` and the `frame` / `source` helpers. */
+export const FRAME_GLSL: string;
 
 // ---------------------------------------------------------------------------
 // Texture mapping
@@ -1107,6 +1313,8 @@ export interface TransformGizmoOptions {
   size?: number;
   /** Change the targets' transforms while dragging (default true) */
   apply?: boolean;
+  /** Where the handles sit and what rotate / scale go around (default "bounds") */
+  pivot?: GizmoPivot;
   /** A handle was grabbed */
   onGrab?: (targets: SceneObject[]) => void;
   /** While dragging: the operation since the grab */
@@ -1116,8 +1324,17 @@ export interface TransformGizmoOptions {
 }
 
 /**
- * Move arrows, rotate rings or scale handles on one or more objects, around their
- * shared center. Add it after the camera tool.
+ * Where a `TransformGizmo` puts its handles and turns / scales around:
+ * - `"bounds"`: the middle of the targets' bounding box
+ * - `"origin"`: the targets' origins in the world (averaged)
+ * - a world point (moved along when the gizmo moves the targets)
+ * - a function asked every frame
+ */
+export type GizmoPivot = "bounds" | "origin" | Vec3 | ((targets: SceneObject[]) => Vec3 | null);
+
+/**
+ * Move arrows, rotate rings or scale handles on one or more objects, around a
+ * pivot (default: the middle of their bounding box). Add it after the camera tool.
  */
 export class TransformGizmo implements Tool {
   constructor(opts?: TransformGizmoOptions);
@@ -1125,6 +1342,7 @@ export class TransformGizmo implements Tool {
   targets: SceneObject[];
   size: number;
   apply: boolean;
+  pivot: GizmoPivot;
   onGrab?: (targets: SceneObject[]) => void;
   onChange?: (op: TransformOp, targets: SceneObject[]) => void;
   onDrop?: (op: TransformOp, targets: SceneObject[]) => void;
@@ -1132,7 +1350,7 @@ export class TransformGizmo implements Tool {
   visible: boolean;
   /** True while a handle is being dragged. */
   readonly dragging: boolean;
-  /** Middle of the targets' bounding box in world space, or null. */
+  /** The pivot in world space, or null when there are no targets. */
   center(): Vec3 | null;
   draw(ctx: CanvasRenderingContext2D, scene: Scene): void;
   pointerDown(e: ToolPointerEvent, scene: Scene): boolean;
@@ -1166,7 +1384,24 @@ export interface PickHit {
   depth: number;
   /** The object, then its groups up to the top: `[part, group, ..., root]` */
   path: SceneObject[];
+  /** Where the hit is, in the world */
+  point: Vec3;
+  /** Where the hit is, in the mesh's own space */
+  local: Vec3;
+  /** The 3 vertex indices of the triangle hit (polygons are fans from their first corner); null for a line */
+  triangle: [number, number, number] | null;
+  /** Weights of those vertices at the hit (they add up to 1); null for a line */
+  barycentric: [number, number, number] | null;
+  /** Unit normal of the face hit, in the world, on its front side; null for a line */
+  normal: Vec3 | null;
+  /** Texture coordinates at the hit (the material's mapping, before repeat / offset / rotation); null without any */
+  uv: UV | null;
+  /** Where the texture is read: `uv` with the material's repeat, offset and rotation; null without texture coordinates */
+  textureUV: UV | null;
 }
+
+/** Whether picking can find an object (not when it or a group above it has `pickable: false`). */
+export function isPickable(obj: SceneObjectInput & { parent?: SceneObjectInput | null }): boolean;
 
 /**
  * Exact picking: the nearest object whose triangles (or, without faces, lines

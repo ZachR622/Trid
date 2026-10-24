@@ -6,6 +6,8 @@ import { parseColor } from "./color.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
 import { textureReady, textureSize, textureIsLive, textureVersion } from "../loaders/texture.js";
 import { uvsFor, uvTransform, applyUVTransform } from "./uvMapping.js";
+import { DEFAULT_LIGHT, DEFAULT_AMBIENT, sceneLights, lightAt as lightOf, lightLevels } from "./lights.js";
+import { runCanvasPost } from "./post.js";
 
 export { newell };
 
@@ -23,11 +25,7 @@ export function materialsOf(obj) {
   return m.length && m[0] ? m : null;
 }
 
-/** Direction light comes from when the scene doesn't set one: above, left, in front. */
-export const DEFAULT_LIGHT = { x: -0.5, y: 1, z: -0.8 };
-
-/** How bright a face turned fully away from the light still is (0..1). */
-export const DEFAULT_AMBIENT = 0.25;
+export { DEFAULT_LIGHT, DEFAULT_AMBIENT };
 
 /**
  * Material: how an object's faces look. Objects without one are drawn
@@ -115,12 +113,13 @@ export class CanvasRenderer {
         drawInstance(ctx, obj, camera, w, h, obj.color ?? scene.color, obj.lineWidth ?? scene.lineWidth, obj.world);
       }
       for (const obj of drawn) if (obj.mesh.dirty) obj.mesh.dirty = false;
+      runCanvasPost(scene, scene.post, this._start);
       return;
     }
 
     const near = camera.near ?? DEFAULT_NEAR;
-    const light = normalize(scene.light ?? DEFAULT_LIGHT);
-    const ambient = scene.ambient ?? DEFAULT_AMBIENT;
+    // Every light, colors parsed (see trid/render/lights.js)
+    const lights = sceneLights(scene, (css) => this._rgba(ctx, css));
     const toScreen = (p) => cameraToScreen(p, camera, w, h);
     const items = [];
     // For effects
@@ -168,16 +167,9 @@ export class CanvasRenderer {
         const na = normalAt(corners, F, a), nb = normalAt(corners, F, b);
         return normalize({ x: na.x + nb.x, y: na.y + nb.y, z: na.z + nb.z });
       };
-      const lightAt = (n, back) => {
-        const r = transformNormal(nm, n);
-        const d = (back ? -1 : 1) * (r.x * light.x + r.y * light.y + r.z * light.z);
-        return ambient + (1 - ambient) * Math.max(0, d);
-      };
-      const flatLight = (face, back) => {
-        const nw = flatNormal(face);
-        const d = (back ? -1 : 1) * (nw.x * light.x + nw.y * light.y + nw.z * light.z);
-        return ambient + (1 - ambient) * Math.max(0, d);
-      };
+      // Light reaching a point, as [r, g, b]: at a corner (smooth) or a face's center (flat)
+      const lightAt = (n, back, p) => lightOf(lights, flipIf(transformNormal(nm, n), back), p);
+      const flatLight = (face, back) => lightOf(lights, flipIf(flatNormal(face), back), centroid(face.map((i) => world[i])));
       const toWorldNormal = (n) => transformNormal(nm, n);
 
       // Everything a material needs, worked out once per object and frame
@@ -247,9 +239,12 @@ export class CanvasRenderer {
           const ts = face.map((i) => L.uvAt(F, i));
           if (ts.every(Boolean)) {
             let lit;
-            if (!shade) lit = face.map(() => 1);
-            else if (corners) lit = face.map((i) => lightAt(normalAt(corners, F, i), back));
-            else lit = face.map(() => flatLight(face, back));
+            if (!shade) lit = face.map(() => WHITE);
+            else if (corners) lit = face.map((i) => lightAt(normalAt(corners, F, i), back, world[i]));
+            else {
+              const one = flatLight(face, back);
+              lit = face.map(() => one);
+            }
             const screen = pts.map(toScreen);
             const n = face.length;
             for (let k = 1; k < n - 1; k++) {
@@ -282,17 +277,18 @@ export class CanvasRenderer {
 
           const position = centroid(face.map((i) => world[i]));
           const toCam = { x: camPos.x - position.x, y: camPos.y - position.y, z: camPos.z - position.z };
-          const diffuse = Math.max(0, nw.x * light.x + nw.y * light.y + nw.z * light.z);
-          const lit = shade ? ambient + (1 - ambient) * diffuse : 1;
+          const reach = lightOf(lights, nw, position);
+          const { light: level, diffuse } = lightLevels(reach, lights.ambientLevel);
+          const lightColor = shade ? reach : WHITE.slice();
           const rgba = this._rgba(ctx, fill);
           const s = {
             base: rgba, normal: nw, position, local: centroid(face.map((i) => verts[i])),
-            view: normalize(toCam), lightDir: light, diffuse, light: lit, ambient,
+            view: normalize(toCam), lightDir: lights.mainDir, diffuse, light: shade ? level : 1, ambient: lights.ambientLevel, lightColor,
             uv: centerUV(face.map((i) => L.uvAt(F, i))),
             depth: Math.hypot(toCam.x, toCam.y, toCam.z), time, background,
             rgba: (v) => (typeof v === "string" ? this._rgba(ctx, v) : Array.isArray(v) ? v : [v.x, v.y, v.z, 1]),
           };
-          let col = [rgba[0] * lit, rgba[1] * lit, rgba[2] * lit, rgba[3]];
+          let col = [rgba[0] * lightColor[0], rgba[1] * lightColor[1], rgba[2] * lightColor[2], rgba[3]];
           for (const e of L.effects) if (e.canvas) col = e.canvas(col, s, e.uniforms ?? {});
           const k = col.map((x) => Math.min(1, Math.max(0, x)));
           items.push({
@@ -305,7 +301,7 @@ export class CanvasRenderer {
         }
 
         if (corners) {
-          const lit = face.map((i) => lightAt(normalAt(corners, F, i), back));
+          const lit = face.map((i) => lightAt(normalAt(corners, F, i), back, world[i]));
           if (clipped === pts) {
             // One gradient per triangle: brightness changes linearly across a triangle
             const screen = pts.map(toScreen);
@@ -323,13 +319,12 @@ export class CanvasRenderer {
             }
             continue;
           }
-          // Cut by the near plane: use the average brightness
-          const avg = lit.reduce((a, b) => a + b, 0) / lit.length;
-          items.push({ depth: c.z, poly: clipped.map(toScreen), fill: this._shade(ctx, fill, avg), outline, lineWidth, edges });
+          // Cut by the near plane: use the average light
+          items.push({ depth: c.z, poly: clipped.map(toScreen), fill: this._shade(ctx, fill, average(lit)), outline, lineWidth, edges });
           continue;
         }
 
-        const brightness = shade ? flatLight(face, back) : 1;
+        const brightness = shade ? flatLight(face, back) : WHITE;
         items.push({
           depth: c.z,
           poly: clipped.map(toScreen),
@@ -394,6 +389,9 @@ export class CanvasRenderer {
 
     // Meshes marked as changed have been redrawn from their new data
     for (const obj of drawn) if (obj.mesh.dirty) obj.mesh.dirty = false;
+
+    // Post effects that have a canvas version (see trid/render/post.js)
+    runCanvasPost(scene, scene.post, this._start);
   }
 
   /**
@@ -487,15 +485,17 @@ export class CanvasRenderer {
   }
 
   /**
-   * A fill for a triangle whose corners have different brightness:
-   * a linear gradient along the direction brightness changes fastest.
-   * Exact, because brightness changes linearly across a triangle.
+   * A fill for a triangle whose corners get different light ([r, g, b] each):
+   * a linear gradient along the direction the light changes fastest.
+   * Exact for white light (brightness changes linearly across a triangle);
+   * close for colored lights whose colors change in different directions.
    */
   _gradient(ctx, color, tri, lit) {
-    const g = gradientLine(tri, lit);
-    if (!g) return this._shade(ctx, color, (Math.min(...lit) + Math.max(...lit)) / 2);
+    const g = gradientLine(tri, lit.map((c) => c[0] + c[1] + c[2]));
+    if (!g) return this._shade(ctx, color, average(lit));
     const grad = ctx.createLinearGradient(g.x0, g.y0, g.x1, g.y1);
-    const a = this._shade(ctx, color, g.lo), b = this._shade(ctx, color, g.hi);
+    const a = this._shade(ctx, color, lightOnTriangle(tri, lit, g.x0, g.y0));
+    const b = this._shade(ctx, color, lightOnTriangle(tri, lit, g.x1, g.y1));
     grad.addColorStop(0, a.css);
     grad.addColorStop(1, b.css);
     return { css: grad, opaque: a.opaque };
@@ -551,19 +551,40 @@ export class CanvasRenderer {
       ctx.globalCompositeOperation = "source-over";
     }
 
-    // Light: black on top, as see-through as the face is bright
-    const lo = Math.min(...it.lit), hi = Math.max(...it.lit);
-    if (lo >= 0.999) return;
-    const g = gradientLine(it.poly, it.lit);
+    // Light (the canvas can darken a texture, not make it brighter than it is)
+    const lit = it.lit.map((c) => c.map((x) => Math.min(1, x)));
+    if (lit.every((c) => c[0] >= 0.999 && c[1] >= 0.999 && c[2] >= 0.999)) return;
+    const white = lit.every((c) => Math.abs(c[0] - c[1]) < 1e-3 && Math.abs(c[1] - c[2]) < 1e-3);
+    if (white) {
+      // White light: black on top, as see-through as the face is bright
+      const level = lit.map((c) => c[0]);
+      const lo = Math.min(...level), hi = Math.max(...level);
+      const g = gradientLine(it.poly, level);
+      if (g) {
+        const grad = ctx.createLinearGradient(g.x0, g.y0, g.x1, g.y1);
+        grad.addColorStop(0, `rgba(0, 0, 0, ${1 - g.lo})`);
+        grad.addColorStop(1, `rgba(0, 0, 0, ${1 - g.hi})`);
+        ctx.fillStyle = grad;
+      } else {
+        ctx.fillStyle = `rgba(0, 0, 0, ${1 - (lo + hi) / 2})`;
+      }
+      ctx.fill();
+      return;
+    }
+    // Colored light: multiply by its color
+    const css = (c) => `rgb(${Math.round(c[0] * 255)}, ${Math.round(c[1] * 255)}, ${Math.round(c[2] * 255)})`;
+    const g = gradientLine(it.poly, lit.map((c) => c[0] + c[1] + c[2]));
     if (g) {
       const grad = ctx.createLinearGradient(g.x0, g.y0, g.x1, g.y1);
-      grad.addColorStop(0, `rgba(0, 0, 0, ${1 - g.lo})`);
-      grad.addColorStop(1, `rgba(0, 0, 0, ${1 - g.hi})`);
+      grad.addColorStop(0, css(lightOnTriangle(it.poly, lit, g.x0, g.y0)));
+      grad.addColorStop(1, css(lightOnTriangle(it.poly, lit, g.x1, g.y1)));
       ctx.fillStyle = grad;
     } else {
-      ctx.fillStyle = `rgba(0, 0, 0, ${1 - (lo + hi) / 2})`;
+      ctx.fillStyle = css(average(lit));
     }
+    ctx.globalCompositeOperation = "multiply";
     ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
   }
 
   /**
@@ -591,16 +612,20 @@ export class CanvasRenderer {
     return c;
   }
 
-  /** CSS color for `color` at a brightness, cached (brightness is rounded to 1/255). */
-  _shade(ctx, color, brightness) {
-    const level = Math.round(brightness * 255);
-    const key = color + "|" + level;
+  /**
+   * CSS color for `color` under some light: a brightness, or [r, g, b]
+   * (colored light). Cached; the light is rounded to 1/255.
+   */
+  _shade(ctx, color, light) {
+    const [lr, lg, lb] = typeof light === "number" ? [light, light, light] : light;
+    const q = (x) => Math.round(Math.max(0, x) * 255);
+    const key = color + "|" + q(lr) + "," + q(lg) + "," + q(lb);
     let out = this._shades.get(key);
     if (!out) {
       const [r, g, b, a] = parseColor(ctx, color);
-      const k = level / 255;
+      const ch = (c, k) => Math.min(255, Math.round((c * q(k)) / 255));
       out = {
-        css: `rgba(${Math.round(r * k)}, ${Math.round(g * k)}, ${Math.round(b * k)}, ${a})`,
+        css: `rgba(${ch(r, lr)}, ${ch(g, lg)}, ${ch(b, lb)}, ${a})`,
         opaque: a >= 1,
       };
       this._shades.set(key, out);
@@ -627,6 +652,32 @@ function gradientLine(tri, lit) {
   const g2 = gx * gx + gy * gy;
   const s = (lo - lit[0]) / g2, e = (hi - lit[0]) / g2;
   return { x0: p0.x + gx * s, y0: p0.y + gy * s, x1: p0.x + gx * e, y1: p0.y + gy * e, lo, hi };
+}
+
+/** Light [r, g, b] at screen point (x, y), blended from a triangle's corners (it can lie outside). */
+function lightOnTriangle(tri, lit, x, y) {
+  const [a, b, c] = tri;
+  const d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+  if (Math.abs(d) < 1e-9) return average(lit);
+  const u = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (y - c.y)) / d;
+  const v = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (y - c.y)) / d;
+  const w = 1 - u - v;
+  return [0, 1, 2].map((i) => Math.max(0, u * lit[0][i] + v * lit[1][i] + w * lit[2][i]));
+}
+
+/** Average of [r, g, b] lights. */
+function average(lit) {
+  const out = [0, 0, 0];
+  for (const c of lit) for (let i = 0; i < 3; i++) out[i] += c[i] / lit.length;
+  return out;
+}
+
+/** White light: colors drawn as they are. */
+const WHITE = [1, 1, 1];
+
+/** The vector, reversed when `back` (a face seen from behind is lit from its other side). */
+function flipIf(n, back) {
+  return back ? { x: -n.x, y: -n.y, z: -n.z } : n;
 }
 
 /** A polygon pushed outward from its center by `px` pixels. */

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   makeShape, worldToScreen, applyTransformOp, pick, pickHit,
-  TransformGizmo, ViewGizmo, OrbitCamera, ToolManager,
+  TransformGizmo, ViewGizmo, OrbitCamera, ToolManager, worldMatrix, transformPoint,
 } from "../trid/index.js";
 
 /** Just what the tools read from a Scene (nothing is rendered). */
@@ -187,4 +187,99 @@ test("ViewGizmo.lookAlong from above, and clicks off the axes fall through", () 
   gizmo.visible = false;
   gizmo.draw(ctx, scene);
   assert.equal(gizmo.contains(400 - 14 - 42, 14 + 42), false);
+});
+
+// --- #22: where pickHit hits --------------------------------------------------------
+
+test("pickHit gives the hit point, mesh-space point, normal and texture coordinates", () => {
+  const box = obj(0);
+  box.material = { fill: "#fff", textureRepeat: 2 };
+  const scene = fakeScene([box]);
+  const c = worldToScreen({ x: 0.1, y: -0.2, z: -0.5 }, scene.camera, 400, 400);
+  const hit = pickHit(scene, c.x, c.y);
+  near(hit.point.x, 0.1, 1e-9); near(hit.point.y, -0.2, 1e-9); near(hit.point.z, -0.5, 1e-9);
+  assert.deepEqual(hit.local, hit.point); // the box sits at the origin, unscaled
+  near(hit.normal.z, -1, 1e-9);
+  assert.equal(hit.triangle.length, 3);
+  near(hit.barycentric.reduce((a, b) => a + b, 0), 1, 1e-9);
+  // The cube's front face covers its texture once: (0.1, -0.2) from the middle is (0.6, 0.3)
+  assert.ok(hit.uv && hit.uv.u >= 0 && hit.uv.u <= 1 && hit.uv.v >= 0 && hit.uv.v <= 1);
+  near(Math.abs(hit.uv.u - 0.5), 0.1, 1e-9);
+  near(Math.abs(hit.uv.v - 0.5), 0.2, 1e-9);
+  near(hit.textureUV.u, hit.uv.u * 2, 1e-9); // repeat 2
+});
+
+test("pickHit's point is perspective-correct: it lands back on the clicked pixel", () => {
+  // A big tilted plane, so depth changes a lot across each triangle
+  const floor = obj(1, 0, makeShape("plane", { size: 4, div: 1 }));
+  floor.rot.x = -0.9;
+  const scene = fakeScene([floor]);
+  const world = worldMatrix(floor);
+  for (const local of [{ x: 0.7, y: 0, z: -1.2 }, { x: -1.5, y: 0, z: 1.1 }, { x: 0.2, y: 0, z: 1.8 }]) {
+    const on = transformPoint(world, local);
+    const { x, y } = worldToScreen(on, scene.camera, 400, 400);
+    const hit = pickHit(scene, x, y);
+    assert.ok(hit, `no hit at ${x}, ${y}`);
+    for (const k of ["x", "y", "z"]) {
+      near(hit.point[k], on[k], 1e-6);
+      near(hit.local[k], local[k], 1e-6);
+    }
+  }
+});
+
+test("pickHit on a line gives the point on it; texture fields are null without UVs", () => {
+  const line = { mesh: { vertices: [{ x: -1, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }], edges: [[0, 1]] },
+    pos: { x: 0, y: 0, z: 0 }, rot: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } };
+  const scene = fakeScene([line]);
+  const c = worldToScreen({ x: 0.3, y: 0, z: 0 }, scene.camera, 400, 400);
+  const hit = pickHit(scene, c.x, c.y);
+  near(hit.point.x, 0.3, 1e-9);
+  assert.equal(hit.barycentric, null);
+  assert.equal(hit.uv, null);
+
+  const tri = { mesh: { vertices: [{ x: -1, y: -1, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 1, y: -1, z: 0 }], faces: [[0, 1, 2]] },
+    pos: { x: 0, y: 0, z: 0 }, rot: { x: 0, y: 0, z: 0 }, scale: { x: 2, y: 2, z: 2 }, material: { fill: "#fff" } };
+  const s2 = fakeScene([tri]);
+  const mid = worldToScreen({ x: 0, y: 0, z: 0 }, s2.camera, 400, 400);
+  const h2 = pickHit(s2, mid.x, mid.y);
+  assert.equal(h2.uv, null);
+  assert.equal(h2.textureUV, null);
+  near(h2.local.y, 0, 1e-9);
+});
+
+// --- #23: TransformGizmo pivot ---------------------------------------------------------
+
+test("TransformGizmo pivot: bounds by default, origin, a point, or a function", () => {
+  // A mesh whose box isn't around its origin
+  const mesh = makeShape("cube", { size: 1 });
+  for (const v of mesh.vertices) v.x += 1;
+  const target = obj(0, 0, mesh);
+  const g = new TransformGizmo({ targets: [target] });
+  near(g.center().x, 1, 1e-9);
+  g.pivot = "origin";
+  near(g.center().x, 0, 1e-9);
+  g.pivot = { x: 0.5, y: 0.25, z: 0 };
+  assert.deepEqual(g.center(), { x: 0.5, y: 0.25, z: 0 });
+  g.pivot = (targets) => ({ x: targets.length * 3, y: 0, z: 0 });
+  near(g.center().x, 3, 1e-9);
+  g.pivot = () => null;
+  assert.equal(g.center(), null);
+  assert.equal(new TransformGizmo({ pivot: "origin" }).center(), null); // no targets
+});
+
+test("TransformGizmo rotates and scales around a custom pivot, which moves with a move", () => {
+  const target = obj(0);
+  const scene = fakeScene([target]);
+  const pivot = { x: 0.5, y: 0, z: 0 };
+  const g = new TransformGizmo({ mode: "scale", targets: [target], pivot });
+  const p = worldToScreen(pivot, scene.camera, 400, 400);
+  const op = dragGizmo(g, scene, p.x, p.y, p.x + 100, p.y); // the uniform-scale square sits on the pivot
+  assert.deepEqual(op.center, { x: 0.5, y: 0, z: 0 });
+  near(target.pos.x, 0.5 - 0.5 * 2, 1e-9); // the origin moved away from the pivot, ×2
+
+  g.mode = "move";
+  const start = target.pos.x;
+  const moved = dragGizmo(g, scene, p.x + 40, p.y, p.x + 90, p.y);
+  near(target.pos.x - start, moved.delta.x, 1e-9);
+  near(pivot.x, 0.5 + moved.delta.x, 1e-9);
 });

@@ -3,10 +3,12 @@ import { normalMatrix, determinantMat4 } from "../math/matrix.js";
 import { worldObjects } from "../sceneGraph.js";
 import { clear, edgeSegments, wireEdges } from "./draw.js";
 import { parseColor } from "./color.js";
-import { DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./canvasRenderer.js";
+import { materialsOf } from "./canvasRenderer.js";
+import { sceneLights, MAX_LIGHTS } from "./lights.js";
+import { FRAME_GLSL, postPasses, activePost, runCanvasPost } from "./post.js";
 import { uvsFor, uvTransform, mappingKey } from "./uvMapping.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
-import { SURFACE_GLSL, buildEffects, effectsKey } from "./effects.js";
+import { SURFACE_GLSL, buildEffects, effectsKey, uniformType } from "./effects.js";
 import { textureReady, textureSize, textureIsLive, textureVersion } from "../loaders/texture.js";
 
 /** Farthest distance drawn by the WebGL renderer, unless the camera sets `far`. */
@@ -61,8 +63,14 @@ precision highp float;
 precision mediump float;
 #endif
 uniform vec4 uColor;
-uniform vec3 uLight;
+uniform vec3 uAmbientColor;
 uniform float uAmbient;
+uniform vec3 uLightDir; // the first directional light, for effects
+// Directional and point lights: xyz = direction light comes from (w = 0) or position (w = 1)
+uniform vec4 uLightVec[${MAX_LIGHTS}];
+// rgb = color × intensity, a = range (0: no fading)
+uniform vec4 uLightColor[${MAX_LIGHTS}];
+uniform int uLightCount;
 uniform float uShade;
 uniform float uTime;
 uniform vec4 uBackground;
@@ -74,12 +82,37 @@ varying vec3 vWorld;
 varying vec3 vLocal;
 varying vec2 vUV;
 ${SURFACE_GLSL}
+// The light reaching a point: the same math as lightAt in trid/render/lights.js
+vec3 tridLighting(vec3 n, vec3 p) {
+  vec3 c = uAmbientColor;
+  for (int i = 0; i < ${MAX_LIGHTS}; i++) {
+    if (i >= uLightCount) break;
+    vec4 l = uLightVec[i];
+    vec3 d = l.xyz;
+    float fade = 1.0;
+    if (l.w > 0.5) {
+      d = l.xyz - p;
+      float dist = max(length(d), 1e-6);
+      d /= dist;
+      float range = uLightColor[i].a;
+      if (range > 0.0) {
+        float k = clamp(1.0 - (dist * dist) / (range * range), 0.0, 1.0);
+        fade = k * k;
+      }
+    }
+    c += uLightColor[i].rgb * max(0.0, dot(n, d)) * fade;
+  }
+  return c;
+}
 ${fx.code}
 void main() {
   vec3 n = normalize(vNormal);
   if (!gl_FrontFacing) n = -n;
-  float diffuse = max(0.0, dot(n, uLight));
-  float light = mix(1.0, uAmbient + (1.0 - uAmbient) * diffuse, uShade);
+  vec3 reach = tridLighting(n, vWorld);
+  float level = max(reach.r, max(reach.g, reach.b));
+  float diffuse = clamp((level - uAmbient) / max(1.0 - uAmbient, 1e-4), 0.0, 1.0);
+  float light = mix(1.0, level, uShade);
+  vec3 lightColor = mix(vec3(1.0), reach, uShade);
 
   // Fill color, times the texture's color when there is one
   vec4 base = uColor * mix(vec4(1.0), texture2D(uTexture, vUV), uUseTexture);
@@ -91,15 +124,16 @@ void main() {
   s.position = vWorld;
   s.local = vLocal;
   s.view = normalize(uCamWorld - vWorld);
-  s.lightDir = uLight;
+  s.lightDir = uLightDir;
   s.diffuse = diffuse;
   s.light = light;
+  s.lightColor = lightColor;
   s.ambient = uAmbient;
   s.depth = length(uCamWorld - vWorld);
   s.time = uTime;
   s.background = uBackground;
 
-  vec4 color = vec4(base.rgb * light, base.a);
+  vec4 color = vec4(base.rgb * lightColor, base.a);
 ${fx.calls}
   color = clamp(color, 0.0, 1.0);
   if (color.a < 0.004) discard; // fully see-through pixels (e.g. a PNG's empty parts) don't hide what's behind
@@ -109,7 +143,7 @@ ${fx.calls}
   return { source, uniforms: fx.uniforms };
 }
 
-const FACE_UNIFORMS = ["uUVTransform", "uNormalMatrix", "uLight", "uAmbient", "uShade", "uTime", "uBackground", "uCamWorld", "uTexture", "uUseTexture"];
+const FACE_UNIFORMS = ["uUVTransform", "uNormalMatrix", "uAmbientColor", "uAmbient", "uLightDir", "uLightVec", "uLightColor", "uLightCount", "uShade", "uTime", "uBackground", "uCamWorld", "uTexture", "uUseTexture"];
 
 // Each line segment is a thin rectangle facing the screen, `uWidth` pixels wide
 const LINE_VS = `
@@ -147,6 +181,48 @@ void main() {
 
 const UNIFORMS = ["uModel", "uCamPos", "uCamRot", "uF", "uAspect", "uNear", "uFar", "uColor"];
 
+// Post effects: one big triangle covering the screen
+const POST_VS = `
+attribute vec2 aPos;
+varying vec2 vUV;
+void main() {
+  vUV = aPos * 0.5 + 0.5;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}
+`;
+
+/** Fragment shader for one pass of a post effect (see trid/render/post.js). */
+function postFS(glsl, uniforms) {
+  const decls = uniforms.map((u) => `uniform ${u.type} ${u.name};`).join("\n");
+  return `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 uSize;
+uniform vec2 uTexel;
+uniform float uTime;
+uniform vec4 uBackground;
+varying vec2 vUV;
+${FRAME_GLSL}
+${decls}
+${glsl}
+void main() {
+  Frame f;
+  f.uv = vUV;
+  f.size = uSize;
+  f.texel = uTexel;
+  f.time = uTime;
+  f.background = uBackground;
+  gl_FragColor = clamp(post(frame(vUV), f), 0.0, 1.0);
+}
+`;
+}
+
+const POST_UNIFORMS = ["uFrame", "uSource", "uSize", "uTexel", "uTime", "uBackground"];
+const COPY_GLSL = "vec4 post(vec4 color, Frame f) { return color; }";
+
 /**
  * Draws a scene with WebGL, on the graphics card.
  *
@@ -163,6 +239,10 @@ const UNIFORMS = ["uModel", "uCamPos", "uCamRot", "uF", "uAspect", "uNear", "uFa
  * a mesh's vertices, edges or faces in place, set `mesh.dirty = true`.
  * Textures are sent once too (videos every frame): after redrawing a canvas,
  * call `updateTexture(canvas)`.
+ *
+ * Post effects (`scene.post`, see trid/render/post.js) run on the graphics
+ * card too: the scene is drawn into a texture, then each pass draws the
+ * next picture from it.
  *
  * Meshes and textures that haven't been drawn for `releaseAfter` frames
  * are freed from the graphics card, so replacing them (`obj.mesh = newMesh`)
@@ -229,6 +309,8 @@ export class WebGLRenderer {
 
     this._faces = new Map(); // face programs, one per combination of effects
     this._line = program(gl, LINE_VS, LINE_FS, ["aA", "aB", "aCorner"], [...UNIFORMS, "uRes", "uWidth"]);
+    this._posts = new Map(); // post effect pass programs, one per pass code
+    this._post = null; // render targets for post effects, made when first needed
 
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
@@ -257,14 +339,27 @@ export class WebGLRenderer {
       this.canvas.width = w;
       this.canvas.height = h;
     }
+
+    // Post effects: the ones with GLSL run here, canvas-only ones after the copy
+    const post = activePost(scene.post);
+    const gpuPost = post.filter((e) => postPasses(e).length);
+    const background = this._color(ctx, scene.background);
+    if (gpuPost.length) {
+      // Into a texture, on the scene's background so effects see the whole picture
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this._sceneTarget(w, h));
+      const [r, g, b, a] = background;
+      gl.clearColor(r * a, g * a, b * a, a);
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.clearColor(0, 0, 0, 0);
+    }
     gl.viewport(0, 0, w, h);
-    gl.clearColor(0, 0, 0, 0);
     gl.depthMask(true);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     const view = {
       ctx,
-      background: this._color(ctx, scene.background),
+      background,
       time: (performance.now() - this._start) / 1000,
       camPos: [camera.x ?? 0, camera.y ?? 0, camera.z ?? 0],
       camRot: [camera.yaw ?? 0, camera.pitch ?? 0],
@@ -273,10 +368,7 @@ export class WebGLRenderer {
       near: camera.near ?? DEFAULT_NEAR,
       far: camera.far ?? DEFAULT_FAR,
     };
-    const l = scene.light ?? DEFAULT_LIGHT;
-    const len = Math.hypot(l.x, l.y, l.z) || 1;
-    const light = [l.x / len, l.y / len, l.z / len];
-    const ambient = scene.ambient ?? DEFAULT_AMBIENT;
+    const lights = this._lights(scene, ctx);
 
     // Opaque things first; see-through ones after, without writing depth
     const opaque = [], clear2 = [];
@@ -311,11 +403,14 @@ export class WebGLRenderer {
       }
     }
 
-    for (const d of opaque) this._draw(d, view, light, ambient, w, h);
+    for (const d of opaque) this._draw(d, view, lights, w, h);
     gl.depthMask(false);
-    for (const d of clear2) this._draw(d, view, light, ambient, w, h);
+    for (const d of clear2) this._draw(d, view, lights, w, h);
+
+    if (gpuPost.length) this._runPost(gpuPost, view, w, h);
 
     ctx.drawImage(this.canvas, 0, 0);
+    runCanvasPost(scene, post.filter((e) => !postPasses(e).length), this._start);
 
     // Meshes marked as changed have been sent again
     for (const obj of drawn) if (obj.mesh.dirty) obj.mesh.dirty = false;
@@ -361,6 +456,211 @@ export class WebGLRenderer {
     const oldest = this._frame - this.releaseAfter;
     for (const [item, frame] of this._meshUse) if (frame < oldest) this.release(item);
     for (const [item, frame] of this._textureUse) if (frame < oldest) this.release(item);
+    // Post effect pictures of a size no longer used (after a resize, or effects removed)
+    if (this._post) {
+      const keep = [];
+      for (const t of this._post.pool) {
+        if (t.used < this._frame - 60) this._freeTarget(t);
+        else keep.push(t);
+      }
+      this._post.pool = keep;
+      if (this._post.used < this._frame - 60) this._freePost();
+    }
+  }
+
+  // --- Post effects ---
+
+  /**
+   * The framebuffer the scene is drawn into when there are post effects:
+   * multisampled on WebGL 2 (copied into a texture by `_runPost`), else
+   * straight into a texture.
+   */
+  _sceneTarget(w, h) {
+    const gl = this.gl;
+    let P = this._post;
+    if (P && (P.w !== w || P.h !== h)) {
+      this._freePost();
+      P = null;
+    }
+    if (!P) {
+      P = this._post = { w, h, pool: [], used: this._frame };
+      P.scene = this._makeTarget(w, h, true);
+      if (this._webgl2 && this._options.antialias) {
+        const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) || 0);
+        if (samples > 1) {
+          const fb = gl.createFramebuffer();
+          const color = gl.createRenderbuffer();
+          gl.bindRenderbuffer(gl.RENDERBUFFER, color);
+          gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA8, w, h);
+          const depth = gl.createRenderbuffer();
+          gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+          gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT24, w, h);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, color);
+          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+          if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) P.msaa = { fb, color, depth };
+          else {
+            gl.deleteFramebuffer(fb);
+            gl.deleteRenderbuffer(color);
+            gl.deleteRenderbuffer(depth);
+          }
+          gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+        }
+      }
+      const quad = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      P.quad = quad;
+    }
+    P.used = this._frame;
+    return P.msaa ? P.msaa.fb : P.scene.fb;
+  }
+
+  /** A texture to draw into, `w` × `h`, with a depth buffer when `depth`. */
+  _makeTarget(w, h, depth = false) {
+    const gl = this.gl;
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    let rb = null;
+    if (depth) {
+      rb = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+      gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return { fb, tex, depth: rb, w, h, used: this._frame };
+  }
+
+  _freeTarget(t) {
+    const gl = this.gl;
+    gl.deleteFramebuffer(t.fb);
+    gl.deleteTexture(t.tex);
+    if (t.depth) gl.deleteRenderbuffer(t.depth);
+  }
+
+  /** Frees every post effect render target. */
+  _freePost() {
+    const P = this._post;
+    if (!P) return;
+    const gl = this.gl;
+    this._freeTarget(P.scene);
+    for (const t of P.pool) this._freeTarget(t);
+    if (P.msaa) {
+      gl.deleteFramebuffer(P.msaa.fb);
+      gl.deleteRenderbuffer(P.msaa.color);
+      gl.deleteRenderbuffer(P.msaa.depth);
+    }
+    gl.deleteBuffer(P.quad);
+    this._post = null;
+  }
+
+  /** A pool picture of a size that isn't one of `busy`. */
+  _poolTarget(w, h, busy) {
+    const P = this._post;
+    let t = P.pool.find((x) => x.w === w && x.h === h && !busy.includes(x));
+    if (!t) {
+      t = this._makeTarget(w, h);
+      P.pool.push(t);
+    }
+    t.used = this._frame;
+    return t;
+  }
+
+  /** The program for one pass's code, compiled once. Null if it doesn't compile (reported once). */
+  _postProgram(glsl, uniforms) {
+    const list = Object.entries(uniforms ?? {})
+      .map(([name, value]) => ({ name, type: uniformType(value) }))
+      .filter((u) => u.type);
+    const key = glsl + "|" + list.map((u) => u.name + ":" + u.type).join(",");
+    if (this._posts.has(key)) return this._posts.get(key);
+    let p = null;
+    try {
+      p = program(this.gl, POST_VS, postFS(glsl, list), ["aPos"], [...POST_UNIFORMS, ...list.map((u) => u.name)]);
+      p.list = list;
+    } catch (err) {
+      console.error("Trid: a post effect's shader failed to compile, skipping it.\n" + err.message);
+    }
+    this._posts.set(key, p);
+    return p;
+  }
+
+  /**
+   * Runs the post effects on the scene's picture, then draws the result on
+   * the WebGL canvas.
+   */
+  _runPost(effects, view, w, h) {
+    const gl = this.gl;
+    const P = this._post;
+    // Multisampled drawing: resolve it into the scene's texture
+    if (P.msaa) {
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, P.msaa.fb);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, P.scene.fb);
+      gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+    }
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.bindBuffer(gl.ARRAY_BUFFER, P.quad);
+
+    const pass = (prog, input, source, target, tw, th, uniforms) => {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fb : null);
+      gl.viewport(0, 0, tw, th);
+      gl.useProgram(prog.program);
+      const u = prog.uniforms;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, input.tex);
+      gl.uniform1i(u.uFrame, 0);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, source.tex);
+      gl.uniform1i(u.uSource, 1);
+      gl.uniform2f(u.uSize, tw, th);
+      gl.uniform2f(u.uTexel, 1 / input.w, 1 / input.h);
+      gl.uniform1f(u.uTime, view.time);
+      gl.uniform4fv(u.uBackground, view.background);
+      for (const x of prog.list) this._setUniform(view.ctx, u[x.name], x.type, uniforms?.[x.name]);
+      const a = prog.attributes.aPos;
+      gl.enableVertexAttribArray(a);
+      gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.disableVertexAttribArray(a);
+    };
+
+    let source = P.scene; // the picture the current effect starts from
+    for (const e of effects) {
+      let prev = source;
+      for (const ps of postPasses(e)) {
+        const prog = this._postProgram(ps.glsl, e.uniforms);
+        if (!prog) continue;
+        const tw = Math.max(1, Math.round(w * ps.scale)), th = Math.max(1, Math.round(h * ps.scale));
+        const target = this._poolTarget(tw, th, [source, prev]);
+        pass(prog, prev, source, target, tw, th, e.uniforms);
+        prev = target;
+      }
+      source = prev;
+    }
+
+    // Onto the canvas
+    pass(this._postProgram(COPY_GLSL, {}), source, source, null, w, h, {});
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
   }
 
   /** Frees the graphics card memory. The renderer can't be used afterwards. */
@@ -375,11 +675,29 @@ export class WebGLRenderer {
     this._meshUse.clear();
     this._textureUse.clear();
     for (const p of new Set(this._faces.values())) gl.deleteProgram(p.program);
+    for (const p of this._posts.values()) if (p) gl.deleteProgram(p.program);
     gl.deleteProgram(this._line.program);
+    this._freePost();
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 
-  _draw(d, view, light, ambient, w, h) {
+  /** The scene's lights, packed for the face shader's uniforms. */
+  _lights(scene, ctx) {
+    const L = sceneLights(scene, (css) => this._color(ctx, css));
+    const vec = new Float32Array(MAX_LIGHTS * 4), color = new Float32Array(MAX_LIGHTS * 4);
+    L.lights.forEach((l, i) => {
+      const p = l.point ? l.pos : l.dir;
+      vec.set([p.x, p.y, p.z, l.point ? 1 : 0], i * 4);
+      color.set([l.color[0], l.color[1], l.color[2], l.range], i * 4);
+    });
+    return {
+      vec, color, count: L.lights.length,
+      ambient: L.ambient, ambientLevel: L.ambientLevel,
+      dir: [L.mainDir.x, L.mainDir.y, L.mainDir.z],
+    };
+  }
+
+  _draw(d, view, lights, w, h) {
     const gl = this.gl;
     const isFace = d.kind === "face";
     const effects = isFace ? d.mat.effects ?? [] : null;
@@ -409,8 +727,12 @@ export class WebGLRenderer {
       gl.uniformMatrix3fv(u.uUVTransform, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
       gl.uniformMatrix3fv(u.uNormalMatrix, false, d.place.normals);
       gl.frontFace(d.place.mirrored ? gl.CCW : gl.CW);
-      gl.uniform3fv(u.uLight, light);
-      gl.uniform1f(u.uAmbient, ambient);
+      gl.uniform3fv(u.uAmbientColor, lights.ambient);
+      gl.uniform1f(u.uAmbient, lights.ambientLevel);
+      gl.uniform3fv(u.uLightDir, lights.dir);
+      gl.uniform4fv(u.uLightVec, lights.vec);
+      gl.uniform4fv(u.uLightColor, lights.color);
+      gl.uniform1i(u.uLightCount, lights.count);
       gl.uniform1f(u.uShade, d.mat.shade === false ? 0 : 1);
       gl.uniform1f(u.uTime, view.time);
       gl.uniform4fv(u.uBackground, view.background);

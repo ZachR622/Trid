@@ -60,7 +60,7 @@ The canvas renderer shades each triangle with a gradient, and WebGL blends per p
 
 ## Light
 
-The scene has one light, set by **direction** (where the light comes from), and an **ambient** level (how bright a face turned fully away still is, from 0 = black to 1 = no shading).
+By default the scene has one white light, set by **direction** (where the light comes from), and an **ambient** level (how bright a face turned fully away still is, from 0 = black to 1 = no shading).
 
 ```js
 const scene = new Scene(canvas, {
@@ -70,6 +70,8 @@ const scene = new Scene(canvas, {
 
 scene.light = { x: 1, y: 0, z: 0 }; // can be changed at any time
 ```
+
+For colored lights, point lights and several lights at once, see [Lights](./lights).
 
 ## Faces in a mesh
 

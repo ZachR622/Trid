@@ -159,7 +159,7 @@ Set `gizmo.visible = false` to hide it without removing it. `gizmo.contains(x, y
 
 ## TransformGizmo
 
-Handles to move, rotate and scale objects with the mouse. It works on one or more `targets` at once, around their shared center (the middle of their bounding box).
+Handles to move, rotate and scale objects with the mouse. It works on one or more `targets` at once, around a pivot: by default their shared center (the middle of their bounding box).
 
 <Demo src="gizmo" hint="Click a shape to select it · drag a handle · 1 move, 2 rotate, 3 scale · click the corner axes to turn the view" />
 
@@ -177,11 +177,31 @@ Handles to move, rotate and scale objects with the mouse. It works on one or mor
 | `targets` | `[]` | Objects it edits; change `gizmo.targets` at any time. No targets: no handles |
 | `size` | `70` | Handle length in CSS pixels (the same on screen at any distance) |
 | `apply` | `true` | Change the targets' `pos`, `rot` and `scale` while dragging |
+| `pivot` | `"bounds"` | Where the handles sit and what rotate and scale go around. See [Pivot](#pivot) |
 | `onGrab` | — | `(targets) => void`: a handle was grabbed |
 | `onChange` | — | `(op, targets) => void`: while dragging, the operation since the grab |
 | `onDrop` | — | `(op, targets) => void`: on release, the whole operation |
 
 `gizmo.dragging` is `true` while a handle is held, and `gizmo.visible = false` hides it. Clicks that miss the handles fall through to the tools below (the camera), so add the gizmo **after** the camera tool.
+
+### Pivot
+
+`pivot` (an option, or `gizmo.pivot` at any time) sets where the handles sit. Rotate and scale go around it: it's the `center` of the operations.
+
+| `pivot` | Where |
+| --- | --- |
+| `"bounds"` | The middle of the targets' bounding box (the default) |
+| `"origin"` | The targets' origins in the world (their `pos`, with their groups), averaged for several targets |
+| `{ x, y, z }` | A point in the world. When the gizmo moves the targets, it moves this point with them, so the handles stay on it |
+| `(targets) => point` | Asked every frame: for a pivot your app keeps in its own data (return `null` for no handles) |
+
+```js
+gizmo.pivot = "origin";                         // turn around the object's own origin
+gizmo.pivot = { x: 0, y: 0, z: 0 };             // around the world's center
+gizmo.pivot = ([part]) => worldPivotOf(part);   // from your data
+```
+
+`gizmo.center()` returns the pivot in world space.
 
 ### Applying the changes yourself
 

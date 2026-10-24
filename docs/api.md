@@ -17,6 +17,9 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/webglRenderer.js` | [`WebGLRenderer`, `DEFAULT_FAR`](#webglrenderer) |
 | `trid/render/normals.js` | [`cornerNormals`, `creaseOf`, `newell`, `DEFAULT_CREASE`](#normals) |
 | `trid/render/effects.js` | [`toon`, `rim`, `edgeGlow`, `unlit`, `gradient`, `fog`](./effects#built-in-effects), [`buildEffects`, `effectsKey`, `uniformType`, `SURFACE_GLSL`](#effects) |
+| `trid/render/lights.js` | [`defaultLights`, `MAX_LIGHTS`](./lights), [`sceneLights`, `lightAt`, `lightLevels`, `rangeFade`](#lights) |
+| `trid/render/post.js` | [`bloom`, `vignette`, `grade`, `grain`](./post#built-in-effects), [`postPasses`, `activePost`, `runCanvasPost`, `FRAME_GLSL`](#post-effects) |
+| `trid/render/grid.js` | [`gridMesh`, `gridHelper`](./shapes#floor-grids) |
 | `trid/render/color.js` | [`parseColor`](#parsecolor) |
 | `trid/render/shapes.js` | [`makeShape`, `lathe`, `extrude`, `triangulate`, `scaleMesh`](./shapes) |
 | `trid/render/meshUtils.js` | [`cloneMesh`, `transformMesh`, `displaceMesh`, `mergeMeshes`, `meshBounds`](./shapes#mesh-helpers) |
@@ -28,7 +31,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/loaders/mtl.js` | [`parseMTL`](./obj#from-the-mtl-file) |
 | `trid/render/proceduralTextures.js` | [`makeTexture`, `texturePixels`, `colorBytes`, `TEXTURE_STYLES`](./textures#procedural-textures) |
 | `trid/export/capture.js` | [`screenshot`, `record`, `download`](./export) |
-| `trid/tools/index.js` | [Tools](./tools), [`pick`, `pickHit`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
+| `trid/tools/index.js` | [Tools](./tools), [`pick`, `pickHit`, `isPickable`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
 | `trid/sceneGraph.js` | [`worldObjects`, `worldMatrix`, `worldPosition`, `ancestors`, `forEachPlaced`](./groups#where-things-are-parent-and-world) |
 | `trid/math/matrix.js` | [`identityMat4`, `mat4FromTransform`, `mulMat4`, `invertMat4`, `determinantMat4`, `transformPoint`, `transformDirection`, `normalMatrix`, `transformNormal`, `transformOpToLocal`](./groups#matrices) |
 | `trid/math/rotation.js` | [`matFromEuler`, `eulerFromMat`, `matFromAxisAngle`, `mulMat`, `mulVec`, `applyTransformOp`](#rotations) |
@@ -175,6 +178,24 @@ From `trid/render/effects.js`. The built-in effects and how to write your own ar
 - **`uniformType(value)`** returns the GLSL type a uniform value becomes, or `null`.
 - **`SURFACE_GLSL`** is the GLSL declaration of the `Surface` struct.
 
+### Lights
+
+From `trid/render/lights.js`. Using lights is explained on the [Lights](./lights) page. The helpers below are what the renderers use:
+
+- **`sceneLights(scene, rgba)`** returns a scene's lights ready for shading: `{ ambient, ambientLevel, lights, mainDir }`, colors parsed by `rgba(css)` and multiplied by their intensity. A scene-like object with only `light` / `ambient` gets the default pair.
+- **`lightAt(lights, normal, position)`** returns the light reaching a point as `[r, g, b]`: the same math as the WebGL shader.
+- **`lightLevels(color, ambientLevel)`** returns `{ light, diffuse }`, the numbers effects get.
+- **`rangeFade(dist, range)`** is how much of a point light reaches `dist` away.
+
+### Post effects
+
+From `trid/render/post.js`. The built-in effects and how to write your own are on the [Post effects](./post) page. Used by the renderers:
+
+- **`postPasses(effect)`** returns an effect's passes as `{ glsl, scale }` (empty for a canvas-only effect).
+- **`activePost(list)`** returns the effects that are on.
+- **`runCanvasPost(scene, list, start)`** runs the effects' `canvas` functions on the scene's canvas.
+- **`FRAME_GLSL`** is the GLSL declaration of `Frame` and the `frame` / `source` helpers.
+
 ### Textures
 
 From `trid/loaders/texture.js`. Using textures is explained on the [Textures](./textures) page.
@@ -244,10 +265,37 @@ Bounding boxes are approximate: clicking the empty corner around a sphere still 
 ### pickHit
 
 ```js
-pickHit(scene, x, y, { filter, padding = 4, objects = scene.objects } = {})  // → { object, face, depth } or null
+pickHit(scene, x, y, { filter, padding = 4, objects = scene.objects } = {})  // → hit or null
 ```
 
-Exact picking: the nearest object whose drawn surface is under the pixel. Every face is projected with the renderers' own math and tested triangle by triangle, so a click always matches what's drawn: through a ring's hole, a sword guard in front of its blade. `face` is the index in `mesh.faces` that was hit, `depth` the distance in front of the camera. Objects without faces (wireframes) are hit within `padding` pixels of one of their lines (`face` is then `-1`).
+Exact picking: the nearest object whose drawn surface is under the pixel. Every face is projected with the renderers' own math and tested triangle by triangle, so a click always matches what's drawn: through a ring's hole, a sword guard in front of its blade. Objects without faces (wireframes) are hit within `padding` pixels of one of their lines.
+
+| Field | Meaning |
+| --- | --- |
+| `object` | The object with the mesh that was hit |
+| `face` | Index in `mesh.faces`, or `-1` for a line of a wireframe |
+| `depth` | Distance in front of the camera |
+| `path` | The object, then its groups up to the top: `[part, group, ..., root]` |
+| `point` | Where the hit is, in the world |
+| `local` | Where the hit is, in the mesh's own space (`mesh.vertices` space) |
+| `triangle` | The 3 vertex indices of the triangle hit (faces with more corners are cut into a fan from their first corner); `null` for a line |
+| `barycentric` | The weights of those 3 vertices at the hit, adding up to 1 (`local` is their weighted sum); `null` for a line |
+| `normal` | Unit normal of the face, in the world, on its front side; `null` for a line |
+| `uv` | Texture coordinates at the hit, from the face's material `mapping` (before repeat, offset and rotation); `null` without any |
+| `textureUV` | Where the texture is read at the hit: `uv` with the material's `textureRepeat`, `textureOffset` and `textureRotation`. Can be outside 0..1 when the texture repeats |
+
+The hit point is exact on tilted faces too (weighted for perspective). To paint on a model's texture, the image pixel under the mouse is:
+
+```js
+const hit = pickHit(scene, x, y);
+if (hit?.textureUV) {
+  const u = hit.textureUV.u - Math.floor(hit.textureUV.u), v = hit.textureUV.v - Math.floor(hit.textureUV.v);
+  paint(u * image.width, (1 - v) * image.height); // v goes up, image rows go down
+  updateTexture(image);
+}
+```
+
+Objects with `pickable: false`, or inside a group with it (like a [grid](./shapes#floor-grids)), are skipped by `pick` and `pickHit`. `isPickable(obj)` tells whether an object can be found.
 
 Faces with a corner behind the camera's near plane are skipped. It's one pass over the objects' vertices per call: fine for clicks and hover on models of a few thousand faces.
 
