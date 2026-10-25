@@ -1703,3 +1703,53 @@ export interface SweepOptions {
  * Clockwise faces; uvs: u around the section, v along the path.
  */
 export function sweep(path: Vec3[], opts?: SweepOptions): Mesh;
+
+// Modeling: loft
+
+/** A 2D section, placed along the loft's axis or path. */
+export interface LoftOutline {
+  /** Closed outline: x to the side, y up (either direction; one point = a tip) */
+  outline: Point2[];
+  /** Where it is: the position on the axis, or 0 (start) to 1 (end) along a path (default: evenly spread) */
+  at?: number;
+  /** Size, the same both ways or per direction (default 1); 0 = a tip */
+  scale?: number | { x?: number; y?: number };
+  /** Turn in its own plane, in radians (default 0) */
+  rotate?: number;
+  /** Move in its own plane (default none) */
+  offset?: Partial<Point2>;
+}
+
+/** A section as a ring of 3D points, used where it is. */
+export interface LoftRing {
+  points: Vec3[];
+}
+
+export interface LoftOptions {
+  /** Straight axis the outlines are placed along (default "z"). x/y of an outline: "z" → X/Y, "y" → X/Z, "x" → Z/Y */
+  axis?: "x" | "y" | "z";
+  /** A 3D path to place the outlines along instead of the axis */
+  path?: Vec3[];
+  /** With `path`: keep the outlines' y pointed this way (default: carried along without spinning) */
+  up?: Vec3;
+  /** The surface loops back to its first section (a closed path, or 3D rings in a loop; default false) */
+  closed?: boolean;
+  /** Close the ends with flat caps (default true) */
+  caps?: boolean;
+  /** Rows between two sections, on average (default 6) */
+  segments?: number;
+  /** Points around each section (default: kept when every section has the same count, else the most any has, at least 24) */
+  points?: number;
+  /** Smooth curves between sections, never past them (default true); false = straight */
+  smooth?: boolean;
+  /** Line sections up so the surface doesn't twist (default true) */
+  align?: boolean;
+}
+
+/**
+ * A surface through cross-sections: bodies, bottles, hulls, car bodies,
+ * heads. Every section is an `outline` (2D, placed along an axis or a path)
+ * or every section is `points` (a 3D ring). Clockwise faces; uvs: u around,
+ * v along. Throws when the two kinds are mixed.
+ */
+export function loft(sections: LoftOutline[] | LoftRing[], opts?: LoftOptions): Mesh;

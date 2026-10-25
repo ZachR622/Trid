@@ -1,5 +1,6 @@
 import { triangulate } from "../render/shapes.js";
-import { vec, add, sub, mul, dot, cross, dist, norm, rotateAround, isPoint, signedArea2 } from "./vec.js";
+import { vec, add, sub, mul, dot, cross, rotateAround, signedArea2 } from "./vec.js";
+import { across, cleanPath, pathFrames } from "./frames.js";
 
 const EMPTY = () => ({ vertices: [], edges: [], faces: [], uvs: [], faceUVs: [] });
 
@@ -16,23 +17,6 @@ function sizeAt(opt, t, fallback) {
     v = opt.length === 1 ? opt[0] : opt[i] + (opt[i + 1] - opt[i]) * (x - i);
   }
   return Number.isFinite(v) ? v : fallback;
-}
-
-/** `v` without its part along the unit vector `t`, at length 1 (null when `v` is along `t`). */
-const across = (v, t) => norm(sub(v, mul(t, dot(v, t))));
-
-/**
- * Carries the section's "up" direction `r` from one path point to the next
- * without spinning it (double reflection, Wang et al. 2008).
- */
-function transport(r, x0, t0, x1, t1) {
-  const v1 = sub(x1, x0), c1 = dot(v1, v1);
-  if (c1 < 1e-24) return across(r, t1) ?? r;
-  const rL = sub(r, mul(v1, (2 * dot(v1, r)) / c1));
-  const tL = sub(t0, mul(v1, (2 * dot(v1, t0)) / c1));
-  const v2 = sub(t1, tL), c2 = dot(v2, v2);
-  const out = c2 < 1e-24 ? rL : sub(rL, mul(v2, (2 * dot(v2, rL)) / c2));
-  return across(out, t1) ?? r;
 }
 
 /** A circle of `n` points of radius 1, counter-clockwise, starting at the bottom. */
@@ -72,11 +56,7 @@ export function sweep(path, opts = {}) {
   } = opts;
 
   // The path, without bad points and repeats
-  const pts = [];
-  for (const p of path ?? []) if (isPoint(p) && (!pts.length || dist(p, pts[pts.length - 1]) > 1e-9)) pts.push(vec(p.x, p.y, p.z));
-  let loop = !!closed;
-  if (loop && pts.length > 2 && dist(pts[0], pts[pts.length - 1]) <= 1e-9) pts.pop();
-  if (pts.length < 3) loop = false;
+  const { pts, loop } = cleanPath(path, closed);
 
   // The section: counter-clockwise when closed, so the outside is on its right
   const ring = profile ? profileClosed !== false : true;
@@ -92,51 +72,23 @@ export function sweep(path, opts = {}) {
   const n = pts.length;
   if (n < 2 || m < (ring ? 3 : 2)) return EMPTY();
 
-  // Length along the path (t for sizes and twist, v for textures)
+  // Frames along the path; t (0 to 1) for sizes and twist, by length
+  const { dirs, tangents, ups, along, total } = pathFrames(pts, loop, up);
   const sides = loop ? n : n - 1;
-  const along = [0];
-  for (let i = 0; i < sides; i++) along.push(along[i] + dist(pts[i], pts[(i + 1) % n]));
-  const total = along[sides] || 1;
   const tOf = (i) => along[i] / total;
 
-  // Direction at each point: halfway between the sides around it.
-  // At a corner, the section is stretched toward the bend so the tube keeps its thickness (miter).
-  const dirs = Array.from({ length: sides }, (_, i) => norm(sub(pts[(i + 1) % n], pts[i])));
-  const tangents = [], miters = [];
-  for (let i = 0; i < n; i++) {
+  // At a corner, the section is stretched toward the bend so the tube keeps its thickness (miter)
+  const miters = tangents.map((t, i) => {
     const din = loop ? dirs[(i + n - 1) % n] : dirs[i - 1];
-    const dout = loop ? dirs[i] : dirs[i];
-    const t = !din ? dout : !dout ? din : norm(add(din, dout), dout);
-    tangents.push(t);
-    let mt = null;
-    if (miter && din && dout) {
-      const k = Math.min(3, 1 / Math.max(dot(t, dout), 1 / 3));
-      const bend = across(sub(dout, din), t);
-      if (k > 1 + 1e-9 && bend) mt = { bend, k };
-    }
-    miters.push(mt);
-  }
+    const dout = dirs[i];
+    if (!miter || !din || !dout) return null;
+    const k = Math.min(3, 1 / Math.max(dot(t, dout), 1 / 3));
+    const bend = across(sub(dout, din), t);
+    return k > 1 + 1e-9 && bend ? { bend, k } : null;
+  });
 
-  // The section's "up" at each point
-  const upDir = up && isPoint(up) ? norm(up) : null;
-  const t0 = tangents[0];
-  const start = (upDir && across(upDir, t0)) ?? across(Math.abs(t0.y) < 0.99 ? vec(0, 1, 0) : vec(1, 0, 0), t0);
-  const ups = [start];
-  for (let i = 1; i < n; i++) {
-    const carried = transport(ups[i - 1], pts[i - 1], tangents[i - 1], pts[i], tangents[i]);
-    ups.push((upDir && across(upDir, tangents[i])) ?? carried);
-  }
-
-  // A loop: the carried "up" comes back a little turned; spread the difference along it so there's no seam.
-  // The twist is rounded to whole turns there, so the ends still meet.
-  let fix = 0, turn = twist || 0;
-  if (loop) {
-    if (!upDir) {
-      const back = transport(ups[n - 1], pts[n - 1], tangents[n - 1], pts[0], t0);
-      fix = Math.atan2(dot(cross(back, ups[0]), t0), dot(back, ups[0]));
-    }
-    turn = Math.round(turn / (2 * Math.PI)) * 2 * Math.PI;
-  }
+  // On a loop, the twist is rounded to whole turns so the ends still meet
+  const turn = loop ? Math.round((twist || 0) / (2 * Math.PI)) * 2 * Math.PI : twist || 0;
 
   // Rings of vertices; a ring of size 0 is a single point
   const vertices = [];
@@ -148,7 +100,7 @@ export function sweep(path, opts = {}) {
       return new Array(m).fill(tip);
     }
     const tan = tangents[i];
-    const nrm = rotateAround(ups[i], tan, (fix + turn) * t);
+    const nrm = rotateAround(ups[i], tan, turn * t);
     const side = cross(nrm, tan);
     const mt = miters[i];
     return sec.map((q) => {

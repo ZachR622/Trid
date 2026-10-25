@@ -3,7 +3,7 @@
 Tools for making your own shapes in code, beyond `makeShape`, `lathe` and `extrude`. Everything here returns plain data (points or meshes), so it works with every renderer, and meshes come with texture coordinates and clockwise faces like the built-in shapes.
 
 ```js
-import { spline, resamplePath, sweep } from "./trid/index.js";
+import { spline, resamplePath, sweep, loft } from "./trid/index.js";
 ```
 
 ## Curves
@@ -114,3 +114,64 @@ On a closed path, `twist` is rounded to whole turns so the ends still meet.
 ### Faces and textures
 
 Faces are clockwise from outside like the built-in shapes, whichever way the path and a closed profile go. An open profile faces its right side (like a `lathe` profile). Texture coordinates: u goes around the section and v along the path, both by length. Caps map the section's box.
+
+## `loft(sections, opts?)`
+
+A surface through cross-sections: bodies, bottles, boat hulls, car bodies, heads, fuselages. Each section is a closed outline, and the surface joins them in order, smoothly.
+
+<Demo src="loft" hint="a bottle along Y · a hull from square to round to a point · a horn along a curved path — drag to orbit" />
+
+<<< @/demos/loft.js
+
+Sections come in two kinds (all sections must be the same kind):
+
+| Kind | Fields | Placed |
+| --- | --- | --- |
+| Outline | `outline` (2D points), `at`, and optional `scale`, `rotate`, `offset` | Along a straight `axis`, or along a 3D `path` |
+| Ring | `points` (3D points) | Where they are |
+
+For outlines, `at` is where the section sits: the position on the axis, or from `0` (the path's start) to `1` (its end) along a path. Sections are joined in order of `at`; without it, they're spread evenly. `scale` (a number, or `{ x, y }`), `rotate` (radians) and `offset` (`{ x, y }`) change a section in its own plane, so one outline can be reused at many sizes.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `axis` | `"z"` | Straight axis for outlines. An outline's x and y go to X and Y for `"z"`, X and Z for `"y"`, Z and Y for `"x"` |
+| `path` | none | A 3D path to place the outlines along instead (use [`spline`](#spline-points-opts) for a smooth one) |
+| `up` | none | With `path`: keep the outlines' y pointed this way, like [`sweep`](#how-the-section-turns) |
+| `closed` | `false` | The surface loops back to its first section: a closed `path`, or rings in a loop |
+| `caps` | `true` | Close the ends with flat caps |
+| `segments` | `6` | Rows between two sections, on average (shared out by distance, so faces stay even) |
+| `points` | auto | Points around each section |
+| `smooth` | `true` | Smooth between sections; `false` joins them with straight lines |
+| `align` | `true` | Line the sections up so the surface doesn't twist |
+
+```js
+const circle = (r, n = 24) => Array.from({ length: n }, (_, i) => {
+  const a = (i / n) * Math.PI * 2;
+  return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+});
+
+// A boat hull: a flat stern, a round middle, a sharp bow
+const hull = loft([
+  { at: -1, outline: [{ x: -0.3, y: 0.2 }, { x: -0.3, y: -0.1 }, { x: 0.3, y: -0.1 }, { x: 0.3, y: 0.2 }] },
+  { at: 0, outline: spline([{ x: -0.4, y: 0.2 }, { x: -0.35, y: -0.15 }, { x: 0, y: -0.3 }, { x: 0.35, y: -0.15 }, { x: 0.4, y: 0.2 }]) },
+  { at: 1, outline: [{ x: 0, y: 0.25 }] },
+]);
+
+// A neck along a curve, from round to oval, kept upright
+const neckPath = spline([{ x: 0, y: 0, z: 0 }, { x: 0, y: 0.3, z: 0.1 }, { x: 0, y: 0.5, z: 0.35 }], { count: 30 });
+const neck = loft([
+  { at: 0, outline: circle(0.2) },
+  { at: 1, outline: circle(0.2), scale: { x: 0.7, y: 1 } },
+], { path: neckPath, up: { x: 0, y: 1, z: 0 } });
+```
+
+### How sections are joined
+
+- **Point counts.** When every section has the same number of points, they're kept as they are, so you decide which points join. Otherwise each section is resampled to the same count (`points`, by default the most any section has, at least 24). A section's own points are kept, so a square keeps its corners.
+- **Lining up.** Each section is turned to match the one before it, so the surface doesn't twist even if the outlines start at different points. Rings of 3D points can also be walked either way. Turn it off with `align: false` to join point *k* to point *k* exactly.
+- **Smooth, never past the sections.** Between sections the surface follows smooth curves that never go past the sections themselves: the widest section is the widest point, with no bulge between two equal sections. `smooth: false` joins them with straight lines.
+- **Tips.** A section of one point (or `scale: 0`) closes the surface into a point: a nose, a bow, a tail.
+
+### Faces and textures
+
+Faces are clockwise from outside like the built-in shapes, however the outlines and the axis or path go. Texture coordinates: u goes around the sections and v along the surface (by distance). Caps map their own box.
