@@ -81,3 +81,13 @@ export {
 
 // Random numbers and noise
 export { rng, noise2, noise3, fbm2, fbm3 } from "./math/noise.js";
+
+// Modeling
+export { spline, resamplePath } from "./modeling/curves.js";
+export { sweep } from "./modeling/sweep.js";
+export { loft } from "./modeling/loft.js";
+export { taperMesh, twistMesh, bendMesh, bulgeMesh } from "./modeling/deform.js";
+export { weldVertices, cleanMesh, validateMesh, fixWinding } from "./modeling/cleanup.js";
+export { subdivideMesh } from "./modeling/subdivide.js";
+export { blobMesh, blobField, sdfMesh } from "./modeling/blobs.js";
+export { bevelMesh } from "./modeling/bevel.js";

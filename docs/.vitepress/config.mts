@@ -38,6 +38,7 @@ export default defineConfig({
           { text: "Groups", link: "/groups" },
           { text: "Shapes & meshes", link: "/shapes" },
           { text: "Random & noise", link: "/noise" },
+          { text: "Modeling", link: "/modeling" },
           { text: "Filled faces", link: "/faces" },
           { text: "Renderers", link: "/renderers" },
           { text: "Textures", link: "/textures" },

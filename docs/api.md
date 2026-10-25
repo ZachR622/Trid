@@ -24,6 +24,14 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/shapes.js` | [`makeShape`, `lathe`, `extrude`, `triangulate`, `scaleMesh`](./shapes) |
 | `trid/render/meshUtils.js` | [`cloneMesh`, `transformMesh`, `displaceMesh`, `mergeMeshes`, `meshBounds`](./shapes#mesh-helpers) |
 | `trid/math/noise.js` | [`rng`, `noise2`, `noise3`, `fbm2`, `fbm3`](./noise) |
+| `trid/modeling/curves.js` | [`spline`, `resamplePath`](./modeling#curves) |
+| `trid/modeling/sweep.js` | [`sweep`](./modeling#sweep-path-opts) |
+| `trid/modeling/loft.js` | [`loft`](./modeling#loft-sections-opts) |
+| `trid/modeling/deform.js` | [`taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh`](./modeling#deformers) |
+| `trid/modeling/cleanup.js` | [`weldVertices`, `cleanMesh`, `validateMesh`, `fixWinding`](./modeling#cleanup-and-checks) |
+| `trid/modeling/subdivide.js` | [`subdivideMesh`](./modeling#subdividemesh-mesh-opts) |
+| `trid/modeling/blobs.js` | [`blobMesh`, `blobField`, `sdfMesh`](./modeling#blobs) |
+| `trid/modeling/bevel.js` | [`bevelMesh`](./modeling#bevelmesh-mesh-opts) |
 | `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `loadMaterials`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |

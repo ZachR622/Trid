@@ -16,8 +16,8 @@ Returns a new mesh centered on the origin, with `vertices`, `edges`, `faces` and
 
 | Kind | Options (defaults) | Result |
 | --- | --- | --- |
-| `"cube"` | `size` (0.5) | Cube with sides of `size` |
-| `"box"` | `w` (0.6), `h` (0.6), `d` (0.6) | Box of width (X), height (Y), depth (Z) |
+| `"cube"` | `size` (0.5), `radius` (0), `segments` (4) | Cube with sides of `size` |
+| `"box"` | `w` (0.6), `h` (0.6), `d` (0.6), `radius` (0), `segments` (4) | Box of width (X), height (Y), depth (Z) |
 | `"sphere"` | `r` (0.45), `rings` (12), `segments` (24) | Sphere of latitude and longitude lines |
 | `"cylinder"` | `r` (0.3), `h` (0.8), `segments` (32) | Capped cylinder standing along Y |
 | `"cone"` | `r` (0.35), `h` (0.8), `segments` (32), `rTop` (0) | Cone with its tip up; with `rTop` > 0, a tapered cylinder |
@@ -25,6 +25,16 @@ Returns a new mesh centered on the origin, with `vertices`, `edges`, `faces` and
 | `"plane"` | `size` (1), `div` (8), `height` (none) | Flat grid in XZ facing +Y, `div` cells per side |
 
 `segments` is always the number of points around (the Y axis, or the sphere's circles). Cylinders, cones and tori are built with [`lathe`](#lathe-profile-opts).
+
+### Rounded boxes
+
+With a `radius`, a cube or box gets rounded edges and corners: furniture, devices, cushions, phones. `segments` is the rows around each rounded edge. Vertices along the edges are shared, so `smooth: true` shades it without seams. Each side keeps its material number and its whole texture, like the plain box.
+
+```js
+const phone = makeShape("box", { w: 0.35, h: 0.7, d: 0.04, radius: 0.015 });
+```
+
+To round the edges of any other mesh, use [`bevelMesh`](./modeling#bevelmesh-mesh-opts).
 
 ### Plane heights
 

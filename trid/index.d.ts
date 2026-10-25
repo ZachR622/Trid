@@ -284,8 +284,10 @@ export interface ShapeOptions {
   r?: number;
   /** Sphere latitude bands (default 12) */
   rings?: number;
-  /** Points around: sphere (24), cylinder / cone (32), torus (48) */
+  /** Points around: sphere (24), cylinder / cone (32), torus (48); rows per rounded edge of a cube / box with `radius` (4) */
   segments?: number;
+  /** Cube / box: round the edges and corners by this much (default 0: sharp) */
+  radius?: number;
   /** Cone top radius: 0 = pointed, > 0 = tapered cylinder (default 0) */
   rTop?: number;
   /** Torus: distance from the center to the middle of the tube (default 0.35) */
@@ -1632,3 +1634,320 @@ export function noise3(x: number, y: number, z: number, opts?: NoiseOptions): nu
 export function fbm2(x: number, y: number, opts?: FbmOptions): number;
 /** Fractal 3D noise: octaves of noise3, each twice as fine. About [0, 1), averaging 0.5. */
 export function fbm3(x: number, y: number, z: number, opts?: FbmOptions): number;
+
+// Modeling: curves
+
+export interface SplineOptions {
+  /** Points made between two control points (default 8) */
+  segments?: number;
+  /** The last point joins the first (a loop); the result doesn't repeat the first point (default false) */
+  closed?: boolean;
+  /** 0 = uniform, 0.5 = centripetal: no loops or overshoot (default), 1 = chordal */
+  alpha?: number;
+  /** 0 = smooth (default), 1 = straight lines between the points */
+  tension?: number;
+  /** Instead of `segments`: this many points in all, evenly spaced by length */
+  count?: number;
+  /** Instead of `segments`: points about this far apart, evenly spaced */
+  spacing?: number;
+}
+
+/**
+ * A smooth curve through `points` (Catmull-Rom: it passes through every
+ * point). Works with 2D, 3D and lathe `{ r, y }` points: every number field
+ * of the first point is a coordinate, and the result has the same fields.
+ */
+export function spline<P extends Point2 | Vec3 | ProfilePoint>(points: P[], opts?: SplineOptions): P[];
+
+export interface ResampleOptions {
+  /** Number of points in all */
+  count?: number;
+  /** Distance between points (used when `count` isn't given) */
+  spacing?: number;
+  /** The points form a loop (default false) */
+  closed?: boolean;
+}
+
+/** Points along a polyline, evenly spaced by length. The ends stay where they are. */
+export function resamplePath<P extends Point2 | Vec3 | ProfilePoint>(points: P[], opts?: ResampleOptions): P[];
+
+// Modeling: sweep
+
+/** A size along a path: a number, numbers spread evenly from start to end, or a function of t (0 at the start, 1 at the end). */
+export type SizeAlong = number | number[] | ((t: number) => number);
+
+export interface SweepOptions {
+  /** The cross-section: x to the path's side, y to its "up" (default: a circle of `radius`) */
+  profile?: Point2[];
+  /** The profile is a closed outline (default true); false = an open line, for ribbons, leaves and roads */
+  profileClosed?: boolean;
+  /** Radius of the default circle (default 0.1). Ignored with a `profile` */
+  radius?: SizeAlong;
+  /** Points around the default circle (default 16) */
+  segments?: number;
+  /** Size of the section along the path (default 1). 0 at an end closes it into a point */
+  scale?: SizeAlong;
+  /** Turn of the section from start to end, in radians (default 0). Whole turns on a closed path */
+  twist?: number;
+  /** The path is a loop: its end joins its start (default false) */
+  closed?: boolean;
+  /** Close the ends with flat caps (default true; open paths with closed profiles) */
+  caps?: boolean;
+  /** Keep the section's y pointed this way (roads, rails, frames). Default: carried along the path without spinning */
+  up?: Vec3;
+  /** Stretch the section at sharp corners so the tube keeps its thickness (default true) */
+  miter?: boolean;
+}
+
+/**
+ * Moves a cross-section along a 3D path: tails, horns, tentacles, handles,
+ * pipes, cables, rails. Without `profile`, a round tube of `radius`.
+ * Clockwise faces; uvs: u around the section, v along the path.
+ */
+export function sweep(path: Vec3[], opts?: SweepOptions): Mesh;
+
+// Modeling: loft
+
+/** A 2D section, placed along the loft's axis or path. */
+export interface LoftOutline {
+  /** Closed outline: x to the side, y up (either direction; one point = a tip) */
+  outline: Point2[];
+  /** Where it is: the position on the axis, or 0 (start) to 1 (end) along a path (default: evenly spread) */
+  at?: number;
+  /** Size, the same both ways or per direction (default 1); 0 = a tip */
+  scale?: number | { x?: number; y?: number };
+  /** Turn in its own plane, in radians (default 0) */
+  rotate?: number;
+  /** Move in its own plane (default none) */
+  offset?: Partial<Point2>;
+}
+
+/** A section as a ring of 3D points, used where it is. */
+export interface LoftRing {
+  points: Vec3[];
+}
+
+export interface LoftOptions {
+  /** Straight axis the outlines are placed along (default "z"). x/y of an outline: "z" → X/Y, "y" → X/Z, "x" → Z/Y */
+  axis?: "x" | "y" | "z";
+  /** A 3D path to place the outlines along instead of the axis */
+  path?: Vec3[];
+  /** With `path`: keep the outlines' y pointed this way (default: carried along without spinning) */
+  up?: Vec3;
+  /** The surface loops back to its first section (a closed path, or 3D rings in a loop; default false) */
+  closed?: boolean;
+  /** Close the ends with flat caps (default true) */
+  caps?: boolean;
+  /** Rows between two sections, on average (default 6) */
+  segments?: number;
+  /** Points around each section (default: kept when every section has the same count, else the most any has, at least 24) */
+  points?: number;
+  /** Smooth curves between sections, never past them (default true); false = straight */
+  smooth?: boolean;
+  /** Line sections up so the surface doesn't twist (default true) */
+  align?: boolean;
+}
+
+/**
+ * A surface through cross-sections: bodies, bottles, hulls, car bodies,
+ * heads. Every section is an `outline` (2D, placed along an axis or a path)
+ * or every section is `points` (a 3D ring). Clockwise faces; uvs: u around,
+ * v along. Throws when the two kinds are mixed.
+ */
+export function loft(sections: LoftOutline[] | LoftRing[], opts?: LoftOptions): Mesh;
+
+// Modeling: deformers
+
+export interface AxisRange {
+  /** Axis the effect goes along (default "y") */
+  axis?: "x" | "y" | "z";
+  /** Start of the part that changes: 0 = the mesh's low end on the axis, 1 = its high end (default 0) */
+  from?: number;
+  /** End of the part that changes, same measure (default 1). Past it, the full effect carries on */
+  to?: number;
+  /** A point the axis line goes through (default: the middle of the mesh's box) */
+  center?: Partial<Vec3>;
+}
+
+export interface TaperOptions extends AxisRange {
+  /** Size at the end of the range (default 0.5), or a function of how far into the range (0 to 1) giving the size */
+  amount?: number | ((w: number) => number);
+}
+
+export interface TwistOptions extends AxisRange {
+  /** Turn at the end of the range, in radians (default π/2), or a function of how far into the range (0 to 1) */
+  angle?: number | ((w: number) => number);
+}
+
+export interface BendOptions extends AxisRange {
+  /** Angle of the arc, in radians (default π/2); negative curves the other way */
+  angle?: number;
+  /** Axis it curves toward (default: "z" for a "y" axis, "z" for "x", "y" for "z") */
+  toward?: "x" | "y" | "z";
+}
+
+export interface BulgeOptions {
+  /** Middle of the bulge */
+  center: Vec3;
+  /** Distance where it fades to nothing */
+  radius: number;
+  /** How far the middle moves (default 0.1); negative = a dent */
+  amount?: number;
+  /** "normal": along the surface, works on flat sides (default); "radial": away from `center` (put it inside the part) */
+  mode?: "normal" | "radial";
+}
+
+/** Narrows or widens a mesh along an axis, in place. Returns the same mesh. */
+export function taperMesh<M extends Mesh>(mesh: M, opts?: TaperOptions): M;
+/** Turns a mesh around an axis, more and more along it, in place (same direction as rotateX / Y / Z). Returns the same mesh. */
+export function twistMesh<M extends Mesh>(mesh: M, opts?: TwistOptions): M;
+/** Bends a mesh into an arc along an axis, in place; past the range it goes on straight. Returns the same mesh. */
+export function bendMesh<M extends Mesh>(mesh: M, opts?: BendOptions): M;
+/** Pushes the surface out (or in) around a point, fading at `radius`, in place. Returns the same mesh. */
+export function bulgeMesh<M extends Mesh>(mesh: M, opts: BulgeOptions): M;
+
+// Modeling: cleanup and checks
+
+/**
+ * Merges vertices closer than `epsilon` (default: a ten-millionth of the
+ * mesh's size), in place. Texture coordinates and normals (per corner) are
+ * kept; corners that meet are removed. Returns the same mesh.
+ */
+export function weldVertices<M extends Mesh>(mesh: M, epsilon?: number): M;
+
+export interface CleanOptions {
+  /** Merge vertices at the same place first: true, or the distance (default false) */
+  weld?: boolean | number;
+}
+
+/**
+ * Removes what's broken, in place: faces to missing or bad vertices, repeated
+ * corners, faces with fewer than 3 corners, crossed or of no area, repeated
+ * faces, bad corner lists (set to null), bad edges, and unused vertices,
+ * texture coordinates and normals. Returns the same mesh.
+ */
+export function cleanMesh<M extends Mesh>(mesh: M, opts?: CleanOptions): M;
+
+export interface MeshProblem {
+  /** What's wrong, e.g. "bad-index", "no-area", "turned-face", "inside-out", "open-edge" */
+  kind: string;
+  /** "error": breaks drawing or export; "warning": draws wrong; "info": worth knowing */
+  level: "error" | "warning" | "info";
+  /** A short sentence, with the first few faces / vertices / edges concerned */
+  message: string;
+  faces?: number[];
+  vertices?: number[];
+  edges?: number[];
+}
+
+/** Lists what's wrong with a mesh, without changing it (one entry per kind of problem; empty when fine). */
+export function validateMesh(mesh: Mesh): MeshProblem[];
+
+/**
+ * Turns faces in place so neighbors agree and each piece points outward
+ * (clockwise from outside). Works without welding. Returns the same mesh.
+ */
+export function fixWinding<M extends Mesh>(mesh: M): M;
+
+// Modeling: subdivision
+
+export interface SubdivideOptions {
+  /** Times to subdivide (default 1, at most 6); each level makes about 4 times the faces */
+  levels?: number;
+  /** false: only split the faces, keep the shape (default true) */
+  smooth?: boolean;
+  /** Edges where faces meet sharper than this (degrees) stay hard (default: none) */
+  creaseAngle?: number;
+  /** Edges that stay hard: pairs or polylines of vertex indices, e.g. [[0, 1], [4, 5, 6, 7, 4]] */
+  creases?: number[][];
+  /** "smooth": texture coordinates smoothed with the surface, seams kept (default); "linear": only split */
+  uvs?: "smooth" | "linear";
+}
+
+/**
+ * Smooths a mesh by subdividing it (Catmull-Clark): a rough cage becomes a
+ * smooth surface. Returns a new mesh of quads (the original isn't changed),
+ * welded, with texture coordinates and materials; own normals are dropped.
+ */
+export function subdivideMesh(mesh: Mesh, opts?: SubdivideOptions): Mesh;
+
+// Modeling: blobs (distance fields)
+
+/** How a blob shape joins what's before it: melts in (default), carves it, or keeps only the overlap. */
+export type BlobOp = "add" | "subtract" | "intersect";
+
+interface BlobBase {
+  /** How it joins what's before it (default "add") */
+  op?: BlobOp;
+  /** Same as op: "subtract" */
+  subtract?: boolean;
+  /** How far it melts into what's before it, as a distance (default: the blobMesh / blobField `blend`) */
+  blend?: number;
+}
+
+export type BlobShape = BlobBase & (
+  | { kind: "sphere"; center: Vec3; radius: number }
+  /** Turned by `rot` (radians, X then Y then Z) */
+  | { kind: "ellipsoid"; center: Vec3; radii: Vec3; rot?: Vec3 }
+  /** A capsule between two points; `ra` / `rb` instead of `radius` make a rounded cone */
+  | { kind: "capsule"; a: Vec3; b: Vec3; radius?: number; ra?: number; rb?: number }
+  /** A capped cylinder between two points, edges rounded by `round` */
+  | { kind: "cylinder"; a: Vec3; b: Vec3; radius: number; round?: number }
+  /** A box of `size`, edges rounded by `round`, turned by `rot` */
+  | { kind: "box"; center: Vec3; size: Vec3; round?: number; rot?: Vec3 }
+  /** A ring lying flat in XZ (like makeShape("torus")), turned by `rot` */
+  | { kind: "torus"; center: Vec3; R: number; tube: number; rot?: Vec3 }
+);
+
+export interface SdfMeshOptions {
+  /** Grid cells along the longest side (default 64, 4 to 256); more is finer and slower */
+  resolution?: number;
+  /** "nets": surface nets, even quads (default); "cubes": marching cubes, triangles. Both are watertight */
+  method?: "nets" | "cubes";
+  /** Pull vertices exactly onto the surface (default true) */
+  project?: boolean;
+  /** Normals from the field, for smooth shading (default true) */
+  normals?: boolean;
+  /** Texture mapping for the uvs, as for computeUVs (default "box"); false: none */
+  uvs?: MappingType | Mapping | false;
+  /** Skip grid blocks far from the surface, trusting the field to be about the distance (default true) */
+  sparse?: boolean;
+}
+
+export interface BlobMeshOptions extends Omit<SdfMeshOptions, "sparse"> {
+  /** How far shapes melt into each other, as a distance (default: a tenth of the model's size). A shape's own `blend` wins */
+  blend?: number;
+}
+
+/** One smooth mesh of shapes that melt together (added, subtracted or intersected, in order). */
+export function blobMesh(shapes: BlobShape[], opts?: BlobMeshOptions): Mesh;
+
+/** The distance field of blob shapes (negative inside), to mix with your own math and mesh with sdfMesh. */
+export function blobField(shapes: BlobShape[], opts?: { blend?: number }): (p: Vec3) => number;
+
+/** The surface where `field(p)` is 0 (negative inside), within `bounds`, as a mesh. */
+export function sdfMesh(field: (p: Vec3) => number, bounds: { min: Vec3; max: Vec3 }, opts?: SdfMeshOptions): Mesh;
+
+// Modeling: bevel
+
+export interface BevelOptions {
+  /** Size of the rounding: the radius of the ball rolled along the edges (default: a twentieth of the mesh's size). Shrinks where bevels would overlap */
+  radius?: number;
+  /** Rows across each rounded edge (default 3); 1 = a flat cut (chamfer) */
+  segments?: number;
+  /** Edges where faces meet sharper than this (degrees) are beveled (default 30) */
+  angle?: number;
+  /** "edges": round the edges, corners become pieces of a sphere (default); "vertices": cut only the corners */
+  mode?: "edges" | "vertices";
+  /** Instead of `angle`: the edges to bevel, as pairs or polylines of vertex indices */
+  edges?: number[][];
+  /** With mode "vertices", instead of `angle`: the corners to cut, as vertex indices */
+  vertices?: number[];
+}
+
+/**
+ * Rounds (or cuts flat) the sharp edges of a mesh, like a bevel modifier.
+ * Returns a new mesh, welded, with texture coordinates and materials kept.
+ * Edges along an open border stay sharp.
+ */
+export function bevelMesh(mesh: Mesh, opts?: BevelOptions): Mesh;
