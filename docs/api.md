@@ -24,6 +24,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/shapes.js` | [`makeShape`, `lathe`, `extrude`, `triangulate`, `scaleMesh`](./shapes) |
 | `trid/render/meshUtils.js` | [`cloneMesh`, `transformMesh`, `displaceMesh`, `mergeMeshes`, `meshBounds`](./shapes#mesh-helpers) |
 | `trid/math/noise.js` | [`rng`, `noise2`, `noise3`, `fbm2`, `fbm3`](./noise) |
+| `trid/modeling/curves.js` | [`spline`, `resamplePath`](./modeling#curves) |
 | `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `loadMaterials`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |

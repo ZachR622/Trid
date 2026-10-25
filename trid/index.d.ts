@@ -1632,3 +1632,39 @@ export function noise3(x: number, y: number, z: number, opts?: NoiseOptions): nu
 export function fbm2(x: number, y: number, opts?: FbmOptions): number;
 /** Fractal 3D noise: octaves of noise3, each twice as fine. About [0, 1), averaging 0.5. */
 export function fbm3(x: number, y: number, z: number, opts?: FbmOptions): number;
+
+// Modeling: curves
+
+export interface SplineOptions {
+  /** Points made between two control points (default 8) */
+  segments?: number;
+  /** The last point joins the first (a loop); the result doesn't repeat the first point (default false) */
+  closed?: boolean;
+  /** 0 = uniform, 0.5 = centripetal: no loops or overshoot (default), 1 = chordal */
+  alpha?: number;
+  /** 0 = smooth (default), 1 = straight lines between the points */
+  tension?: number;
+  /** Instead of `segments`: this many points in all, evenly spaced by length */
+  count?: number;
+  /** Instead of `segments`: points about this far apart, evenly spaced */
+  spacing?: number;
+}
+
+/**
+ * A smooth curve through `points` (Catmull-Rom: it passes through every
+ * point). Works with 2D, 3D and lathe `{ r, y }` points: every number field
+ * of the first point is a coordinate, and the result has the same fields.
+ */
+export function spline<P extends Point2 | Vec3 | ProfilePoint>(points: P[], opts?: SplineOptions): P[];
+
+export interface ResampleOptions {
+  /** Number of points in all */
+  count?: number;
+  /** Distance between points (used when `count` isn't given) */
+  spacing?: number;
+  /** The points form a loop (default false) */
+  closed?: boolean;
+}
+
+/** Points along a polyline, evenly spaced by length. The ends stay where they are. */
+export function resamplePath<P extends Point2 | Vec3 | ProfilePoint>(points: P[], opts?: ResampleOptions): P[];
