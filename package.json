@@ -1,6 +1,6 @@
 {
   "name": "trid3d",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A small 3D library for the HTML canvas: wireframes, filled and smooth faces, textures and shader effects, drawn with Canvas 2D or WebGL. No dependencies.",
   "keywords": [
     "3d",
