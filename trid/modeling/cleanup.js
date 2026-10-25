@@ -26,7 +26,7 @@ function sizeOf(vertices) {
  * first there). Uses a grid and looks in the neighboring cells, so close
  * vertices on either side of a cell boundary still meet. Bad vertices stay alone.
  */
-function samePlace(vertices, eps) {
+export function samePlace(vertices, eps) {
   const cells = new Map();
   const cellOf = (x) => Math.floor(x / eps);
   return vertices.map((v, i) => {
@@ -52,7 +52,7 @@ const validIndex = (i, n) => Number.isInteger(i) && i >= 0 && i < n;
  * A face's corners without repeats in a row (and without the last when it
  * repeats the first): `[vertex, corner]` pairs.
  */
-function distinctCorners(face) {
+export function distinctCorners(face) {
   const keep = [];
   face.forEach((v, c) => {
     if (!keep.length || keep[keep.length - 1][0] !== v) keep.push([v, c]);
@@ -81,7 +81,7 @@ function applyFaces(mesh, kept) {
 }
 
 /** Default distance for "the same place": tiny next to the mesh. */
-const defaultEps = (vertices) => (sizeOf(vertices) || 1) * 1e-7;
+export const defaultEps = (vertices) => (sizeOf(vertices) || 1) * 1e-7;
 
 /**
  * Merges vertices closer than `epsilon` (default: a ten-millionth of the

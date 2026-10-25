@@ -1846,3 +1846,25 @@ export function validateMesh(mesh: Mesh): MeshProblem[];
  * (clockwise from outside). Works without welding. Returns the same mesh.
  */
 export function fixWinding<M extends Mesh>(mesh: M): M;
+
+// Modeling: subdivision
+
+export interface SubdivideOptions {
+  /** Times to subdivide (default 1, at most 6); each level makes about 4 times the faces */
+  levels?: number;
+  /** false: only split the faces, keep the shape (default true) */
+  smooth?: boolean;
+  /** Edges where faces meet sharper than this (degrees) stay hard (default: none) */
+  creaseAngle?: number;
+  /** Edges that stay hard: pairs or polylines of vertex indices, e.g. [[0, 1], [4, 5, 6, 7, 4]] */
+  creases?: number[][];
+  /** "smooth": texture coordinates smoothed with the surface, seams kept (default); "linear": only split */
+  uvs?: "smooth" | "linear";
+}
+
+/**
+ * Smooths a mesh by subdividing it (Catmull-Clark): a rough cage becomes a
+ * smooth surface. Returns a new mesh of quads (the original isn't changed),
+ * welded, with texture coordinates and materials; own normals are dropped.
+ */
+export function subdivideMesh(mesh: Mesh, opts?: SubdivideOptions): Mesh;

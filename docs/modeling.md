@@ -5,7 +5,7 @@ Tools for making your own shapes in code, beyond `makeShape`, `lathe` and `extru
 ```js
 import {
   spline, resamplePath, sweep, loft, taperMesh, twistMesh, bendMesh, bulgeMesh,
-  weldVertices, cleanMesh, validateMesh, fixWinding,
+  weldVertices, cleanMesh, validateMesh, fixWinding, subdivideMesh,
 } from "./trid/index.js";
 ```
 
@@ -179,6 +179,51 @@ const neck = loft([
 
 Faces are clockwise from outside like the built-in shapes, however the outlines and the axis or path go. Texture coordinates: u goes around the sections and v along the surface (by distance). Caps map their own box.
 
+## `subdivideMesh(mesh, opts?)`
+
+Smooths a mesh by subdividing it (Catmull-Clark, like a subdivision surface modifier). Build a rough cage of a few boxes and faces, and get a smooth, organic shape from it: box modeling. Each level splits every face into one quad per corner (about 4 times the faces) and rounds the surface. Returns a **new mesh**; the original isn't changed.
+
+<Demo src="subdivide" hint="a cage of boxes · smoothed twice · a box smoothed · a box with creaseAngle — drag to orbit" />
+
+<<< @/demos/subdivide.js
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `levels` | `1` | Times to subdivide (at most 6). 2 or 3 is usually plenty |
+| `smooth` | `true` | `false`: only split the faces, keep the shape (to give a deformer more rows) |
+| `creaseAngle` | none | Edges where faces meet sharper than this (degrees) stay hard |
+| `creases` | none | Edges that stay hard: pairs or polylines of vertex indices |
+| `uvs` | `"smooth"` | `"smooth"`: texture coordinates are smoothed with the surface, keeping their seams. `"linear"`: only split |
+
+```js
+// A smooth body from a rough cage: a box with a smaller box on top
+const cage = mergeMeshes([
+  makeShape("box", { w: 0.6, h: 0.4, d: 0.4 }),
+  { mesh: makeShape("cube", { size: 0.3 }), pos: { x: 0, y: 0.35, z: 0 } },
+]);
+const body = subdivideMesh(cage, { levels: 2 });
+
+// A rounded box: smooth, but its 90° edges stay hard
+const panel = subdivideMesh(box, { levels: 2, creaseAngle: 60 });
+```
+
+::: tip One piece or several
+Pieces that don't share vertices (like boxes merged together) are smoothed one by one, each into its own rounded blob. For one continuous surface, the cage must be one connected mesh: neighboring faces sharing their edges.
+:::
+
+### Creases
+
+A sharp edge keeps its shape: the surface stays creased along it at every level. A point with 3 sharp edges or more is a hard corner and stays put. A loop of sharp edges (each point on 2) stays sharp across, but rounds a little along the loop, like a creased edge in other modelers.
+
+Open borders (a sheet, a hole) count as sharp: they stay where they are, smoothed along the border only, and an open sheet keeps its corners.
+
+### What the result keeps
+
+- Faces stay turned the way they were, and the result is welded (vertices at the same place merged first, so an unwelded mesh is still smoothed as one surface).
+- Each new face keeps its face's material (`faceMaterials`).
+- Texture coordinates come along when every face has them.
+- The mesh's own normals (from an OBJ file) are dropped: the renderers compute new ones, and `material.smooth` makes it look round.
+
 ## Deformers
 
 The everyday modifiers, one call each: `taperMesh`, `twistMesh`, `bendMesh` and `bulgeMesh`. Like [`displaceMesh`](./shapes#mesh-helpers), each one changes the mesh **in place** and returns it. The mesh's own normals (from an OBJ file) are removed, since they no longer fit, and the renderers compute new ones.
@@ -188,7 +233,7 @@ The everyday modifiers, one call each: `taperMesh`, `twistMesh`, `bendMesh` and 
 <<< @/demos/deform.js
 
 ::: tip Give it enough faces
-A deformer only moves vertices, so a shape needs vertices along the way to bend or twist smoothly. The built-in `box` and `cylinder` have none along their height: build tall shapes with `lathe`, `loft` or `sweep` (which make rows), or add rows to them first.
+A deformer only moves vertices, so a shape needs vertices along the way to bend or twist smoothly. The built-in `box` and `cylinder` have none along their height: build tall shapes with `lathe`, `loft` or `sweep` (which make rows), or [subdivide](#subdividemesh-mesh-opts) them first (`smooth: false` adds rows without changing the shape).
 :::
 
 ### Along an axis: taper, twist, bend

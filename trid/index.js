@@ -88,3 +88,4 @@ export { sweep } from "./modeling/sweep.js";
 export { loft } from "./modeling/loft.js";
 export { taperMesh, twistMesh, bendMesh, bulgeMesh } from "./modeling/deform.js";
 export { weldVertices, cleanMesh, validateMesh, fixWinding } from "./modeling/cleanup.js";
+export { subdivideMesh } from "./modeling/subdivide.js";
