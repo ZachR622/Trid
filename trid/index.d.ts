@@ -1803,3 +1803,46 @@ export function twistMesh<M extends Mesh>(mesh: M, opts?: TwistOptions): M;
 export function bendMesh<M extends Mesh>(mesh: M, opts?: BendOptions): M;
 /** Pushes the surface out (or in) around a point, fading at `radius`, in place. Returns the same mesh. */
 export function bulgeMesh<M extends Mesh>(mesh: M, opts: BulgeOptions): M;
+
+// Modeling: cleanup and checks
+
+/**
+ * Merges vertices closer than `epsilon` (default: a ten-millionth of the
+ * mesh's size), in place. Texture coordinates and normals (per corner) are
+ * kept; corners that meet are removed. Returns the same mesh.
+ */
+export function weldVertices<M extends Mesh>(mesh: M, epsilon?: number): M;
+
+export interface CleanOptions {
+  /** Merge vertices at the same place first: true, or the distance (default false) */
+  weld?: boolean | number;
+}
+
+/**
+ * Removes what's broken, in place: faces to missing or bad vertices, repeated
+ * corners, faces with fewer than 3 corners, crossed or of no area, repeated
+ * faces, bad corner lists (set to null), bad edges, and unused vertices,
+ * texture coordinates and normals. Returns the same mesh.
+ */
+export function cleanMesh<M extends Mesh>(mesh: M, opts?: CleanOptions): M;
+
+export interface MeshProblem {
+  /** What's wrong, e.g. "bad-index", "no-area", "turned-face", "inside-out", "open-edge" */
+  kind: string;
+  /** "error": breaks drawing or export; "warning": draws wrong; "info": worth knowing */
+  level: "error" | "warning" | "info";
+  /** A short sentence, with the first few faces / vertices / edges concerned */
+  message: string;
+  faces?: number[];
+  vertices?: number[];
+  edges?: number[];
+}
+
+/** Lists what's wrong with a mesh, without changing it (one entry per kind of problem; empty when fine). */
+export function validateMesh(mesh: Mesh): MeshProblem[];
+
+/**
+ * Turns faces in place so neighbors agree and each piece points outward
+ * (clockwise from outside). Works without welding. Returns the same mesh.
+ */
+export function fixWinding<M extends Mesh>(mesh: M): M;
