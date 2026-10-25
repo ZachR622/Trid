@@ -6,7 +6,7 @@ Tools for making your own shapes in code, beyond `makeShape`, `lathe` and `extru
 import {
   spline, resamplePath, sweep, loft, taperMesh, twistMesh, bendMesh, bulgeMesh,
   weldVertices, cleanMesh, validateMesh, fixWinding, subdivideMesh,
-  blobMesh, blobField, sdfMesh,
+  blobMesh, blobField, sdfMesh, bevelMesh,
 } from "./trid/index.js";
 ```
 
@@ -294,6 +294,54 @@ const rippled = sdfMesh(
 ```
 
 The field should be negative inside and about the distance to the surface (or less). Far from the surface, `sdfMesh` skips whole blocks of the grid by trusting that. A field that changes faster than the distance (strong noise, a stretched distance) should pass `sparse: false`, or thin parts may be missed.
+
+## `bevelMesh(mesh, opts?)`
+
+Rounds the sharp edges of any mesh, or cuts them flat, like a bevel modifier. Manufactured things are rarely sharp-edged: furniture, devices, robots, panels, tools. Returns a **new mesh**; the original isn't changed.
+
+<Demo src="bevel" hint="an extruded star · a cylinder with rounded rims · one rounded edge · corners cut (vertices mode) — drag to orbit" />
+
+<<< @/demos/bevel.js
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `radius` | a twentieth of the mesh's size | How round: the radius of a ball rolled along the edge |
+| `segments` | `3` | Rows across each rounded edge. `1` cuts it flat (a chamfer) |
+| `angle` | `30` | Edges where faces meet sharper than this (degrees) are beveled |
+| `edges` | none | Instead of `angle`: which edges, as pairs or polylines of vertex indices (`[[0, 1], [4, 5, 6, 7, 4]]`) |
+| `mode` | `"edges"` | `"edges"` rounds the edges. `"vertices"` cuts only the corners |
+| `vertices` | none | With `"vertices"`, instead of `angle`: which corners, as vertex indices |
+
+```js
+// A crate: every sharp edge rounded
+const crate = bevelMesh(makeShape("box"), { radius: 0.03 });
+
+// A cylinder: only its rims are sharper than 30°, so only they're rounded
+const knob = bevelMesh(makeShape("cylinder", { r: 0.2, h: 0.1 }), { radius: 0.02, segments: 4 });
+
+// One edge of a table top, cut flat
+const top = makeShape("box", { w: 1.2, h: 0.05, d: 0.6 });
+const edged = bevelMesh(top, { edges: [[top.faces[0][0], top.faces[0][1]]], radius: 0.02, segments: 1 });
+```
+
+### How it rounds
+
+Each beveled edge is rounded the way a ball of `radius` rolling along it would: the round surface meets both faces smoothly. Where 3 rounded edges meet (a box's corner), the corner is a piece of a sphere, exactly as on a rounded box. Where a rounded edge ends on a flat side, its end becomes part of that side. Concave edges (an inside corner) are rounded too, with the ball outside.
+
+- **Overlap.** On short edges, bevels from both ends would run into each other. The radius then shrinks everywhere (not only there), so the shape stays even.
+- **Flat faces cut into triangles** (an extruded star's caps) are treated as the flat face they make up.
+- **Open borders** (a sheet, a hole in a surface) stay sharp: there is no second face to round toward.
+- **Texture coordinates** follow each face (new points on a face get the coordinates the face's texture gives them there), and the rounded strips take them from the faces on either side. **Materials** follow their faces; the rounded strips and corners take a neighbor's.
+
+The result is welded and closed (when the mesh was), with faces clockwise from outside, so `validateMesh` finds nothing on it.
+
+::: tip makeShape or bevelMesh?
+For a plain rounded box, `makeShape("box", { radius })` is simpler and makes an even grid. `bevelMesh` is for everything else: extruded outlines, lathed shapes, meshes from code or files.
+:::
+
+### Vertices mode
+
+With `mode: "vertices"`, only the corners are cut: wherever 3 sharp edges or more meet (or each vertex in `vertices`), each edge is cut `radius` along from the corner. With `segments: 1` the cut is flat; with more, it's a small dome.
 
 ## Deformers
 

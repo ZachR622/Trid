@@ -90,3 +90,4 @@ export { taperMesh, twistMesh, bendMesh, bulgeMesh } from "./modeling/deform.js"
 export { weldVertices, cleanMesh, validateMesh, fixWinding } from "./modeling/cleanup.js";
 export { subdivideMesh } from "./modeling/subdivide.js";
 export { blobMesh, blobField, sdfMesh } from "./modeling/blobs.js";
+export { bevelMesh } from "./modeling/bevel.js";

@@ -284,8 +284,10 @@ export interface ShapeOptions {
   r?: number;
   /** Sphere latitude bands (default 12) */
   rings?: number;
-  /** Points around: sphere (24), cylinder / cone (32), torus (48) */
+  /** Points around: sphere (24), cylinder / cone (32), torus (48); rows per rounded edge of a cube / box with `radius` (4) */
   segments?: number;
+  /** Cube / box: round the edges and corners by this much (default 0: sharp) */
+  radius?: number;
   /** Cone top radius: 0 = pointed, > 0 = tapered cylinder (default 0) */
   rTop?: number;
   /** Torus: distance from the center to the middle of the tube (default 0.35) */
@@ -1925,3 +1927,27 @@ export function blobField(shapes: BlobShape[], opts?: { blend?: number }): (p: V
 
 /** The surface where `field(p)` is 0 (negative inside), within `bounds`, as a mesh. */
 export function sdfMesh(field: (p: Vec3) => number, bounds: { min: Vec3; max: Vec3 }, opts?: SdfMeshOptions): Mesh;
+
+// Modeling: bevel
+
+export interface BevelOptions {
+  /** Size of the rounding: the radius of the ball rolled along the edges (default: a twentieth of the mesh's size). Shrinks where bevels would overlap */
+  radius?: number;
+  /** Rows across each rounded edge (default 3); 1 = a flat cut (chamfer) */
+  segments?: number;
+  /** Edges where faces meet sharper than this (degrees) are beveled (default 30) */
+  angle?: number;
+  /** "edges": round the edges, corners become pieces of a sphere (default); "vertices": cut only the corners */
+  mode?: "edges" | "vertices";
+  /** Instead of `angle`: the edges to bevel, as pairs or polylines of vertex indices */
+  edges?: number[][];
+  /** With mode "vertices", instead of `angle`: the corners to cut, as vertex indices */
+  vertices?: number[];
+}
+
+/**
+ * Rounds (or cuts flat) the sharp edges of a mesh, like a bevel modifier.
+ * Returns a new mesh, welded, with texture coordinates and materials kept.
+ * Edges along an open border stay sharp.
+ */
+export function bevelMesh(mesh: Mesh, opts?: BevelOptions): Mesh;

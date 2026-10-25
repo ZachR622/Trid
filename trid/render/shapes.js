@@ -13,7 +13,8 @@ function cubeWire(size = 0.5) {
  * @param {number} h - height (y)
  * @param {number} d - depth (z)
  */
-function rectPrismWire(w = 0.6, h = 0.3, d = 0.4) {
+function rectPrismWire(w = 0.6, h = 0.3, d = 0.4, radius = 0, segments = 4) {
+  if (radius > 0) return roundedBox(w, h, d, radius, segments);
   const x = w / 2, y = h / 2, z = d / 2;
 
   const mesh = {
@@ -49,6 +50,91 @@ function rectPrismWire(w = 0.6, h = 0.3, d = 0.4) {
     faceMaterials: [0, 1, 2, 3, 4, 5],
   };
   return withFaceUVs(mesh);
+}
+
+/**
+ * A box with rounded edges and corners, centered on the origin: each side is
+ * a grid whose outer rows bend around the edges (`segments` rows per
+ * rounded edge, evenly spread over the quarter circle). Vertices along the
+ * edges are shared, so smooth shading has no seams. Like the plain box,
+ * each side has its own material number (front, back, top, bottom, right,
+ * left) and the whole texture, upright as seen from outside.
+ */
+function roundedBox(w, h, d, radius, segments) {
+  const half = { x: Math.abs(w) / 2, y: Math.abs(h) / 2, z: Math.abs(d) / 2 };
+  const r = Math.min(radius, half.x, half.y, half.z);
+  const s = Math.max(1, Math.floor(segments));
+  const inner = { x: half.x - r, y: half.y - r, z: half.z - r };
+  // Grid lines across a side: `s` rows around each rounded edge, one flat span between
+  // (where the edges meet, as on a cube of radius = half its size, the flat span is skipped)
+  const ticks = (a) => {
+    const arc = Array.from({ length: s }, (_, i) => Math.tan((Math.PI / 4) * (1 - i / s)) * r);
+    const lo = arc.map((t) => -inner[a] - t), hi = [...arc].reverse().map((t) => inner[a] + t);
+    return inner[a] > 1e-12 ? [...lo, -inner[a], inner[a], ...hi] : [...lo, 0, ...hi];
+  };
+  // The point on the flat side pulled onto the rounded surface
+  const round = (p) => {
+    const c = { x: Math.max(-inner.x, Math.min(inner.x, p.x)), y: Math.max(-inner.y, Math.min(inner.y, p.y)), z: Math.max(-inner.z, Math.min(inner.z, p.z)) };
+    const dx = p.x - c.x, dy = p.y - c.y, dz = p.z - c.z, l = Math.hypot(dx, dy, dz);
+    return l > 1e-12 ? { x: c.x + (dx / l) * r, y: c.y + (dy / l) * r, z: c.z + (dz / l) * r } : p;
+  };
+  // Sides in the plain box's order: front (-z), back (+z), top, bottom, right (+x), left (-x).
+  // The texture goes like on the plain box (withFaceUVs): up is +Y (±Z on the top and bottom), right = normal × up
+  const axisOf = (v) => (v.x ? ["x", Math.sign(v.x)] : v.y ? ["y", Math.sign(v.y)] : ["z", Math.sign(v.z)]);
+  const sides = [["z", -1], ["z", 1], ["y", 1], ["y", -1], ["x", 1], ["x", -1]].map(([n, sign]) => {
+    const nv = { x: 0, y: 0, z: 0 };
+    nv[n] = sign;
+    const up = n === "y" ? { x: 0, y: 0, z: sign } : { x: 0, y: 1, z: 0 };
+    const right = { x: nv.y * up.z - nv.z * up.y, y: nv.z * up.x - nv.x * up.z, z: nv.x * up.y - nv.y * up.x };
+    return { n, sign, u: axisOf(right), v: axisOf(up) };
+  });
+  const vertices = [], faces = [], uvs = [], faceUVs = [], faceMaterials = [];
+  const shared = new Map();
+  const key = (p) => `${p.x.toFixed(9)},${p.y.toFixed(9)},${p.z.toFixed(9)}`;
+  sides.forEach((side, m) => {
+    const [ua, us] = side.u, [va, vs] = side.v;
+    const tu = ticks(ua), tv = ticks(va);
+    const ids = [], uvIds = [];
+    for (const b of tv) {
+      for (const a of tu) {
+        const p = { x: 0, y: 0, z: 0 };
+        p[side.n] = side.sign * half[side.n];
+        p[ua] = a;
+        p[va] = b;
+        const q = round(p);
+        const k = key(q);
+        if (!shared.has(k)) shared.set(k, vertices.push(q) - 1);
+        ids.push(shared.get(k));
+        uvIds.push(uvs.push({ u: (us * a + half[ua]) / (2 * half[ua] || 1), v: (vs * b + half[va]) / (2 * half[va] || 1) }) - 1);
+      }
+    }
+    const nu = tu.length;
+    for (let j = 0; j + 1 < tv.length; j++) {
+      for (let i = 0; i + 1 < nu; i++) {
+        const c = [j * nu + i, j * nu + i + 1, (j + 1) * nu + i + 1, (j + 1) * nu + i];
+        // Clockwise from outside
+        const p = c.map((t) => vertices[ids[t]]);
+        const e1 = { x: p[1].x - p[0].x, y: p[1].y - p[0].y, z: p[1].z - p[0].z };
+        const e2 = { x: p[3].x - p[0].x, y: p[3].y - p[0].y, z: p[3].z - p[0].z };
+        const nz = { x: e1.y * e2.z - e1.z * e2.y, y: e1.z * e2.x - e1.x * e2.z, z: e1.x * e2.y - e1.y * e2.x }[side.n] * side.sign;
+        const order = nz < 0 ? [...c].reverse() : c;
+        faces.push(order.map((t) => ids[t]));
+        faceUVs.push(order.map((t) => uvIds[t]));
+        faceMaterials.push(m);
+      }
+    }
+  });
+  // Faces that collapsed where grid points met (a cube rounded into a ball) are dropped
+  const keep = faces.map((f) => new Set(f).size >= 3);
+  const out = {
+    vertices,
+    faces: faces.filter((_, i) => keep[i]).map((f) => f.filter((v, i) => v !== f[(i + f.length - 1) % f.length])),
+    uvs,
+    faceUVs: faceUVs.filter((_, i) => keep[i]),
+    faceMaterials: faceMaterials.filter((_, i) => keep[i]),
+  };
+  out.faceUVs = out.faceUVs.map((uv, i) => (uv.length === out.faces[i].length ? uv : uv.slice(0, out.faces[i].length)));
+  return out;
 }
 
 /**
@@ -548,8 +634,10 @@ export function scaleMesh(mesh, sx = 1, sy = 1, sz = 1) {
  */
 export function makeShape(kind, opts = {}) {
   switch (kind.toLowerCase()) {
-    case "cube":  return cubeWire(opts.size ?? 0.5);
-    case "box":   return rectPrismWire(opts.w ?? 0.6, opts.h ?? 0.6, opts.d ?? 0.6);
+    case "cube":  return opts.radius > 0
+      ? rectPrismWire(opts.size ?? 0.5, opts.size ?? 0.5, opts.size ?? 0.5, opts.radius, opts.segments ?? 4)
+      : cubeWire(opts.size ?? 0.5);
+    case "box":   return rectPrismWire(opts.w ?? 0.6, opts.h ?? 0.6, opts.d ?? 0.6, opts.radius ?? 0, opts.segments ?? 4);
     case "sphere":return sphereWire(opts.r ?? 0.45, opts.rings ?? 12, opts.segments ?? 24);
     case "cylinder": return cylinder(opts.r, opts.h, opts.segments);
     case "cone":  return cone(opts.r, opts.h, opts.segments, opts.rTop);
