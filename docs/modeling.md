@@ -3,7 +3,7 @@
 Tools for making your own shapes in code, beyond `makeShape`, `lathe` and `extrude`. Everything here returns plain data (points or meshes), so it works with every renderer, and meshes come with texture coordinates and clockwise faces like the built-in shapes.
 
 ```js
-import { spline, resamplePath } from "./trid/index.js";
+import { spline, resamplePath, sweep } from "./trid/index.js";
 ```
 
 ## Curves
@@ -58,3 +58,59 @@ The same points along a polyline (straight lines between them), evenly spaced by
 | `closed` | `false` | The points form a loop |
 
 Without `count` or `spacing`, it returns a copy of the points.
+
+## `sweep(path, opts?)`
+
+Moves a cross-section along a 3D path: tails, horns, tentacles, handles, pipes, cables, rails, picture frames. Without a `profile`, it's a round tube.
+
+<Demo src="sweep" hint="a tapered tail · a twisted star knot · a level road — drag to orbit" />
+
+<<< @/demos/sweep.js
+
+The path is used as given, so pass it through [`spline`](#spline-points-opts) for a smooth one (with `count` or `spacing` for faces of even size).
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `profile` | a circle | The cross-section, a list of `{ x, y }`: x goes to the path's side, y to its "up" |
+| `profileClosed` | `true` | `false`: the profile is an open line (a ribbon, a leaf, a road surface) |
+| `radius` | `0.1` | Radius of the default circle. Ignored with a `profile` |
+| `segments` | `16` | Points around the default circle |
+| `scale` | `1` | Size of the section along the path |
+| `twist` | `0` | Turn of the section from start to end, in radians |
+| `closed` | `false` | The path is a loop (a ring, a handle closed on itself) |
+| `caps` | `true` | Close the ends with flat caps |
+| `up` | none | Keep the section's y pointed this way |
+| `miter` | `true` | Stretch the section at sharp corners so the tube keeps its thickness |
+
+`radius` and `scale` can be:
+- a number;
+- a list of numbers spread evenly from the start to the end (`[0.1, 0.05, 0]`);
+- a function of `t`, which is 0 at the start and 1 at the end (`(t) => 0.1 * (1 - t)`).
+
+An end whose size is 0 closes into a single point, for horns and tail tips.
+
+```js
+// A horn: curved, from thick to a point
+const horn = sweep(spline([
+  { x: 0, y: 0, z: 0 }, { x: 0.05, y: 0.2, z: 0.05 }, { x: 0.2, y: 0.35, z: 0.1 }, { x: 0.35, y: 0.38, z: 0.05 },
+], { count: 30 }), { radius: (t) => 0.08 * (1 - t) ** 0.8 });
+
+// A picture frame: a square path, a molding profile kept upright, sharp mitered corners
+const molding = [{ x: -0.1, y: 0 }, { x: 0.1, y: 0 }, { x: 0.1, y: 0.05 }, { x: 0, y: 0.08 }, { x: -0.1, y: 0.04 }];
+const frame = sweep(
+  [{ x: -1, y: 0, z: -1 }, { x: 1, y: 0, z: -1 }, { x: 1, y: 0, z: 1 }, { x: -1, y: 0, z: 1 }],
+  { profile: molding, closed: true, up: { x: 0, y: 1, z: 0 } },
+);
+```
+
+### How the section turns
+
+By default, the section is carried along the path without spinning, so it never flips at bends, even on knotted 3D paths. On a closed loop, the small turn it picks up around the loop is spread evenly, so there's no seam where the ends meet.
+
+With `up`, the section's y stays pointed that way instead (it only turns around `up`). Use it for things that must stay level: roads, rails, shelves, frames. Where the path goes straight along `up`, the section is carried as usual.
+
+On a closed path, `twist` is rounded to whole turns so the ends still meet.
+
+### Faces and textures
+
+Faces are clockwise from outside like the built-in shapes, whichever way the path and a closed profile go. An open profile faces its right side (like a `lathe` profile). Texture coordinates: u goes around the section and v along the path, both by length. Caps map the section's box.

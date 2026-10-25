@@ -84,3 +84,4 @@ export { rng, noise2, noise3, fbm2, fbm3 } from "./math/noise.js";
 
 // Modeling
 export { spline, resamplePath } from "./modeling/curves.js";
+export { sweep } from "./modeling/sweep.js";

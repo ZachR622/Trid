@@ -1668,3 +1668,38 @@ export interface ResampleOptions {
 
 /** Points along a polyline, evenly spaced by length. The ends stay where they are. */
 export function resamplePath<P extends Point2 | Vec3 | ProfilePoint>(points: P[], opts?: ResampleOptions): P[];
+
+// Modeling: sweep
+
+/** A size along a path: a number, numbers spread evenly from start to end, or a function of t (0 at the start, 1 at the end). */
+export type SizeAlong = number | number[] | ((t: number) => number);
+
+export interface SweepOptions {
+  /** The cross-section: x to the path's side, y to its "up" (default: a circle of `radius`) */
+  profile?: Point2[];
+  /** The profile is a closed outline (default true); false = an open line, for ribbons, leaves and roads */
+  profileClosed?: boolean;
+  /** Radius of the default circle (default 0.1). Ignored with a `profile` */
+  radius?: SizeAlong;
+  /** Points around the default circle (default 16) */
+  segments?: number;
+  /** Size of the section along the path (default 1). 0 at an end closes it into a point */
+  scale?: SizeAlong;
+  /** Turn of the section from start to end, in radians (default 0). Whole turns on a closed path */
+  twist?: number;
+  /** The path is a loop: its end joins its start (default false) */
+  closed?: boolean;
+  /** Close the ends with flat caps (default true; open paths with closed profiles) */
+  caps?: boolean;
+  /** Keep the section's y pointed this way (roads, rails, frames). Default: carried along the path without spinning */
+  up?: Vec3;
+  /** Stretch the section at sharp corners so the tube keeps its thickness (default true) */
+  miter?: boolean;
+}
+
+/**
+ * Moves a cross-section along a 3D path: tails, horns, tentacles, handles,
+ * pipes, cables, rails. Without `profile`, a round tube of `radius`.
+ * Clockwise faces; uvs: u around the section, v along the path.
+ */
+export function sweep(path: Vec3[], opts?: SweepOptions): Mesh;
