@@ -86,3 +86,4 @@ export { rng, noise2, noise3, fbm2, fbm3 } from "./math/noise.js";
 export { spline, resamplePath } from "./modeling/curves.js";
 export { sweep } from "./modeling/sweep.js";
 export { loft } from "./modeling/loft.js";
+export { taperMesh, twistMesh, bendMesh, bulgeMesh } from "./modeling/deform.js";

@@ -1753,3 +1753,53 @@ export interface LoftOptions {
  * v along. Throws when the two kinds are mixed.
  */
 export function loft(sections: LoftOutline[] | LoftRing[], opts?: LoftOptions): Mesh;
+
+// Modeling: deformers
+
+export interface AxisRange {
+  /** Axis the effect goes along (default "y") */
+  axis?: "x" | "y" | "z";
+  /** Start of the part that changes: 0 = the mesh's low end on the axis, 1 = its high end (default 0) */
+  from?: number;
+  /** End of the part that changes, same measure (default 1). Past it, the full effect carries on */
+  to?: number;
+  /** A point the axis line goes through (default: the middle of the mesh's box) */
+  center?: Partial<Vec3>;
+}
+
+export interface TaperOptions extends AxisRange {
+  /** Size at the end of the range (default 0.5), or a function of how far into the range (0 to 1) giving the size */
+  amount?: number | ((w: number) => number);
+}
+
+export interface TwistOptions extends AxisRange {
+  /** Turn at the end of the range, in radians (default π/2), or a function of how far into the range (0 to 1) */
+  angle?: number | ((w: number) => number);
+}
+
+export interface BendOptions extends AxisRange {
+  /** Angle of the arc, in radians (default π/2); negative curves the other way */
+  angle?: number;
+  /** Axis it curves toward (default: "z" for a "y" axis, "z" for "x", "y" for "z") */
+  toward?: "x" | "y" | "z";
+}
+
+export interface BulgeOptions {
+  /** Middle of the bulge */
+  center: Vec3;
+  /** Distance where it fades to nothing */
+  radius: number;
+  /** How far the middle moves (default 0.1); negative = a dent */
+  amount?: number;
+  /** "normal": along the surface, works on flat sides (default); "radial": away from `center` (put it inside the part) */
+  mode?: "normal" | "radial";
+}
+
+/** Narrows or widens a mesh along an axis, in place. Returns the same mesh. */
+export function taperMesh<M extends Mesh>(mesh: M, opts?: TaperOptions): M;
+/** Turns a mesh around an axis, more and more along it, in place (same direction as rotateX / Y / Z). Returns the same mesh. */
+export function twistMesh<M extends Mesh>(mesh: M, opts?: TwistOptions): M;
+/** Bends a mesh into an arc along an axis, in place; past the range it goes on straight. Returns the same mesh. */
+export function bendMesh<M extends Mesh>(mesh: M, opts?: BendOptions): M;
+/** Pushes the surface out (or in) around a point, fading at `radius`, in place. Returns the same mesh. */
+export function bulgeMesh<M extends Mesh>(mesh: M, opts: BulgeOptions): M;

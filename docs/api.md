@@ -27,6 +27,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/modeling/curves.js` | [`spline`, `resamplePath`](./modeling#curves) |
 | `trid/modeling/sweep.js` | [`sweep`](./modeling#sweep-path-opts) |
 | `trid/modeling/loft.js` | [`loft`](./modeling#loft-sections-opts) |
+| `trid/modeling/deform.js` | [`taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh`](./modeling#deformers) |
 | `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `loadMaterials`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |

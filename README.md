@@ -17,7 +17,7 @@ Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools
 - **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
 - **Groups** — give any object `children` and they move, turn and scale with it (models made of parts, a moon orbiting a planet).
 - **Shapes** — cubes, boxes, spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes and `extrude` for flat ones, or any mesh you define as vertices and edges.
-- **Modeling** — smooth curves through a few points (`spline`), shapes swept along a 3D path (`sweep`: tails, horns, pipes, rails), and surfaces through cross-sections (`loft`: bodies, bottles, hulls, heads).
+- **Modeling** — smooth curves through a few points (`spline`), shapes swept along a 3D path (`sweep`: tails, horns, pipes, rails), surfaces through cross-sections (`loft`: bodies, bottles, hulls, heads), and taper, twist, bend and bulge deformers.
 - **Mesh helpers** — clone, transform, displace, merge and measure meshes; seeded random numbers and smooth noise (`fbm2`, `fbm3`, tileable) for rocks, terrain and procedural textures.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth.
 - **Lights** — ambient, directional and point lights, with colors and intensities, as many as you need (up to 8 at once besides ambient).
@@ -87,7 +87,7 @@ Or let users load their own: `scene.use(new ObjUploader())` accepts dropped `.ob
 | `trid/sceneGraph.js` | Groups: `children`, world matrices |
 | `trid/math/` | Transforms, camera directions, projection, matrices, rotations, random numbers and noise |
 | `trid/render/` | Renderers (Canvas 2D, WebGL), lights, effects, post effects, shapes, grids, mesh helpers, procedural textures, drawing, frame loop |
-| `trid/modeling/` | Modeling tools: curves, sweep, loft |
+| `trid/modeling/` | Modeling tools: curves, sweep, loft, deformers |
 | `trid/loaders/` | OBJ, MTL and texture loading |
 | `trid/export/` | Screenshots, video recording, OBJ and MTL export |
 | `trid/tools/` | Camera, object, gizmo and overlay tools |
@@ -113,7 +113,7 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 npm test
 ```
 
-Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes, mesh helpers, curves, sweeps, lofts, noise, textures, OBJ / MTL, picking, tools, groups and matrices, lights, post effects, grids, and the WebGL renderer's GPU memory on a fake WebGL context.
+Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes, mesh helpers, curves, sweeps, lofts, deformers, noise, textures, OBJ / MTL, picking, tools, groups and matrices, lights, post effects, grids, and the WebGL renderer's GPU memory on a fake WebGL context.
 
 ## Upgrading
 
