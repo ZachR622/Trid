@@ -1868,3 +1868,60 @@ export interface SubdivideOptions {
  * welded, with texture coordinates and materials; own normals are dropped.
  */
 export function subdivideMesh(mesh: Mesh, opts?: SubdivideOptions): Mesh;
+
+// Modeling: blobs (distance fields)
+
+/** How a blob shape joins what's before it: melts in (default), carves it, or keeps only the overlap. */
+export type BlobOp = "add" | "subtract" | "intersect";
+
+interface BlobBase {
+  /** How it joins what's before it (default "add") */
+  op?: BlobOp;
+  /** Same as op: "subtract" */
+  subtract?: boolean;
+  /** How far it melts into what's before it, as a distance (default: the blobMesh / blobField `blend`) */
+  blend?: number;
+}
+
+export type BlobShape = BlobBase & (
+  | { kind: "sphere"; center: Vec3; radius: number }
+  /** Turned by `rot` (radians, X then Y then Z) */
+  | { kind: "ellipsoid"; center: Vec3; radii: Vec3; rot?: Vec3 }
+  /** A capsule between two points; `ra` / `rb` instead of `radius` make a rounded cone */
+  | { kind: "capsule"; a: Vec3; b: Vec3; radius?: number; ra?: number; rb?: number }
+  /** A capped cylinder between two points, edges rounded by `round` */
+  | { kind: "cylinder"; a: Vec3; b: Vec3; radius: number; round?: number }
+  /** A box of `size`, edges rounded by `round`, turned by `rot` */
+  | { kind: "box"; center: Vec3; size: Vec3; round?: number; rot?: Vec3 }
+  /** A ring lying flat in XZ (like makeShape("torus")), turned by `rot` */
+  | { kind: "torus"; center: Vec3; R: number; tube: number; rot?: Vec3 }
+);
+
+export interface SdfMeshOptions {
+  /** Grid cells along the longest side (default 64, 4 to 256); more is finer and slower */
+  resolution?: number;
+  /** "nets": surface nets, even quads (default); "cubes": marching cubes, triangles. Both are watertight */
+  method?: "nets" | "cubes";
+  /** Pull vertices exactly onto the surface (default true) */
+  project?: boolean;
+  /** Normals from the field, for smooth shading (default true) */
+  normals?: boolean;
+  /** Texture mapping for the uvs, as for computeUVs (default "box"); false: none */
+  uvs?: MappingType | Mapping | false;
+  /** Skip grid blocks far from the surface, trusting the field to be about the distance (default true) */
+  sparse?: boolean;
+}
+
+export interface BlobMeshOptions extends Omit<SdfMeshOptions, "sparse"> {
+  /** How far shapes melt into each other, as a distance (default: a tenth of the model's size). A shape's own `blend` wins */
+  blend?: number;
+}
+
+/** One smooth mesh of shapes that melt together (added, subtracted or intersected, in order). */
+export function blobMesh(shapes: BlobShape[], opts?: BlobMeshOptions): Mesh;
+
+/** The distance field of blob shapes (negative inside), to mix with your own math and mesh with sdfMesh. */
+export function blobField(shapes: BlobShape[], opts?: { blend?: number }): (p: Vec3) => number;
+
+/** The surface where `field(p)` is 0 (negative inside), within `bounds`, as a mesh. */
+export function sdfMesh(field: (p: Vec3) => number, bounds: { min: Vec3; max: Vec3 }, opts?: SdfMeshOptions): Mesh;
