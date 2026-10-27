@@ -35,7 +35,7 @@ function paint(mesh, test) {
  * makes `segments` vertices per ring, ring after ring), pushed out a little. Its lower edge
  * is cut in a zigzag, so it ends in short, sharp points.
  */
-function tailTip(tail, path, segments, { points = 6, from = 0.82, depth = 0.13, rows = 30 } = {}) {
+function tailTip(tail, path, segments, { points = 6, from, depth, rows }) {
   const last = path.length - 1, S = segments, v = tail.vertices;
   const lerp = (a, b, f) => p(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f);
   // A point on ring k (k can be between two rings), corner a, 8% further from the middle
@@ -58,6 +58,29 @@ function tailTip(tail, path, segments, { points = 6, from = 0.82, depth = 0.13, 
   const end = vertices.push(lerp(path[last - 1], path[last], 1.6)) - 1;
   for (let a = 0; a < S; a++) faces.push([rows * S + ((a + 1) % S), rows * S + a, end]);
   return fixWinding({ vertices, faces }); // turn every face outward
+}
+
+/** Keeps only the faces of a mesh where `keep(faceIndex)` is true, with their materials and corner lists. */
+function keepFaces(mesh, keep) {
+  const ok = mesh.faces.map((_, i) => keep(i));
+  for (const key of ["faces", "faceUVs", "faceNormals", "faceMaterials"]) {
+    if (Array.isArray(mesh[key])) mesh[key] = mesh[key].filter((_, i) => ok[i]);
+  }
+  return mesh;
+}
+
+/**
+ * Removes the faces hidden inside other parts. The parts overlap (the white face sits half
+ * inside the head, the paws inside the legs...): those faces can't be seen, cost time, and
+ * the canvas renderer, which sorts faces instead of using a depth buffer, can draw them on top.
+ * `parts` are [mesh, offset] pairs, all closed. A face goes when all its corners are inside
+ * another part, so the faces along a seam stay on both sides and leave no gap.
+ */
+function trimHidden(parts) {
+  const queries = parts.map(([mesh]) => meshQuery(mesh)); // before any part loses faces
+  const hidden = parts.map(([mesh, off], i) => mesh.vertices.map((v) => parts.some(([, o], j) =>
+    j !== i && queries[j].contains(p(v.x + off.x - o.x, v.y + off.y - o.y, v.z + off.z - o.z)))));
+  parts.forEach(([mesh], i) => keepFaces(mesh, (k) => !mesh.faces[k].every((v) => hidden[i][v])));
 }
 
 /** Every mesh of the fox, at a level of detail (1 = full, 0.5 = about a quarter of the faces). */
@@ -107,7 +130,7 @@ function buildMeshes(detail) {
   });
   const ear = loft([
     { at: 0, outline: oval }, { at: 0.5, outline: oval, scale: 0.7 }, { at: 1, outline: [{ x: 0, y: 0 }] },
-  ], { path: spline([p(0, 0, 0), p(0, 0.13, -0.01), p(0, 0.25, -0.03)], { count: 14 }), segments: n(16), points: n(40) });
+  ], { path: spline([p(0, 0, 0), p(0, 0.13, -0.01), p(0, 0.25, -0.03)], { count: 14 }), segments: 16, points: 40 }); // full detail: the painted patch needs it
   ear.faceMaterials = paint(ear, (c, halfWidth) => c.z > 0 && c.y > 0.06 && Math.abs(c.x) < halfWidth * 0.62
     && c.y < 0.15 + 0.07 * zigzag(c.x * 18 + 0.5) ** 2);
 
@@ -120,7 +143,15 @@ function buildMeshes(detail) {
     segments,
   });
 
-  return { body, paws, ruff, head, face, ear, tail, tip: tailTip(tail, tailPath, segments, { rows: n(30) }) };
+  // The white tip covers the end of the tail: rows as close as the tail's rings, and the
+  // tail's rings under it (and its end cap) removed
+  const last = tailPath.length - 1, from = 0.82, depth = 0.13;
+  const tip = tailTip(tail, tailPath, segments, { from, depth, rows: Math.ceil((1 - from + depth) * last) });
+  keepFaces(tail, (k) => k < last * segments ? Math.floor(k / segments) < Math.floor(from * last) : k < last * segments + segments - 2);
+
+  const origin = p(0, 0, 0);
+  trimHidden([[body, origin], [paws, origin], [ruff, origin], [head, HEAD], [face, HEAD]]);
+  return { body, paws, ruff, head, face, ear, tail, tip };
 }
 
 // Eyes and nose: small flattened spheres
