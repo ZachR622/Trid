@@ -1,15 +1,14 @@
-import { Scene, makeShape, FlyCamera } from "./trid/index.js";
+import { Scene, makeShape, gridHelper, FlyCamera } from "./trid/index.js";
 
 export default function (canvas) {
-  const scene = new Scene(canvas, {
-    width: 800, height: 320, lineWidth: 2, camera: { y: 0.3, z: -3 },
-  });
+  const scene = new Scene(canvas, { width: 800, height: 320, camera: { y: 0.5, z: -2, pitch: -0.15 } });
 
-  // A field of cubes to fly through
-  const cube = makeShape("cube", { size: 0.3 });
+  // A field of blocks on a floor grid, to fly through
+  scene.add(gridHelper({ size: 14, divisions: 28 }));
+  const block = makeShape("cube", { size: 0.3 });
   for (let x = -3; x <= 3; x++) {
     for (let z = 0; z <= 6; z++) {
-      scene.add({ mesh: cube, pos: { x, y: 0, z }, color: `hsl(${(x + z) * 25}, 70%, 65%)` });
+      scene.add({ mesh: block, pos: { x, y: 0.15, z }, material: { fill: `hsl(${(x + z) * 25}, 70%, 65%)` } });
     }
   }
 

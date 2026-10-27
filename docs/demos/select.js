@@ -49,13 +49,13 @@ class SelectTool {
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 320, lineWidth: 2, camera: { z: -2.2 },
+    width: 800, height: 320, camera: { z: -2.2, fov: 0.6 },
   });
 
   ["cube", "sphere", "box"].forEach((kind, i) => scene.add({
-    mesh: makeShape(kind, { size: 0.4, r: 0.25, w: 0.5, h: 0.25, d: 0.3, rings: 8, segments: 12 }),
+    mesh: makeShape(kind, { size: 0.4, r: 0.25, w: 0.5, h: 0.25, d: 0.3, radius: 0.04, segments: 2 }),
     pos: { x: (i - 1) * 0.7, y: 0, z: 0 },
-    color: ["#E9806E", "#7ae96e", "#8ab4f8"][i],
+    material: { fill: ["#E9806E", "#7ae96e", "#8ab4f8"][i], smooth: true },
   }));
 
   scene.use(new OrbitCamera());

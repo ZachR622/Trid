@@ -2,7 +2,7 @@ import { Scene, makeShape, OrbitCamera, HoverHighlight } from "./trid/index.js";
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 320, camera: { z: -1.6 }, lineWidth: 1.5,
+    width: 800, height: 320, camera: { z: -1.6, fov: 0.85 }, lineWidth: 1.5,
   });
 
   const cube = scene.add({

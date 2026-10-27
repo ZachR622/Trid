@@ -27,7 +27,7 @@ for (let x = -0.33; x <= 0.33; x += 0.06) for (let y = -0.12; y <= 0.12; y += 0.
 }
 
 export default function (canvas) {
-  const scene = new Scene(canvas, { width: 800, height: 340, lineWidth: 1, camera: { z: -2 } });
+  const scene = new Scene(canvas, { width: 800, height: 340, lineWidth: 1, camera: { z: -2, fov: 0.6 } });
   const dot = makeShape("sphere", { r: 0.014, rings: 6, segments: 8 });
 
   const rockObj = scene.add({ mesh: rock, pos: p(-0.42, 0, 0), material: { fill: "#8a8f98", smooth: true } });

@@ -41,7 +41,7 @@ The WebGL renderer draws on a hidden canvas of its own, then copies the picture 
 
 ### Changing a mesh
 
-Meshes are sent to the graphics card the first time they're drawn and reused after that. If you change a mesh's vertices, edges or faces **in place** (like the [animated mesh](./examples#animated-mesh) example), mark it:
+Meshes are sent to the graphics card the first time they're drawn and reused after that. If you change a mesh's vertices, edges or faces **in place** (like the [animated mesh](./examples#waves) example), mark it:
 
 ```js
 mesh.vertices[0].y += 0.1;

@@ -1,4 +1,4 @@
-import { Scene } from "./trid/index.js";
+import { Scene, WebGLRenderer, bloom } from "./trid/index.js";
 
 // A square ring in the XY plane
 const ring = {
@@ -10,6 +10,8 @@ export default function (canvas) {
   const scene = new Scene(canvas, {
     width: 800, height: 340, lineWidth: 2, background: "#0b0b0b",
     camera: { z: 0, near: 0.05 },
+    renderer: WebGLRenderer.isSupported() ? new WebGLRenderer() : undefined,
+    post: [bloom({ threshold: 0.4, strength: 1 })], // the bright lines glow
   });
 
   const COUNT = 16, GAP = 0.6;

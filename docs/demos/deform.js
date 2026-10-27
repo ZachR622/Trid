@@ -12,7 +12,7 @@ const bent = bendMesh(column(), { angle: Math.PI / 2, toward: "x", from: 0.4, to
 const bulged = bulgeMesh(column(), { center: { x: 0.1, y: 0, z: 0 }, radius: 0.2, amount: 0.08 });
 
 export default function (canvas) {
-  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2 } });
+  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2, fov: 0.6 } });
   [tapered, twisted, bent, bulged].forEach((mesh, i) => {
     scene.add({ mesh, pos: { x: -0.75 + i * 0.5, y: 0, z: 0 }, material: { fill: ["#e5c07b", "#5f8fd8", "#98c379", "#E9806E"][i], wireframe: true } });
   });

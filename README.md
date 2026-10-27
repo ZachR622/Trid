@@ -8,7 +8,7 @@
 
 ---
 
-Trid gives you a scene, a camera, shapes, model loading and mouse/keyboard tools, all in plain ES modules you can drop next to your page.
+Trid gives you a scene, shapes you can model in code, lights, effects, model loading and mouse/keyboard tools, all in plain ES modules you can drop next to your page. See the [docs](https://zachr622.github.io/Trid/) for live demos.
 
 > **Status:** early (0.x): the API can still change between minor versions. See [Upgrading](#upgrading).
 
