@@ -32,6 +32,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/modeling/subdivide.js` | [`subdivideMesh`](./modeling#subdividemesh-mesh-opts) |
 | `trid/modeling/blobs.js` | [`blobMesh`, `blobField`, `sdfMesh`](./modeling#blobs) |
 | `trid/modeling/bevel.js` | [`bevelMesh`](./modeling#bevelmesh-mesh-opts) |
+| `trid/modeling/query.js` | [`meshQuery`, `raycastMesh`, `pointInMesh`, `distanceToMesh`, `closestPointOnMesh`, `isClosed`, `raycastScene`, `clearQueryCache`](./modeling#rays-inside-and-distance) |
 | `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `loadMaterials`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |
 | `trid/export/obj.js` | [`exportOBJ`](./export#obj-files) |
@@ -306,6 +307,8 @@ if (hit?.textureUV) {
 Objects with `pickable: false`, or inside a group with it (like a [grid](./shapes#floor-grids)), are skipped by `pick` and `pickHit`. `isPickable(obj)` tells whether an object can be found.
 
 Faces with a corner behind the camera's near plane are skipped. It's one pass over the objects' vertices per call: fine for clicks and hover on models of a few thousand faces.
+
+To cast a ray from any point in the world instead of from a pixel, see [`raycastScene`](./modeling#raycastscene-scene-origin-direction-opts).
 
 ### screenBounds
 
