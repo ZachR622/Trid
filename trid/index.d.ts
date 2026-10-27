@@ -1951,3 +1951,99 @@ export interface BevelOptions {
  * Edges along an open border stay sharp.
  */
 export function bevelMesh(mesh: Mesh, opts?: BevelOptions): Mesh;
+
+// Modeling: queries (rays, inside, distance)
+
+/** Which faces a ray counts: "both" (default), "front" (hit from outside) or "back" (hit from inside). */
+export type RaySide = "both" | "front" | "back";
+
+export interface RaycastOptions {
+  /** Ignore hits farther than this (default Infinity) */
+  maxDistance?: number;
+  /** Which faces count (default "both") */
+  side?: RaySide;
+}
+
+/** Where a ray met a mesh, in the mesh's own space. */
+export interface MeshHit {
+  point: Vec3;
+  /** Unit normal of the face, pointing out of the mesh (whichever side the ray came from) */
+  normal: Vec3;
+  /** From the ray's origin */
+  distance: number;
+  /** Index in `mesh.faces` */
+  face: number;
+  /** true when the ray met the face from outside */
+  front: boolean;
+  /** The 3 vertex indices of the triangle hit (faces with more corners are fans from their first corner) */
+  triangle: [number, number, number];
+  /** Weights of those vertices at the point (they add up to 1) */
+  barycentric: [number, number, number];
+}
+
+/** The nearest point of a mesh's surface. */
+export type MeshClosest = Omit<MeshHit, "front">;
+
+/** A mesh prepared for many questions (a snapshot: editing the mesh later doesn't change it). */
+export interface MeshQuery {
+  /** Triangles in the query (faces split into fans) */
+  readonly triangleCount: number;
+  /** The mesh's box */
+  readonly bounds: { min: Vec3; max: Vec3 };
+  /** The first place a ray meets the surface, or null. `direction` can be any length but zero */
+  raycast(origin: Vec3, direction: Vec3, opts?: RaycastOptions): MeshHit | null;
+  /** Whether a point is inside (only meaningful for a closed mesh, see `isClosed`) */
+  contains(p: Vec3): boolean;
+  /** The nearest point of the surface, or null when nothing is within `maxDistance` */
+  closest(p: Vec3, opts?: { maxDistance?: number }): MeshClosest | null;
+  /** Distance to the surface (Infinity when nothing is within `maxDistance`) */
+  distance(p: Vec3, maxDistance?: number): number;
+}
+
+/** Prepares a mesh for many ray, inside and distance questions (builds a BVH once). */
+export function meshQuery(mesh: Mesh): MeshQuery;
+
+/** One-off `meshQuery(mesh).raycast(...)`. For many rays on one mesh, keep a `meshQuery`. */
+export function raycastMesh(mesh: Mesh, origin: Vec3, direction: Vec3, opts?: RaycastOptions): MeshHit | null;
+
+/** One-off `meshQuery(mesh).contains(p)`. */
+export function pointInMesh(mesh: Mesh, p: Vec3): boolean;
+
+/** One-off `meshQuery(mesh).distance(p, maxDistance)`. */
+export function distanceToMesh(mesh: Mesh, p: Vec3, maxDistance?: number): number;
+
+/** One-off `meshQuery(mesh).closest(p, opts)`. */
+export function closestPointOnMesh(mesh: Mesh, p: Vec3, opts?: { maxDistance?: number }): MeshClosest | null;
+
+/** Whether a mesh is closed (watertight): every edge, matched by position, shared by exactly two faces. */
+export function isClosed(mesh: Mesh): boolean;
+
+/** What `raycastScene` found: a `MeshHit` in world space, plus the object. */
+export interface SceneHit extends MeshHit {
+  object: SceneObject;
+  /** The object, then its groups up to the top: `[part, group, ..., root]` */
+  path: SceneObject[];
+  /** Where the hit is, in the mesh's own space (`point` is in the world) */
+  local: Vec3;
+}
+
+export interface RaycastSceneOptions extends RaycastOptions {
+  /** Return false to skip an object */
+  filter?: (obj: SceneObject) => boolean;
+  /** Only these objects (and their children) */
+  objects?: SceneObjectInput[];
+}
+
+/**
+ * The first object a ray meets, in world space (the 3D version of `pickHit`).
+ * Hidden objects, `pickable: false` ones and objects without faces are skipped.
+ */
+export function raycastScene(
+  scene: Scene | SceneObjectInput[],
+  origin: Vec3,
+  direction: Vec3,
+  opts?: RaycastSceneOptions,
+): SceneHit | null;
+
+/** Forgets the prepared query `raycastScene` keeps for a mesh (after editing it in place once `dirty` was cleared). */
+export function clearQueryCache(mesh: Mesh): void;

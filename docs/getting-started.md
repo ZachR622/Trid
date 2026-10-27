@@ -1,20 +1,21 @@
 # Introduction
 
-**Trid** is a small 3D renderer for the HTML `<canvas>`. No dependencies, no build step.
+**Trid** is a small 3D library for the HTML `<canvas>`: build shapes in code, light them, and draw them with Canvas 2D or WebGL. No dependencies, no build step.
 
 ## What it does
 
-- **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
-- **Shapes** — cubes, boxes and spheres out of the box, or any mesh you define as vertices and edges.
-- **Filled faces** — fill and shade any mesh with a material (flat or smooth), or keep it as a wireframe.
-- **Textures** — images, canvases or videos on any mesh, wrapped by its own texture coordinates or by planar, box, sphere and cylinder mapping, with a material per face if you like.
-- **Export** — screenshots, videos of the canvas, and OBJ files of your meshes.
-- **Effects** — toon, rim glow, gradients, fog, or your own shaders, stacked on a material.
-- **Two renderers** — the canvas 2D context by default, or WebGL for exact depth and big models.
-- **OBJ files** — load models from a URL or let users drop their own `.obj` files.
-- **Camera** — position, yaw, pitch, field of view, with near-plane clipping so nothing behind the camera is drawn.
-- **Tools** — ready-made orbit and fly cameras, object dragging, hover highlighting and an FPS meter. Writing your own is a plain object with a few methods.
-- **Pure math** — every transform and projection function is exported, so you can use the pipeline piece by piece.
+- **Scene and groups** — a scene holds a canvas, a camera, lights and your objects, and runs the frame loop. Objects can hold children that move, turn and scale with them.
+- **Shapes** — cubes, rounded boxes, spheres, cylinders, cones, tori and planes, shapes turned around an axis (`lathe`) or pushed out of an outline (`extrude`), or any mesh you write as vertices and faces.
+- **Modeling** — smooth curves, sweeps along a path, lofts through cross-sections, blobs that melt together, subdivision, bevels, taper / twist / bend / bulge, and cleanup tools for broken meshes.
+- **Materials and lights** — fill colors, flat or smooth shading, ambient, directional and point lights in any color.
+- **Textures** — images, canvases or videos, or textures made in code (marble, wood, bricks…), wrapped by the mesh's own coordinates or by planar, box, sphere and cylinder mapping, with a material per face if you like.
+- **Effects** — toon, rim glow, gradients, fog or your own shaders on a material, and bloom, vignette, color grading and grain on the whole picture.
+- **Two renderers** — the canvas 2D context by default, or WebGL for exact depth, per-pixel lighting and big models.
+- **Picking and rays** — the exact triangle under the mouse, rays cast through a scene, inside tests and distances.
+- **Tools** — orbit and fly cameras, move / rotate / scale gizmos, a view cube, dragging, hover highlight and an FPS meter. Writing your own is a plain object with a few methods.
+- **Files** — load `.obj` / `.mtl` models, export OBJ for Blender and other 3D programs, take screenshots and record videos.
+- **Noise** — seeded random numbers and smooth noise for rocks, terrain and anything that shouldn't look made by hand.
+- **Pure math** — every transform, projection and matrix function is exported, so you can use the pipeline piece by piece.
 
 ## Install
 
@@ -38,7 +39,7 @@ For a plain HTML page, load Trid from [jsDelivr](https://www.jsdelivr.com/) with
 
 ```html
 <script type="importmap">
-  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.1/trid/index.js" } }
+  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.5/trid/index.js" } }
 </script>
 <script type="module">
   import { Scene, makeShape } from "trid3d";
@@ -74,17 +75,23 @@ Add a canvas and load your script as a module:
 Then create a scene, add a shape and start the loop in `main.js`:
 
 ```js
-import { Scene, makeShape } from "trid3d"; // or "./trid/index.js"
+import { Scene, makeShape, OrbitCamera } from "trid3d"; // or "./trid/index.js"
 
 const scene = new Scene(document.getElementById("canvas"), {
   width: 800, height: 300,
+  camera: { z: -1.6, fov: 0.6 }, // a step back, with a narrower lens
 });
 
-const cube = scene.add({ mesh: makeShape("cube"), color: "#E9806E" });
+// A cube with rounded edges, filled and smoothly shaded
+const cube = scene.add({
+  mesh: makeShape("cube", { radius: 0.08 }),
+  material: { fill: "#E9806E", smooth: true },
+});
 
+scene.use(new OrbitCamera()); // drag to turn around it
 scene.start((dt) => {
-  cube.rot.x += dt;
-  cube.rot.y += dt * 0.7;
+  cube.rot.x += dt * 0.5;
+  cube.rot.y += dt * 0.35;
 });
 ```
 
@@ -113,11 +120,15 @@ In your own page, use the body of that function with `const canvas = document.ge
 ## Current limits
 
 - With the default canvas renderer, filled faces are sorted far to near, so faces that cross each other can be drawn in the wrong order (`maxFaceSize` reduces this). The [WebGL renderer](./renderers) doesn't have this limit.
-- Picking (used by dragging and hover) tests each object's *screen-space bounding box*, so clicking near a sphere's corner still picks it.
+- No shadows yet: lights brighten and darken faces, but objects don't cast shadows on each other.
+- `pick`, `DragObject` and `HoverHighlight` test each object's *screen-space bounding box* by default, which is fast but rough. Pass `exact: true` to test triangles (see [`pickHit`](./api#pickhit)).
 
 ## Where to go next
 
 - [Core concepts](./concepts) — coordinates, meshes, objects and the camera
 - [Scene](./scene) — everything the `Scene` class can do
+- [Modeling](./modeling/) — building your own shapes in code
+- [Lights](./lights) and [Effects](./effects) — making it look good
 - [Tools](./tools) — mouse and keyboard controls in one line
+- [Examples](./examples) — small complete programs, like a solar system
 - [API reference](./api) — every exported function and class

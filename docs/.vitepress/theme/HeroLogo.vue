@@ -1,67 +1,56 @@
 <script setup lang="ts">
-// The home page logo: a cube, drawn live by Trid.
-// It sits still; drag it to turn it around.
-import { ref, onMounted } from "vue";
-import { drawInstance } from "../../../trid/render/draw.js";
-import { makeShape } from "../../../trid/render/shapes.js";
-import { cameraForward } from "../../../trid/math/transform.js";
+// The home page logo: the fox from docs/demos/fox.js on its round platform, drawn
+// live by Trid on a see-through canvas. It stays still; drag to turn around it.
+import { ref, onMounted, onBeforeUnmount } from "vue";
 
 const canvas = ref<HTMLCanvasElement>();
+let destroy: (() => void) | undefined;
+let unmounted = false;
 
-const cube = {
-  mesh: makeShape("cube", { size: 0.75 }),
-  pos: { x: 0, y: 0, z: 0 },
-  rot: { x: 0, y: 0, z: 0 },
-  scale: { x: 1, y: 1, z: 1 },
-};
-
-// The camera circles the cube (like OrbitCamera), starting at a 3/4 view from above
-const DISTANCE = 2.05;
-const SPEED = 0.01; // radians per dragged pixel
-const MAX_PITCH = Math.PI / 2 - 0.01;
-const camera = { x: 0, y: 0, z: 0, yaw: -0.6, pitch: -0.45, fov: 0.9 };
-
-function placeCamera() {
-  camera.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, camera.pitch));
-  const f = cameraForward(camera);
-  camera.x = -f.x * DISTANCE;
-  camera.y = -f.y * DISTANCE;
-  camera.z = -f.z * DISTANCE;
-}
-
-onMounted(() => {
+onMounted(async () => {
+  // Loaded here, so the fox is only built in the browser
+  const [{ Scene, WebGLRenderer, OrbitCamera }, { makeFox, makePlatform }] = await Promise.all([
+    import("../../../trid/index.js"),
+    import("../../demos/fox.js"),
+  ]);
+  if (unmounted) return;
   const el = canvas.value!;
-  const ctx = el.getContext("2d")!;
-  const { width: w, height: h } = el;
+  const p = (x: number, y: number, z: number) => ({ x, y, z });
 
-  const draw = () => {
-    placeCamera();
-    ctx.clearRect(0, 0, w, h);
-    drawInstance(ctx, cube, camera, w, h, "#e9806e", 6);
-  };
-
-  let last: { x: number; y: number } | null = null;
-  el.addEventListener("pointerdown", (e) => {
-    last = { x: e.clientX, y: e.clientY };
-    el.setPointerCapture(e.pointerId);
+  const webgl = WebGLRenderer.isSupported();
+  const scene = new Scene(el, {
+    background: "transparent",
+    camera: { fov: 0.6 },
+    renderer: webgl ? new WebGLRenderer() : undefined,
+    lights: [
+      { type: "ambient", intensity: 0.55 },
+      { type: "directional", direction: p(-0.4, 0.8, 1), intensity: 0.6, color: "#fff4e6" },  // key, from the front
+      { type: "directional", direction: p(0.5, -0.3, 0.6), intensity: 0.25, color: "#fff4e6" }, // fill from below, so the chin isn't dark
+      { type: "directional", direction: p(0.6, 0.6, -1), intensity: 0.45, color: "#ffe9d6" },  // rim, from behind
+    ],
   });
-  el.addEventListener("pointermove", (e) => {
-    if (!last) return;
-    camera.yaw += (e.clientX - last.x) * SPEED;
-    camera.pitch -= (e.clientY - last.y) * SPEED;
-    last = { x: e.clientX, y: e.clientY };
-    draw();
-  });
-  const end = () => (last = null);
-  el.addEventListener("pointerup", end);
-  el.addEventListener("pointercancel", end);
+  scene.add(makePlatform());
+  // Without WebGL the canvas renderer sorts and draws every face itself: a lighter fox keeps it smooth
+  scene.add(makeFox({ detail: webgl ? 1 : 0.5 }));
 
-  draw();
+  // Turns only when dragged: no auto-rotate, and no zoom or pan (the page keeps its scroll)
+  scene.use(new OrbitCamera({ target: p(0, 0.33, 0), distance: 2.6, yaw: Math.PI + 0.5, pitch: -0.28, zoom: false, pan: false }));
+
+  scene.start(() => {
+    // The renderers paint the background each frame; a see-through one needs clearing here
+    scene.ctx.clearRect(0, 0, el.width, el.height);
+  });
+  destroy = () => scene.destroy();
+});
+
+onBeforeUnmount(() => {
+  unmounted = true;
+  destroy?.();
 });
 </script>
 
 <template>
-  <canvas ref="canvas" class="hero-logo" width="960" height="600" aria-label="Trid logo: a cube you can drag to rotate" role="img"></canvas>
+  <canvas ref="canvas" class="hero-logo" width="960" height="600" aria-label="Trid logo: a fox made in code, drag to turn around it" role="img"></canvas>
 </template>
 
 <style scoped>
@@ -73,6 +62,7 @@ onMounted(() => {
   aspect-ratio: 16 / 10;
   transform: translate(-50%, -50%);
   touch-action: none;
+  cursor: grab;
 }
 
 .hero-logo:active {

@@ -21,17 +21,17 @@ const labels = {
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 340, lineWidth: 2, camera: { y: 0.4, z: -2.2 },
+    width: 800, height: 340, camera: { fov: 0.6 },
   });
 
-  ["cube", "sphere", "box"].forEach((kind, i) => scene.add({
-    mesh: makeShape(kind, { size: 0.4, r: 0.25, w: 0.5, h: 0.3, d: 0.3 }),
+  ["cube", "sphere", "torus"].forEach((kind, i) => scene.add({
+    mesh: makeShape(kind, { size: 0.4, radius: 0.05, r: 0.25, R: 0.2, tube: 0.07 }),
     pos: { x: (i - 1) * 0.75, y: 0, z: 0 },
-    color: ["#E9806E", "#7ae96e", "#8ab4f8"][i],
-    label: kind,
+    material: { fill: ["#E9806E", "#7ae96e", "#8ab4f8"][i], smooth: true },
+    label: kind, // any field you like: the tool below reads it
   }));
 
-  scene.use(new OrbitCamera());
+  scene.use(new OrbitCamera({ pitch: -0.2, distance: 2.4 }));
   scene.use(labels);
   scene.start((dt) => scene.objects.forEach((o) => (o.rot.y += dt * 0.4)));
 

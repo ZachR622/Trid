@@ -2,7 +2,7 @@ import { Scene, makeShape, extrude, OrbitCamera, TransformGizmo, pickHit } from 
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 380, lineWidth: 1, camera: { y: 0.5, z: -2 },
+    width: 800, height: 380, lineWidth: 1, camera: { y: 0.5, z: -2, fov: 0.7 },
   });
   const mat = (fill) => ({ fill, smooth: true });
 

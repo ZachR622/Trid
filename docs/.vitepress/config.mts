@@ -7,7 +7,7 @@ const tridDir = path.join(repoRoot, "trid");
 
 export default defineConfig({
   title: "Trid",
-  description: "A small 3D renderer for the HTML canvas.",
+  description: "A small 3D library for the HTML canvas: model, light and draw 3D with Canvas 2D or WebGL.",
   // For GitHub Pages at https://zachr622.github.io/Trid/, build with DOCS_BASE=/Trid/
   base: process.env.DOCS_BASE ?? "/",
   srcExclude: ["README.md"],
@@ -38,7 +38,19 @@ export default defineConfig({
           { text: "Groups", link: "/groups" },
           { text: "Shapes & meshes", link: "/shapes" },
           { text: "Random & noise", link: "/noise" },
-          { text: "Modeling", link: "/modeling" },
+          {
+            text: "Modeling",
+            link: "/modeling/",
+            collapsed: false,
+            items: [
+              { text: "Curves, sweeps & lofts", link: "/modeling/curves" },
+              { text: "Subdivision & bevels", link: "/modeling/smoothing" },
+              { text: "Blobs", link: "/modeling/blobs" },
+              { text: "Deformers", link: "/modeling/deformers" },
+              { text: "Cleanup and checks", link: "/modeling/cleanup" },
+              { text: "Rays, inside and distance", link: "/modeling/queries" },
+            ],
+          },
           { text: "Filled faces", link: "/faces" },
           { text: "Renderers", link: "/renderers" },
           { text: "Textures", link: "/textures" },

@@ -4,16 +4,16 @@ export default function (canvas) {
   const scene = new Scene(canvas, { width: 800, height: 320, camera: { z: -2.2, fov: 0.7 } });
 
   const box = scene.add({
-    name: "box", mesh: makeShape("cube", { size: 0.5 }), pos: { x: -0.7, y: 0, z: 0 },
-    material: { fill: "#E9806E" },
+    name: "box", mesh: makeShape("cube", { size: 0.5, radius: 0.05, segments: 2 }), pos: { x: -0.7, y: 0, z: 0 },
+    material: { fill: "#E9806E", smooth: true },
   });
   const ball = scene.add({
     name: "ball", mesh: makeShape("sphere", { r: 0.3 }), pos: { x: 0.1, y: 0, z: 0 },
     material: { fill: "#8ab4f8", smooth: true },
   });
   const ring = scene.add({
-    name: "ring", mesh: makeShape("sphere", { r: 0.25, rings: 4, segments: 10 }), pos: { x: 0.85, y: 0, z: 0 },
-    color: "#7ae96e", lineWidth: 2,
+    name: "ring", mesh: makeShape("torus", { R: 0.22, tube: 0.07 }), pos: { x: 0.85, y: 0, z: 0 },
+    material: { fill: "#7ae96e", smooth: true },
   });
 
   scene.use(new OrbitCamera({ pitch: -0.3 }));

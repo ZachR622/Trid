@@ -13,9 +13,9 @@ const knot = spline([
 const curve = { vertices: knot, edges: knot.slice(1).map((_, i) => [i, i + 1]) };
 
 export default function (canvas) {
-  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2.2 } });
-  scene.add({ mesh: rough, pos: { x: -0.8, y: 0, z: 0 }, material: { fill: "#8a8f98", wireframe: true } });
-  scene.add({ mesh: smooth, pos: { x: 0, y: 0, z: 0 }, material: { fill: "#5f8fd8", wireframe: true } });
+  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2.2, fov: 0.6 } });
+  scene.add({ mesh: rough, pos: { x: -0.8, y: 0, z: 0 }, material: { fill: "#8a8f98", wireframe: true, doubleSided: true } }); // open at the top: draw the inside too
+  scene.add({ mesh: smooth, pos: { x: 0, y: 0, z: 0 }, material: { fill: "#5f8fd8", wireframe: true, doubleSided: true } });
   scene.add({ mesh: curve, pos: { x: 0.8, y: 0, z: 0 }, color: "#e5c07b" });
 
   scene.use(new OrbitCamera({ pitch: -0.25, autoRotate: true, autoRotateSpeed: 0.4, autoRotateDelay: 2 }));

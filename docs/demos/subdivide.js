@@ -14,7 +14,7 @@ const creased = subdivideMesh(makeShape("box", { w: 0.4, h: 0.3, d: 0.3 }), { le
 const soft = subdivideMesh(makeShape("box", { w: 0.4, h: 0.3, d: 0.3 }), { levels: 3 });
 
 export default function (canvas) {
-  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2 } });
+  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2, fov: 0.6 } });
   scene.add({ mesh: cage, pos: { x: -0.8, y: 0, z: 0 }, material: { fill: "#8a8f98", wireframe: true } });
   scene.add({ mesh: smooth, pos: { x: -0.25, y: 0, z: 0 }, material: { fill: "#e5c07b", smooth: true } });
   scene.add({ mesh: soft, pos: { x: 0.3, y: 0, z: 0 }, material: { fill: "#5f8fd8", smooth: true } });

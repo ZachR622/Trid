@@ -1,7 +1,7 @@
 import { Scene, makeShape, OrbitCamera } from "./trid/index.js";
 
 export default function (canvas) {
-  const scene = new Scene(canvas, { width: 800, height: 300, camera: { z: -1.4 } });
+  const scene = new Scene(canvas, { width: 800, height: 300, camera: { z: -1.4, fov: 0.9 } });
 
   // The same low-poly sphere, flat on the left and smooth on the right
   const ball = makeShape("sphere", { r: 0.35, rings: 8, segments: 12 });

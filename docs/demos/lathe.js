@@ -14,9 +14,9 @@ const star = extrude(Array.from({ length: 10 }, (_, i) => {
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 320, lineWidth: 1, camera: { z: -2 },
+    width: 800, height: 320, lineWidth: 1, camera: { z: -2, fov: 0.6 },
   });
-  scene.add({ mesh: vase, pos: { x: -0.45, y: 0, z: 0 }, material: { fill: "#5f8fd8", wireframe: true } });
+  scene.add({ mesh: vase, pos: { x: -0.45, y: 0, z: 0 }, material: { fill: "#5f8fd8", wireframe: true, doubleSided: true } }); // open at the top: draw the inside too
   const s = scene.add({ mesh: star, pos: { x: 0.45, y: 0, z: 0 }, material: { fill: "#e5c07b", wireframe: true } });
 
   scene.use(new OrbitCamera({ pitch: -0.25, autoRotate: true, autoRotateSpeed: 0.4, autoRotateDelay: 2 }));

@@ -2,7 +2,7 @@ import { Scene, makeShape, displaceMesh, fbm2, fbm3, OrbitCamera } from "./trid/
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 340, lineWidth: 1, camera: { z: -2.4 },
+    width: 800, height: 340, lineWidth: 1, camera: { z: -2.4, fov: 0.6 },
   });
 
   // A rock: a sphere pushed in and out by 3D noise (no seam, since it's sampled in 3D)
@@ -17,7 +17,7 @@ export default function (canvas) {
     size: 1, div: 32,
     height: (x, z) => 0.8 * (fbm2(x * 3 + 10, z * 3, { octaves: 4 }) - 0.5),
   });
-  scene.add({ mesh: hills, pos: { x: 0.6, y: -0.15, z: 0 }, material: { fill: "#6fae5c", smooth: true } });
+  scene.add({ mesh: hills, pos: { x: 0.6, y: -0.15, z: 0 }, material: { fill: "#6fae5c", smooth: true, doubleSided: true } }); // a sheet: both sides show
 
   scene.use(new OrbitCamera({ pitch: -0.45, autoRotate: true, autoRotateSpeed: 0.3, autoRotateDelay: 2 }));
   scene.start();

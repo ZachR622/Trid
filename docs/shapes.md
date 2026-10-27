@@ -6,7 +6,7 @@ Build meshes with `makeShape`, spin a profile with `lathe`, thicken an outline w
 import { makeShape, lathe, extrude, scaleMesh, transformMesh, mergeMeshes } from "./trid/index.js";
 ```
 
-<Demo src="shapes" hint="cube · box · sphere · custom pyramid / cylinder · cone · torus · plane — drag to orbit" />
+<Demo src="shapes" hint="cube · rounded box · sphere · your own pyramid / cylinder · cone · torus · plane — the lines show how each is built · drag to orbit" />
 
 <<< @/demos/shapes.js
 
@@ -34,7 +34,7 @@ With a `radius`, a cube or box gets rounded edges and corners: furniture, device
 const phone = makeShape("box", { w: 0.35, h: 0.7, d: 0.04, radius: 0.015 });
 ```
 
-To round the edges of any other mesh, use [`bevelMesh`](./modeling#bevelmesh-mesh-opts).
+To round the edges of any other mesh, use [`bevelMesh`](./modeling/smoothing#bevelmesh-mesh-opts).
 
 ### Plane heights
 

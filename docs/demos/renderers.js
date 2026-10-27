@@ -23,7 +23,7 @@ export default function (canvas) {
   const button = document.createElement("button");
   const show = () => {
     const gl = scene.renderer === webgl;
-    label.textContent = gl ? "WebGL: exact, per pixel" : "Canvas 2D: sorted faces";
+    label.textContent = gl ? "WebGL: exact, per pixel" : webgl ? "Canvas 2D: sorted faces" : "Canvas 2D (WebGL isn't available in this browser)";
     button.textContent = gl ? "Use Canvas 2D" : "Use WebGL";
   };
   button.onclick = () => {

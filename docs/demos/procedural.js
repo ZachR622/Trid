@@ -2,7 +2,7 @@ import { Scene, makeShape, makeTexture, TEXTURE_STYLES, OrbitCamera, WebGLRender
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 380, camera: { z: -3.1 },
+    width: 800, height: 380, camera: { z: -3.1, fov: 0.7 },
     renderer: WebGLRenderer.isSupported() ? new WebGLRenderer() : undefined,
   });
 

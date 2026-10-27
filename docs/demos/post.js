@@ -3,7 +3,7 @@ import { Scene, makeShape, gridHelper, WebGLRenderer, OrbitCamera, unlit, bloom,
 export default function (canvas) {
   const effects = { bloom: bloom({ threshold: 0.6 }), grade: grade({ saturation: 1.3, contrast: 1.1 }), vignette: vignette({ strength: 0.7 }), grain: grain() };
   const scene = new Scene(canvas, {
-    width: 800, height: 360, background: "#0d0d12", camera: { y: 0.6, z: -2.4 },
+    width: 800, height: 360, background: "#0d0d12", camera: { y: 0.6, z: -2.4, fov: 0.7 },
     renderer: WebGLRenderer.isSupported() ? new WebGLRenderer() : undefined,
     post: Object.values(effects),
   });

@@ -1,4 +1,4 @@
-import { Scene, parseOBJ, OrbitCamera, ObjUploader } from "./trid/index.js";
+import { Scene, parseOBJ, fixWinding, OrbitCamera, ObjUploader } from "./trid/index.js";
 
 // A small house, written as OBJ text, shown until you load your own file
 const HOUSE = `
@@ -25,17 +25,22 @@ f 6 7 10 9
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 400, lineWidth: 1.5, color: "#E9806E", camera: { z: -2 },
+    width: 800, height: 400, lineWidth: 1, color: "#00000066", camera: { z: -2, fov: 1.1 },
   });
 
-  const house = scene.add({ mesh: parseOBJ(HOUSE, { fit: 1 }) });
+  // fit: 1 scales and centers the model to fit in a 1-unit box.
+  // Files often have some faces turned the wrong way: fixWinding turns them all outward.
+  const look = { fill: "#E9806E", wireframe: true };
+  const house = scene.add({ mesh: fixWinding(parseOBJ(HOUSE, { fit: 1 })), material: look });
 
   scene.use(new OrbitCamera({ pitch: -0.3, yaw: -0.5 }));
   const uploader = scene.use(new ObjUploader({
     hint: "",
     onLoad: (obj, file) => {
       scene.remove(house);
-      status.textContent = `${file.name} · ${obj.mesh.vertices.length} vertices · ${obj.mesh.edges.length} edges`;
+      fixWinding(obj.mesh);
+      obj.material ??= { ...look, smooth: true }; // files without a .mtl get the same look
+      status.textContent = `${file.name} · ${obj.mesh.vertices.length} vertices · ${obj.mesh.faces?.length ?? 0} faces`;
     },
     onError: (err) => (status.textContent = err.message),
   }));

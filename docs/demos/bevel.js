@@ -17,7 +17,7 @@ const oneEdge = bevelMesh(block, { edges: [[a, b]], radius: 0.08, segments: 6 })
 const cut = bevelMesh(makeShape("cube", { size: 0.3 }), { mode: "vertices", radius: 0.07, segments: 1 });
 
 export default function (canvas) {
-  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2 } });
+  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2, fov: 0.65 } });
   const items = [[starBevel, "#e5c07b"], [knob, "#5f8fd8"], [oneEdge, "#98c379"], [cut, "#E9806E"]];
   items.forEach(([mesh, fill], i) => scene.add({ mesh, pos: { x: -0.75 + i * 0.5, y: 0, z: 0 }, rot: { x: 0.5, y: 0.6, z: 0 }, material: { fill, smooth: true } }));
   scene.use(new OrbitCamera({ pitch: -0.25, autoRotate: true, autoRotateSpeed: 0.4, autoRotateDelay: 2 }));

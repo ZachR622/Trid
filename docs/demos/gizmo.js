@@ -1,20 +1,20 @@
-import { Scene, makeShape, OrbitCamera, ViewGizmo, TransformGizmo, pick } from "./trid/index.js";
+import { Scene, makeShape, gridHelper, OrbitCamera, ViewGizmo, TransformGizmo, pick } from "./trid/index.js";
 
 const MODES = ["move", "rotate", "scale"];
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 380, lineWidth: 1, camera: { y: 0.8, z: -2.6 },
+    width: 800, height: 380, camera: { fov: 0.6 }, lineWidth: 1,
   });
 
   const shapes = [
-    scene.add({ mesh: makeShape("cube", { size: 0.4 }), pos: { x: -0.7, y: 0, z: 0 }, material: { fill: "#E9806E" } }),
+    scene.add({ mesh: makeShape("cube", { size: 0.4, radius: 0.04, segments: 2 }), pos: { x: -0.7, y: 0, z: 0 }, material: { fill: "#E9806E", smooth: true } }),
     scene.add({ mesh: makeShape("torus", { R: 0.22, tube: 0.07 }), pos: { x: 0, y: 0, z: 0 }, material: { fill: "#e5c07b", smooth: true } }),
     scene.add({ mesh: makeShape("cone", { r: 0.2, h: 0.45 }), pos: { x: 0.7, y: 0, z: 0 }, material: { fill: "#7ae96e", smooth: true } }),
   ];
-  scene.add({ mesh: makeShape("plane", { size: 2.4, div: 12 }), pos: { x: 0, y: -0.3, z: 0 }, color: "#333" });
+  scene.add({ ...gridHelper({ size: 2.4, divisions: 12 }), pos: { x: 0, y: -0.3, z: 0 } });
 
-  scene.use(new OrbitCamera({ pitch: -0.35 }));
+  scene.use(new OrbitCamera({ pitch: -0.35, distance: 2 }));
   // Added after the camera, so they get clicks first
   scene.use(new ViewGizmo());
   const gizmo = scene.use(new TransformGizmo({ targets: [shapes[1]] }));

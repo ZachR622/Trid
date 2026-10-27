@@ -25,10 +25,10 @@ const road = sweep(spline([
 });
 
 export default function (canvas) {
-  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2.2 } });
+  const scene = new Scene(canvas, { width: 800, height: 320, lineWidth: 1, camera: { z: -2.2, fov: 0.6 } });
   scene.add({ mesh: tail, pos: { x: -0.8, y: 0, z: 0 }, material: { fill: "#e5c07b", smooth: true } });
   scene.add({ mesh: knot, pos: { x: 0, y: 0, z: 0 }, material: { fill: "#5f8fd8", wireframe: true } });
-  scene.add({ mesh: road, pos: { x: 0.8, y: 0, z: 0 }, material: { fill: "#98c379", wireframe: true } });
+  scene.add({ mesh: road, pos: { x: 0.8, y: 0, z: 0 }, material: { fill: "#98c379", wireframe: true, doubleSided: true } }); // a flat strip: both sides show
 
   scene.use(new OrbitCamera({ pitch: -0.25, autoRotate: true, autoRotateSpeed: 0.4, autoRotateDelay: 2 }));
   scene.start();
