@@ -4,7 +4,7 @@
 
 <h1 align="center">Trid</h1>
 
-<p align="center">A small 3D library for the HTML canvas. No dependencies, no build step.</p>
+<p align="center">Model, light and draw 3D on the HTML canvas. No dependencies, no build step.</p>
 
 ---
 
@@ -14,9 +14,9 @@ Trid gives you a scene, shapes you can model in code, lights, effects, model loa
 
 ## Features
 
-- **Scene** — holds a canvas, a camera and your objects, and runs the frame loop for you.
+- **Scene** — holds a canvas, a camera, lights and your objects, and runs the frame loop for you. The background can be a color or see-through (`"transparent"`), so a model can float over your page.
 - **Groups** — give any object `children` and they move, turn and scale with it (models made of parts, a moon orbiting a planet).
-- **Shapes** — cubes, boxes (sharp or rounded), spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes and `extrude` for flat ones, or any mesh you define as vertices and edges.
+- **Shapes** — cubes, boxes (sharp or rounded), spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes (a point on the axis closes it to a tip) and `extrude` for flat ones, or any mesh you define as vertices, faces and edges.
 - **Modeling** — smooth curves through a few points (`spline`), shapes swept along a 3D path (`sweep`: tails, horns, pipes, rails), surfaces through cross-sections (`loft`: bodies, bottles, hulls, heads), subdivision surfaces with creases (`subdivideMesh`: box modeling), shapes that melt together (`blobMesh`: creatures, clay; or any distance field with `sdfMesh`), rounded or cut edges on any mesh (`bevelMesh`), taper, twist, bend and bulge deformers, mesh cleanup and checks (weld, clean, validate, fix winding), and rays, inside tests and distances against meshes and scenes (`meshQuery`, `raycastScene`).
 - **Mesh helpers** — clone, transform, displace, merge and measure meshes; seeded random numbers and smooth noise (`fbm2`, `fbm3`, tileable) for rocks, terrain and procedural textures.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth.
@@ -27,7 +27,7 @@ Trid gives you a scene, shapes you can model in code, lights, effects, model loa
 - **Two renderers** — the canvas 2D context by default, or `WebGLRenderer` for exact depth and big models, with the same scene code.
 - **OBJ files** — load models from a URL (with their `.mtl` colors and textures), or let users drop their own `.obj` files on the canvas.
 - **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` / `exportModel` write meshes, objects or whole scenes as OBJ files with their MTL materials and textures.
-- **Camera** — position, yaw, pitch and field of view, with near-plane clipping.
+- **Camera** — position, yaw, pitch and field of view (50° by default), with near-plane clipping.
 - **Tools** — orbit and fly cameras, object dragging, hover highlight, a move / rotate / scale gizmo (with a pivot of your choice), a view axes gizmo, a floor grid, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles, with the hit point and texture coordinates under the mouse. Writing your own is a plain object with a few methods.
 - **Pure math** — every transform and projection step is exported, plus 4×4 matrices and rotations, so you can use the pipeline piece by piece.
 
@@ -41,7 +41,7 @@ No bundler? Use the CDN with an import map, or copy the `trid/` folder next to y
 
 ```html
 <script type="importmap">
-  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.3/trid/index.js" } }
+  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.6/trid/index.js" } }
 </script>
 ```
 
@@ -56,13 +56,22 @@ No bundler? Use the CDN with an import map, or copy the `trid/` folder next to y
 // main.js
 import { Scene, makeShape, OrbitCamera } from "trid3d";
 
-const scene = new Scene(document.getElementById("canvas"), { width: 800, height: 400 });
-const cube = scene.add({ mesh: makeShape("cube"), color: "#E9806E" });              // wireframe
-const ball = scene.add({ mesh: makeShape("sphere"), material: { fill: "#8ab4f8" } }); // filled and shaded
-ball.pos.x = 0.8;
+const scene = new Scene(document.getElementById("canvas"), {
+  width: 800, height: 400,
+  camera: { z: -1.5 }, // a step back
+});
+
+// A cube with rounded edges, filled and smoothly shaded
+const cube = scene.add({
+  mesh: makeShape("cube", { radius: 0.08 }),
+  material: { fill: "#E9806E", smooth: true },
+});
 
 scene.use(new OrbitCamera()); // drag to orbit, scroll to zoom
-scene.start((dt) => (cube.rot.y += dt));
+scene.start((dt) => {
+  cube.rot.x += dt * 0.5;
+  cube.rot.y += dt * 0.35;
+});
 ```
 
 Without a bundler, serve the folder (`python3 -m http.server`) instead of opening the file directly: browsers block module imports from `file://` pages.
@@ -113,9 +122,15 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 npm test
 ```
 
-Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes, mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, deformers, mesh cleanup, mesh and scene queries, noise, textures, OBJ / MTL, picking, tools, groups and matrices, lights, post effects, grids, and the WebGL renderer's GPU memory on a fake WebGL context.
+Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes (lathe poles included), mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, deformers, mesh cleanup, mesh and scene queries, noise, textures, OBJ / MTL, picking, tools, groups and matrices, lights, post effects, grids, the field of view, see-through backgrounds, and the WebGL renderer's GPU memory on a fake WebGL context.
 
 ## Upgrading
+
+### From 0.5 to 0.6
+
+- **The cone's tip is a single point** (a pole), so the cone is closed: `isClosed` and `validateMesh` no longer report a hole there. It has fewer vertices than before (its tip ring of 32 is now 1), and its side faces are triangles. Any `lathe` profile point with `r: 0` works the same way.
+- **The default field of view is 50°** (`DEFAULT_FOV`), instead of 90°. Scenes whose camera has no `fov` look about twice as close, like in most 3D tools. To keep the old view, give the camera `fov: Math.PI / 2`.
+- **`background: null` is see-through**, like `"transparent"` (it used to come out black). `clear()` now empties the canvas before painting the background, so see-through and half see-through backgrounds work; opaque ones look the same.
 
 ### From 0.3 to 0.4
 

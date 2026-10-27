@@ -20,7 +20,7 @@ Returns a new mesh centered on the origin, with `vertices`, `edges`, `faces` and
 | `"box"` | `w` (0.6), `h` (0.6), `d` (0.6), `radius` (0), `segments` (4) | Box of width (X), height (Y), depth (Z) |
 | `"sphere"` | `r` (0.45), `rings` (12), `segments` (24) | Sphere of latitude and longitude lines |
 | `"cylinder"` | `r` (0.3), `h` (0.8), `segments` (32) | Capped cylinder standing along Y |
-| `"cone"` | `r` (0.35), `h` (0.8), `segments` (32), `rTop` (0) | Cone with its tip up; with `rTop` > 0, a tapered cylinder |
+| `"cone"` | `r` (0.35), `h` (0.8), `segments` (32), `rTop` (0) | Cone with its tip up (a single point); with `rTop` > 0, a tapered cylinder |
 | `"torus"` | `R` (0.35), `tube` (0.12), `segments` (48), `tubeSegments` (20) | Ring lying flat in XZ. `R` goes from the center to the middle of the tube |
 | `"plane"` | `size` (1), `div` (8), `height` (none) | Flat grid in XZ facing +Y, `div` cells per side |
 
@@ -72,7 +72,7 @@ Spins a profile around the Y axis, like a potter's wheel: vases, bottles, cups, 
 Walk it so the **outside is on your right** in the (r, y) plane: bottom to top for a vase, or, for a closed ring, counter-clockwise (like the torus). Walked the other way, the faces point inward.
 :::
 
-A point with `r: 0` closes that end to a tip, with no cap needed. Texture coordinates go around (u) and along the profile by its length (v); caps map the texture as a disc.
+A point with `r: 0` is a **pole**: a single vertex with triangles around it, so that end closes to a tip with no cap needed (the cone's tip, both ends of a spinning top). Texture coordinates go around (u) and along the profile by its length (v); caps map the texture as a disc.
 
 ## `extrude(outline, depth = 0.2)`
 

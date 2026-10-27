@@ -16,7 +16,7 @@ new Scene(canvas, options?)
 | --- | --- | --- |
 | `width` | canvas's current width | Sets `canvas.width` (drawing resolution in pixels) |
 | `height` | canvas's current height | Sets `canvas.height` |
-| `background` | `"#141414"` | Color the canvas is cleared with each frame |
+| `background` | `"#141414"` | Color the canvas is cleared with each frame. `"transparent"` (or `null`) leaves it see-through: see [below](#see-through-background) |
 | `color` | `"#ffffff"` | Default wireframe color |
 | `lineWidth` | `3` | Default wireframe thickness |
 | `camera` | `{ z: -1 }` | The [camera](./concepts#the-camera) object |
@@ -27,6 +27,16 @@ new Scene(canvas, options?)
 | `renderer` | a new `CanvasRenderer` | What draws the scene, for example a `WebGLRenderer`. See [Renderers](./renderers) |
 
 The canvas can be resized with CSS (for example `width: 100%`). Drawing stays at `width` × `height`, and tools still get pointer positions in canvas pixels.
+
+### See-through background
+
+With `background: "transparent"` (or `null`), the canvas is cleared each frame and only the objects are drawn: the page behind it shows through, so a model can float over your page's own background, like the fox on the [home page](/). A color with some transparency, like `"rgba(20, 20, 20, 0.5)"`, tints the page behind instead.
+
+```js
+const scene = new Scene(canvas, { background: "transparent" });
+```
+
+Screenshots keep the transparency (PNG). [Fog](./effects#built-in-effects) fades toward the background, which here has no color: give it its own `color`. Post effects that darken or brighten the whole picture, like a vignette, also change the see-through parts.
 
 ## Adding and removing objects
 

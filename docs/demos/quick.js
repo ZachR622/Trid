@@ -3,7 +3,7 @@ import { Scene, makeShape, OrbitCamera } from "./trid/index.js";
 export default function (canvas) {
   const scene = new Scene(canvas, {
     width: 800, height: 300,
-    camera: { z: -1.6, fov: 0.6 }, // a step back, with a narrower lens
+    camera: { z: -1.5 }, // a step back
   });
 
   // A cube with rounded edges, filled and smoothly shaded

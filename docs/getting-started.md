@@ -39,7 +39,7 @@ For a plain HTML page, load Trid from [jsDelivr](https://www.jsdelivr.com/) with
 
 ```html
 <script type="importmap">
-  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.5/trid/index.js" } }
+  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.6/trid/index.js" } }
 </script>
 <script type="module">
   import { Scene, makeShape } from "trid3d";
@@ -79,7 +79,7 @@ import { Scene, makeShape, OrbitCamera } from "trid3d"; // or "./trid/index.js"
 
 const scene = new Scene(document.getElementById("canvas"), {
   width: 800, height: 300,
-  camera: { z: -1.6, fov: 0.6 }, // a step back, with a narrower lens
+  camera: { z: -1.5 }, // a step back
 });
 
 // A cube with rounded edges, filled and smoothly shaded

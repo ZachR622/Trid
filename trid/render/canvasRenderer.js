@@ -125,7 +125,7 @@ export class CanvasRenderer {
     // For effects
     const camPos = { x: camera.x ?? 0, y: camera.y ?? 0, z: camera.z ?? 0 };
     const time = (performance.now() - this._start) / 1000;
-    const background = this._rgba(ctx, scene.background);
+    const background = this._rgba(ctx, scene.background ?? "transparent");
 
     for (const obj of drawn) {
       const mats = materialsOf(obj);

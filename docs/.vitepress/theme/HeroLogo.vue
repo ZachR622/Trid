@@ -36,10 +36,7 @@ onMounted(async () => {
   // Turns only when dragged: no auto-rotate, and no zoom or pan (the page keeps its scroll)
   scene.use(new OrbitCamera({ target: p(0, 0.33, 0), distance: 2.6, yaw: Math.PI + 0.5, pitch: -0.28, zoom: false, pan: false }));
 
-  scene.start(() => {
-    // The renderers paint the background each frame; a see-through one needs clearing here
-    scene.ctx.clearRect(0, 0, el.width, el.height);
-  });
+  scene.start();
   destroy = () => scene.destroy();
 });
 

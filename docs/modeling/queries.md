@@ -62,7 +62,7 @@ Rays start just past their origin, so a ray starting on the surface doesn't hit 
 
 ## `isClosed(mesh)`
 
-Whether the mesh is closed (watertight): every edge is shared by exactly two faces. Edges are matched by vertex position, so unwelded meshes and texture seams count as closed. Only a closed mesh has an inside. The built-in cube, box, sphere, torus and cylinder are closed, and so are `blobMesh` results. A plane isn't, and neither is the default cone (its tip is a tiny open ring). For more detail, [`validateMesh`](./cleanup#validatemesh-mesh) lists the open edges.
+Whether the mesh is closed (watertight): every edge is shared by exactly two faces. Edges are matched by vertex position, so unwelded meshes and texture seams count as closed. Only a closed mesh has an inside. The built-in cube, box, sphere, cylinder, cone and torus are closed, and so are `blobMesh` results; a plane isn't. For more detail, [`validateMesh`](./cleanup#validatemesh-mesh) lists the open edges.
 
 ## `raycastScene(scene, origin, direction, opts?)`
 

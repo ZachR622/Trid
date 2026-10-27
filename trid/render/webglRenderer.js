@@ -343,7 +343,7 @@ export class WebGLRenderer {
     // Post effects: the ones with GLSL run here, canvas-only ones after the copy
     const post = activePost(scene.post);
     const gpuPost = post.filter((e) => postPasses(e).length);
-    const background = this._color(ctx, scene.background);
+    const background = this._color(ctx, scene.background ?? "transparent");
     if (gpuPost.length) {
       // Into a texture, on the scene's background so effects see the whole picture
       gl.bindFramebuffer(gl.FRAMEBUFFER, this._sceneTarget(w, h));

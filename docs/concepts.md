@@ -80,7 +80,7 @@ The camera is a plain object where every field is optional:
 | `x, y, z` | `0` | Position in world space |
 | `yaw` | `0` | Turn around Y in radians (> 0 turns right) |
 | `pitch` | `0` | Tilt around X in radians (> 0 looks up) |
-| `fov` | `Math.PI / 2` | Vertical field of view (90°) |
+| `fov` | `DEFAULT_FOV` (50°) | Vertical field of view, in radians. Wider shows more but makes everything smaller |
 | `near` | `0.01` | Near plane: anything closer is clipped |
 | `far` | `1000` | Anything farther isn't drawn ([WebGL renderer](./renderers) only) |
 
