@@ -192,8 +192,8 @@ export interface SceneOptions {
   width?: number;
   /** Sets canvas.height (keeps the current one if omitted) */
   height?: number;
-  /** Clear color (default "#141414") */
-  background?: string;
+  /** Clear color (default "#141414"); "transparent", a see-through rgba() or null: the page shows behind */
+  background?: string | null;
   /** Default wireframe color (default "#ffffff") */
   color?: string;
   /** Default wireframe width (default 3) */
@@ -221,7 +221,7 @@ export class Scene {
 
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-  background: string;
+  background: string | null;
   color: string;
   lineWidth: number;
   camera: Camera;
@@ -1426,8 +1426,8 @@ export function worldPerPixel(scene: Scene, depth: number): number;
 // Drawing and the frame loop
 // ---------------------------------------------------------------------------
 
-/** Fills the whole canvas with a color. */
-export function clear(ctx: CanvasRenderingContext2D, w: number, h: number, color: string): void;
+/** Clears the whole canvas, then fills it with a color ("transparent" or null: left see-through). */
+export function clear(ctx: CanvasRenderingContext2D, w: number, h: number, color?: string | null): void;
 /** Draws a square point centered at a screen position. */
 export function point(ctx: CanvasRenderingContext2D, p: Vec2, color: string, size?: number): void;
 /** Draws a line between two screen points. */

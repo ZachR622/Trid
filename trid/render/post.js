@@ -91,7 +91,7 @@ export function runCanvasPost(scene, list, start) {
     canvas,
     rgba: (v) => (typeof v === "string" ? parseColor(ctx, v).map((x, i) => (i < 3 ? x / 255 : x)) : v),
   };
-  frame.background = frame.rgba(scene.background ?? "#000000");
+  frame.background = frame.rgba(scene.background ?? "transparent");
   for (const e of effects) {
     ctx.save();
     try {

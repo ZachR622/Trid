@@ -123,7 +123,7 @@ edgeSegments(edges)
 wireEdges(mesh)
 ```
 
-- **`clear`** fills the whole canvas with `color`.
+- **`clear`** clears the whole canvas, then fills it with `color`. With `"transparent"` or `null`, it stays see-through.
 - **`point`** draws a filled square centered on screen point `p`. Useful for debugging vertices.
 - **`line`** draws one line between two screen points.
 - **`drawWireframe`** connects already-projected screen points using index edges (2 indices = segment, 3+ = closed loop). Everything is stroked as one path. No clipping is done.

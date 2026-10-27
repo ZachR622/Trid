@@ -2,17 +2,27 @@ import { localToWorld, worldToCamera, cameraToScreen, clipNear, DEFAULT_NEAR } f
 import { transformPoint } from "../math/matrix.js";
 
 /**
- * Clears the entire canvas with a solid background color.
+ * Clears the entire canvas, then paints it with a background color.
  * This should usually be called once per frame before drawing.
+ *
+ * A see-through color (`"transparent"`, or `rgba(...)` with an alpha below 1),
+ * or no color (`null`), lets the page behind the canvas show through.
  *
  * @param {CanvasRenderingContext2D} ctx - Canvas 2D context
  * @param {number} w - Canvas width
  * @param {number} h - Canvas height
- * @param {string} color - Background color (CSS color)
+ * @param {string|null} [color] - Background color (CSS color); none: left see-through
  */
 export function clear(ctx, w, h, color) {
+  ctx.clearRect(0, 0, w, h);
+  if (!isVisible(color)) return;
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, w, h);
+}
+
+/** Whether a background color paints anything (not null, empty or "transparent"). */
+function isVisible(color) {
+  return color != null && color !== "" && String(color).trim().toLowerCase() !== "transparent";
 }
 
 /**

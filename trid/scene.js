@@ -37,7 +37,7 @@ export class Scene {
    * @param {Object} [opts]
    * @param {number} [opts.width] - Sets canvas.width (keeps the current one if omitted)
    * @param {number} [opts.height] - Sets canvas.height (keeps the current one if omitted)
-   * @param {string} [opts.background="#141414"] - Clear color
+   * @param {string|null} [opts.background="#141414"] - Clear color; "transparent" or null: see-through, the page shows behind
    * @param {string} [opts.color="#ffffff"] - Default wireframe color
    * @param {number} [opts.lineWidth=3] - Default wireframe width
    * @param {import("./math/transform.js").Camera} [opts.camera={ z: -1 }] - Camera
