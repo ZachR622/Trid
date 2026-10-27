@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeShape, lathe, extrude, triangulate, newell, parseOBJ, exportOBJ, edgeSegments, wireEdges } from "../trid/index.js";
+import { makeShape, lathe, extrude, triangulate, newell, parseOBJ, exportOBJ, edgeSegments, wireEdges, isClosed, validateMesh } from "../trid/index.js";
 
 /** Every face, UV and edge index points at something. */
 function assertValid(mesh) {
@@ -54,6 +54,42 @@ test("cylinder, cone and lathe sides face outward", () => {
   assert.equal(outwardShare(cyl, axis, cyl.faces.slice(0, 16)), 1);
   const cone = makeShape("cone", { segments: 16 });
   assert.equal(outwardShare(cone, axis, cone.faces.slice(0, 16)), 1);
+});
+
+test("a profile point on the axis is a pole: one vertex, triangles around it, a closed cone", () => {
+  const cone = makeShape("cone", { segments: 16 });
+  assertValid(cone);
+  assert.equal(isClosed(cone), true);
+  assert.deepEqual(validateMesh(cone), []);
+  // The bottom ring, the tip and the bottom cap's center
+  assert.equal(cone.vertices.length, 16 + 1 + 1);
+  const tip = cone.vertices.findIndex((v) => v.y > 0.39);
+  assert.deepEqual(cone.vertices[tip], { x: 0, y: 0.4, z: 0 });
+  const sides = cone.faces.slice(0, 16);
+  for (const f of sides) assert.equal(f.length, 3);
+  assert.ok(sides.every((f) => f.includes(tip)));
+  // Every tip corner sits in the middle of its face's u span, so the texture doesn't twist
+  const u = (f, i) => cone.uvs[cone.faceUVs[f][i]].u;
+  for (let s = 0; s < 16; s++) {
+    const corner = cone.faces[s].indexOf(tip);
+    const others = [0, 1, 2].filter((i) => i !== corner).map((i) => u(s, i));
+    assert.ok(Math.abs(u(s, corner) - (others[0] + others[1]) / 2) < 1e-12);
+  }
+  // A tapered cone keeps its ring and top cap
+  assert.equal(isClosed(makeShape("cone", { rTop: 0.1 })), true);
+});
+
+test("lathe with poles at both ends makes a closed solid, faces outward", () => {
+  const top = lathe([{ r: 0, y: -0.3 }, { r: 0.3, y: 0 }, { r: 0, y: 0.3 }], { segments: 12 });
+  assertValid(top);
+  assert.equal(top.vertices.length, 1 + 12 + 1);
+  assert.equal(isClosed(top), true);
+  assert.deepEqual(validateMesh(top), []);
+  assert.equal(outwardShare(top, () => ({ x: 0, y: 0, z: 0 })), 1);
+  // No ring is drawn at a pole, and the lines along the profile reach it
+  assert.equal(top.edges.filter((e) => e.length > 2).length, 1);
+  // A cap asked for at a pole isn't added
+  assert.equal(lathe([{ r: 0, y: 0 }, { r: 0.3, y: 0.5 }], { segments: 8, capBottom: true }).faces.length, 8);
 });
 
 test("cylinder caps face outward", () => {

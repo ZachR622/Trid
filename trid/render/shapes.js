@@ -249,12 +249,18 @@ function sphereWire(radius = 0.35, rings = 10, segments = 16) {
   return { vertices, edges, faces, uvs, faceUVs };
 }
 
+/** Profile points closer to the axis than this are poles (one vertex). */
+const POLE = 1e-9;
+
 /**
  * Spins a profile around the Y axis: vases, bottles, cups, columns, chess
  * pieces. Cylinders, cones and tori are built with it.
  *
  * Walk the profile so the outside is on its right in the (r, y) plane:
  * bottom to top for a vase. Faces are clockwise as seen from outside.
+ *
+ * A point on the axis (`r: 0`) is a pole: one vertex, with triangles around
+ * it, like a cone's tip or the closed end of a spinning top.
  *
  * Texture coordinates: u goes around, v follows the profile's length.
  * Caps map the texture as a disc. Edges are the profile's rings plus one
@@ -292,52 +298,67 @@ export function lathe(profile, { segments = 32, capBottom = false, capTop = fals
   }
   const total = lengths[lengths.length - 1] || 1;
 
-  for (const p of profile) {
-    for (let s = 0; s < segments; s++) {
-      const t = (s / segments) * Math.PI * 2;
-      vertices.push({ x: Math.cos(t) * p.r, y: p.y, z: Math.sin(t) * p.r });
+  // One ring of vertices per profile point, or a single vertex for a pole (on the axis)
+  const pole = profile.map((p) => !(Math.abs(p.r) > POLE));
+  const start = [];
+  for (const [r, p] of profile.entries()) {
+    start.push(vertices.length);
+    if (pole[r]) vertices.push({ x: 0, y: p.y, z: 0 });
+    else {
+      for (let s = 0; s < segments; s++) {
+        const t = (s / segments) * Math.PI * 2;
+        vertices.push({ x: Math.cos(t) * p.r, y: p.y, z: Math.sin(t) * p.r });
+      }
     }
   }
+  const at = (r, s) => (pole[r] ? start[r] : start[r] + (s % segments));
 
   const rows = pts.length - 1;
   for (let r = 0; r < rows; r++) {
-    const a = r * segments;
-    const b = ((r + 1) % profile.length) * segments;
+    const next = (r + 1) % profile.length;
+    if (pole[r] && pole[next]) continue; // along the axis: nothing to draw
     for (let s = 0; s < segments; s++) {
-      const s1 = (s + 1) % segments;
-      faces.push([a + s, b + s, b + s1, a + s1]);
-      const u0 = s / segments, u1 = (s + 1) / segments;
+      const u0 = s / segments, u1 = (s + 1) / segments, um = (u0 + u1) / 2;
       const v0 = lengths[r] / total, v1 = lengths[r + 1] / total;
-      faceUVs.push([uv(u0, v0), uv(u0, v1), uv(u1, v1), uv(u1, v0)]);
+      // Next to a pole, a triangle; its corner there sits in the middle of u
+      if (pole[r]) {
+        faces.push([at(r, s), at(next, s), at(next, s + 1)]);
+        faceUVs.push([uv(um, v0), uv(u0, v1), uv(u1, v1)]);
+      } else if (pole[next]) {
+        faces.push([at(r, s), at(next, s), at(r, s + 1)]);
+        faceUVs.push([uv(u0, v0), uv(um, v1), uv(u1, v0)]);
+      } else {
+        faces.push([at(r, s), at(next, s), at(next, s + 1), at(r, s + 1)]);
+        faceUVs.push([uv(u0, v0), uv(u0, v1), uv(u1, v1), uv(u1, v0)]);
+      }
     }
   }
 
-  // Rings (skipped where the profile touches the axis) and lines along the profile
+  // Rings (none at a pole) and lines along the profile
   profile.forEach((p, r) => {
-    if (p.r > 1e-5) edges.push(Array.from({ length: segments }, (_, s) => r * segments + s));
+    if (!pole[r]) edges.push(Array.from({ length: segments }, (_, s) => at(r, s)));
   });
   for (let s = 0; s < segments; s++) {
-    if (closed && profile.length > 2) edges.push(profile.map((_, r) => r * segments + s));
-    else for (let r = 0; r < profile.length - 1; r++) edges.push([r * segments + s, (r + 1) * segments + s]);
+    if (closed && profile.length > 2) edges.push(profile.map((_, r) => at(r, s)));
+    else for (let r = 0; r < profile.length - 1; r++) if (!(pole[r] && pole[r + 1])) edges.push([at(r, s), at(r + 1, s)]);
   }
 
   const disc = (s) => {
     const t = (s / segments) * Math.PI * 2;
     return uv(0.5 + Math.cos(t) * 0.5, 0.5 + Math.sin(t) * 0.5);
   };
-  if (capBottom && !closed && profile[0].r > 0) {
+  if (capBottom && !closed && !pole[0]) {
     const c = vertices.push({ x: 0, y: profile[0].y, z: 0 }) - 1;
     for (let s = 0; s < segments; s++) {
-      faces.push([c, s, (s + 1) % segments]);
+      faces.push([c, at(0, s), at(0, s + 1)]);
       faceUVs.push([uv(0.5, 0.5), disc(s), disc(s + 1)]);
     }
   }
   const last = profile.length - 1;
-  if (capTop && !closed && profile[last].r > 0) {
+  if (capTop && !closed && !pole[last]) {
     const c = vertices.push({ x: 0, y: profile[last].y, z: 0 }) - 1;
-    const a = last * segments;
     for (let s = 0; s < segments; s++) {
-      faces.push([c, a + (s + 1) % segments, a + s]);
+      faces.push([c, at(last, s + 1), at(last, s)]);
       faceUVs.push([uv(0.5, 0.5), disc(s + 1), disc(s)]);
     }
   }
@@ -350,11 +371,9 @@ function cylinder(r = 0.3, h = 0.8, segments = 32) {
   return lathe([{ r, y: -h / 2 }, { r, y: h / 2 }], { segments, capBottom: true, capTop: true });
 }
 
-/** A cone along Y with its tip up, or a tapered cylinder when `rTop` > 0. */
+/** A cone along Y with its tip up (a single point, so it's closed), or a tapered cylinder when `rTop` > 0. */
 function cone(r = 0.35, h = 0.8, segments = 32, rTop = 0) {
-  // A tiny top ring keeps the tip's faces non-degenerate for UVs and normals
-  const profile = [{ r, y: -h / 2 }, { r: rTop > 0 ? rTop : 1e-6, y: h / 2 }];
-  return lathe(profile, { segments, capBottom: true, capTop: rTop > 0 });
+  return lathe([{ r, y: -h / 2 }, { r: rTop > 0 ? rTop : 0, y: h / 2 }], { segments, capBottom: true, capTop: rTop > 0 });
 }
 
 /** A ring in the XZ plane: `R` from the center to the middle of the tube. */

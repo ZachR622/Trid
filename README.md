@@ -119,6 +119,7 @@ Uses Node's built-in test runner (Node 21+), so there's nothing to install. The 
 
 ### From 0.5 to 0.6
 
+- **The cone's tip is a single point** (a pole), so the cone is closed: `isClosed` and `validateMesh` no longer report a hole there. It has fewer vertices than before (its tip ring of 32 is now 1), and its side faces are triangles. Any `lathe` profile point with `r: 0` works the same way.
 - **The default field of view is 50°** (`DEFAULT_FOV`), instead of 90°. Scenes whose camera has no `fov` look about twice as close, like in most 3D tools. To keep the old view, give the camera `fov: Math.PI / 2`.
 
 ### From 0.3 to 0.4
