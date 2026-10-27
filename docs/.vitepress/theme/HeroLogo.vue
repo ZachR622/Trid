@@ -17,10 +17,11 @@ onMounted(async () => {
   const el = canvas.value!;
   const p = (x: number, y: number, z: number) => ({ x, y, z });
 
+  const webgl = WebGLRenderer.isSupported();
   const scene = new Scene(el, {
     background: "transparent",
     camera: { fov: 0.6 },
-    renderer: WebGLRenderer.isSupported() ? new WebGLRenderer() : undefined,
+    renderer: webgl ? new WebGLRenderer() : undefined,
     lights: [
       { type: "ambient", intensity: 0.55 },
       { type: "directional", direction: p(-0.4, 0.8, 1), intensity: 0.6, color: "#fff4e6" },  // key, from the front
@@ -29,7 +30,8 @@ onMounted(async () => {
     ],
   });
   scene.add(makePlatform());
-  scene.add(makeFox());
+  // Without WebGL the canvas renderer sorts and draws every face itself: a lighter fox keeps it smooth
+  scene.add(makeFox({ detail: webgl ? 1 : 0.5 }));
 
   // Turns only when dragged: no auto-rotate, and no zoom or pan (the page keeps its scroll)
   scene.use(new OrbitCamera({ target: p(0, 0.33, 0), distance: 2.6, yaw: Math.PI + 0.5, pitch: -0.28, zoom: false, pan: false }));
