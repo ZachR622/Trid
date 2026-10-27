@@ -1,4 +1,10 @@
 /**
+ * Default vertical field of view: 50°, a normal lens (like most 3D tools).
+ * Wider shows more but makes everything smaller; set `camera.fov` to change it.
+ */
+export const DEFAULT_FOV = (50 * Math.PI) / 180;
+
+/**
  * Converts normalized device coordinates (-1 to +1)
  * into actual screen (pixel) coordinates.
  *
@@ -36,11 +42,11 @@ export function screen(p, w, h) {
  * - larger z => appears smaller
  *
  * @param {{x:number, y:number, z:number}} p - 3D point (camera space)
- * @param {number} fov - Vertical field of view in radians (default: 90°)
+ * @param {number} fov - Vertical field of view in radians (default: `DEFAULT_FOV`, 50°)
  * @param {number} aspect - Canvas width / height (default: 1)
  * @returns {{x:number, y:number}} 2D projected point
  */
-export function project(p, fov = Math.PI / 2, aspect = 1) {
+export function project(p, fov = DEFAULT_FOV, aspect = 1) {
   const f = 1 / Math.tan(fov / 2);
   return {
     x: (p.x * f) / (p.z * aspect),

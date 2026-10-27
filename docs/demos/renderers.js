@@ -2,7 +2,7 @@ import { Scene, makeShape, CanvasRenderer, WebGLRenderer, OrbitCamera } from "./
 
 export default function (canvas) {
   const scene = new Scene(canvas, {
-    width: 800, height: 360, camera: { z: -0.95 }, lineWidth: 2,
+    width: 800, height: 360, camera: { z: -1.9 }, lineWidth: 2,
   });
 
   // Shapes that cut through each other: hard for sorting, easy for a depth buffer

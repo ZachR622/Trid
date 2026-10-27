@@ -117,6 +117,10 @@ Uses Node's built-in test runner (Node 21+), so there's nothing to install. The 
 
 ## Upgrading
 
+### From 0.5 to 0.6
+
+- **The default field of view is 50°** (`DEFAULT_FOV`), instead of 90°. Scenes whose camera has no `fov` look about twice as close, like in most 3D tools. To keep the old view, give the camera `fov: Math.PI / 2`.
+
 ### From 0.3 to 0.4
 
 - **Lights are a list**: `scene.lights`. A scene still starts with one directional light and an ambient level, and looks the same. `scene.light` and `scene.ambient` are now shortcuts for the first directional light's direction and the first ambient light's intensity.

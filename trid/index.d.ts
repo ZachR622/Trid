@@ -43,7 +43,7 @@ export interface Camera {
   yaw?: number;
   /** Tilt around X in radians, > 0 looks up (default 0) */
   pitch?: number;
-  /** Vertical field of view in radians (default Math.PI / 2) */
+  /** Vertical field of view in radians (default DEFAULT_FOV: 50°) */
   fov?: number;
   /** Near plane distance; closer geometry is clipped (default 0.01) */
   near?: number;
@@ -1467,7 +1467,7 @@ export function parseColor(ctx: CanvasRenderingContext2D, color: string): RGBA;
 // Math
 // ---------------------------------------------------------------------------
 
-/** Default vertical field of view (90°). */
+/** Default vertical field of view: 50° (in radians). */
 export const DEFAULT_FOV: number;
 /** Default near plane distance. */
 export const DEFAULT_NEAR: number;

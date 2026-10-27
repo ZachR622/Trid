@@ -92,7 +92,7 @@ Each returns a new point. Angles are in radians. Rotation order matters: `rotate
 
 | Name | Value |
 | --- | --- |
-| `DEFAULT_FOV` | `Math.PI / 2` — 90° vertical field of view |
+| `DEFAULT_FOV` | 50° vertical field of view, in radians (`50 * Math.PI / 180`) |
 | `DEFAULT_NEAR` | `0.01` — near plane distance |
 
 ### Projection
@@ -100,7 +100,7 @@ Each returns a new point. Angles are in radians. Rotation order matters: `rotate
 From `trid/math/projection.js`.
 
 ```js
-project(p, fov = Math.PI / 2, aspect = 1)  // → { x, y }
+project(p, fov = DEFAULT_FOV, aspect = 1)  // → { x, y }
 screen(p, w, h)                            // → { x, y }
 ```
 

@@ -1,4 +1,6 @@
-import { project, screen } from "./projection.js";
+import { project, screen, DEFAULT_FOV } from "./projection.js";
+
+export { DEFAULT_FOV };
 
 /**
  * Camera object. Every field is optional and falls back to its default.
@@ -11,13 +13,10 @@ import { project, screen } from "./projection.js";
  * @property {number} [z=0] - Position on Z
  * @property {number} [yaw=0] - Turn around Y in radians (> 0 turns right)
  * @property {number} [pitch=0] - Tilt around X in radians (> 0 looks up)
- * @property {number} [fov=Math.PI/2] - Vertical field of view in radians
+ * @property {number} [fov=DEFAULT_FOV] - Vertical field of view in radians (default 50°)
  * @property {number} [near=0.01] - Near plane distance; closer geometry is clipped
  * @property {number} [far=1000] - Far distance; farther geometry isn't drawn (WebGL renderer only)
  */
-
-/** Default vertical field of view (90°). */
-export const DEFAULT_FOV = Math.PI / 2;
 
 /** Default near plane distance. */
 export const DEFAULT_NEAR = 0.01;
