@@ -18,7 +18,7 @@ export default function (canvas) {
   });
 
   scene.add(makePlatform());
-  scene.add(makeFox({ detail: webgl ? 1 : 0.5 })); // a lighter fox for the canvas renderer
+  scene.add(makeFox({ detail: webgl ? 1 : 0.5 }));
 
   // Toon shading: a few flat bands of light, like a cartoon
   for (const obj of worldObjects(scene)) {

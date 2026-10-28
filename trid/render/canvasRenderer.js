@@ -886,7 +886,7 @@ function normalize(v) {
 }
 
 /** Cuts a camera-space polygon at z = near, keeping the part in front. */
-function clipPolygon(pts, near) {
+export function clipPolygon(pts, near) {
   if (pts.every((p) => p.z >= near)) return pts;
   const out = [];
   for (let i = 0; i < pts.length; i++) {

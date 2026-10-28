@@ -1365,6 +1365,36 @@ export interface TransformGizmoOptions {
   onChange?: (op: TransformOp, targets: SceneObject[]) => void;
   /** On release: the whole operation */
   onDrop?: (op: TransformOp, targets: SceneObject[]) => void;
+  /** Outline the targets, under the handles (default false). Options: see `SelectionOutline` */
+  outline?: boolean | Omit<SelectionOutlineOptions, "targets">;
+}
+
+export interface SelectionOutlineOptions {
+  /** Objects to outline, or a function asked every frame (default none) */
+  targets?: SceneObject[] | (() => SceneObject[]);
+  /** Line color (default "#ffa64d") */
+  color?: string;
+  /** Line width in CSS pixels (default 2) */
+  width?: number;
+  /** Opacity of the outline where the objects are hidden behind others (default 0.35; 0 = not shown) */
+  hidden?: number;
+}
+
+/**
+ * A colored line around selected objects, like a 3D editor's selection. Parts hidden
+ * behind other objects get a faint outline. Add it before tools that draw handles.
+ */
+export class SelectionOutline implements Tool {
+  constructor(opts?: SelectionOutlineOptions);
+  targets: SceneObject[] | (() => SceneObject[]);
+  color: string;
+  width: number;
+  hidden: number;
+  /** Hide the outline without removing the tool. */
+  visible: boolean;
+  /** The objects outlined this frame. */
+  current(): SceneObject[];
+  draw(ctx: CanvasRenderingContext2D, scene: Scene): void;
 }
 
 /**
@@ -1394,6 +1424,8 @@ export class TransformGizmo implements Tool {
   visible: boolean;
   /** True while a handle is being dragged. */
   readonly dragging: boolean;
+  /** The outline around the targets (`outline` option), or null. */
+  outline: SelectionOutline | null;
   /** The pivot in world space, or null when there are no targets. */
   center(): Vec3 | null;
   draw(ctx: CanvasRenderingContext2D, scene: Scene): void;

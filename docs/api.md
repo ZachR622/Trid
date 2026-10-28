@@ -40,7 +40,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/loaders/mtl.js` | [`parseMTL`](./obj#from-the-mtl-file) |
 | `trid/render/proceduralTextures.js` | [`makeTexture`, `texturePixels`, `colorBytes`, `TEXTURE_STYLES`](./textures#procedural-textures) |
 | `trid/export/capture.js` | [`screenshot`, `record`, `download`](./export) |
-| `trid/tools/index.js` | [Tools](./tools), [`pick`, `pickHit`, `isPickable`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
+| `trid/tools/index.js` | [Tools](./tools) (including [`SelectionOutline`](./tools#selectionoutline)), [`pick`, `pickHit`, `isPickable`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
 | `trid/sceneGraph.js` | [`worldObjects`, `worldMatrix`, `worldPosition`, `ancestors`, `forEachPlaced`](./groups#where-things-are-parent-and-world) |
 | `trid/math/matrix.js` | [`identityMat4`, `mat4FromTransform`, `mulMat4`, `invertMat4`, `determinantMat4`, `transformPoint`, `transformDirection`, `normalMatrix`, `transformNormal`, `transformOpToLocal`](./groups#matrices) |
 | `trid/math/rotation.js` | [`matFromEuler`, `eulerFromMat`, `matFromAxisAngle`, `mulMat`, `mulVec`, `applyTransformOp`](#rotations) |

@@ -17,7 +17,7 @@ export default function (canvas) {
   scene.use(new OrbitCamera({ pitch: -0.35, distance: 2 }));
   // Added after the camera, so they get clicks first
   scene.use(new ViewGizmo());
-  const gizmo = scene.use(new TransformGizmo({ targets: [shapes[1]] }));
+  const gizmo = scene.use(new TransformGizmo({ targets: [shapes[1]], outline: true }));
 
   // A click (not a drag) selects the shape under it, by its triangles: the torus's hole is empty
   let down = null;

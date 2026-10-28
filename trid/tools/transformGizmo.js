@@ -4,6 +4,7 @@ import { meshBounds } from "../render/meshUtils.js";
 import { transformOpToLocal } from "../math/matrix.js";
 import { worldMatrix, worldPosition, ancestors } from "../sceneGraph.js";
 import { worldPerPixel } from "./helpers.js";
+import { SelectionOutline } from "./selectionOutline.js";
 
 const AXES = [
   { dir: { x: 1, y: 0, z: 0 }, color: "#e8605a" },
@@ -49,6 +50,9 @@ const RING = 64;
  * grabbing a handle doesn't also orbit. Clicks that miss the handles fall
  * through to the tools below.
  *
+ * `outline: true` also draws a `SelectionOutline` around the targets, under
+ * the handles (give options instead of true to change its look).
+ *
  * @example
  * scene.use(new OrbitCamera());
  * const gizmo = scene.use(new TransformGizmo({ mode: "rotate" }));
@@ -67,8 +71,9 @@ export class TransformGizmo {
    * @param {(targets:Object[]) => void} [opts.onGrab] - A handle was grabbed
    * @param {(op:Object, targets:Object[]) => void} [opts.onChange] - While dragging: the operation since the grab
    * @param {(op:Object, targets:Object[]) => void} [opts.onDrop] - On release: the whole operation
+   * @param {boolean|Object} [opts.outline=false] - Outline the targets (options: see `SelectionOutline`)
    */
-  constructor({ mode = "move", targets = [], size = 70, apply = true, pivot = "bounds", onGrab, onChange, onDrop } = {}) {
+  constructor({ mode = "move", targets = [], size = 70, apply = true, pivot = "bounds", onGrab, onChange, onDrop, outline = false } = {}) {
     this.mode = mode;
     this.targets = targets;
     this.size = size;
@@ -81,6 +86,8 @@ export class TransformGizmo {
     this.visible = true;
     /** True while a handle is being dragged. */
     this.dragging = false;
+    /** The outline around the targets (`outline` option), or null. */
+    this.outline = outline ? new SelectionOutline({ ...(outline === true ? {} : outline), targets: () => this.targets }) : null;
 
     this._handles = []; // from the last draw
     this._hover = -1;
@@ -114,6 +121,7 @@ export class TransformGizmo {
 
   draw(ctx, scene) {
     this._handles = [];
+    this.outline?.draw(ctx, scene); // even with the handles hidden: the targets are still selected
     if (!this.visible) return;
     // Rings and scale handles stay where the drag started; arrows follow the move
     const c = this._drag && this.mode !== "move" ? this._drag.center : this.center();

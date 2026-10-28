@@ -1,6 +1,6 @@
 # Tools
 
-Tools add interaction and overlays to a scene: camera controls, dragging, hover effects, an FPS counter. Add one with `scene.use(tool)`.
+Tools add interaction and overlays to a scene: camera controls, dragging, hover effects, selection outlines, an FPS counter. Add one with `scene.use(tool)`.
 
 ```js
 import {
@@ -181,6 +181,7 @@ Handles to move, rotate and scale objects with the mouse. It works on one or mor
 | `onGrab` | — | `(targets) => void`: a handle was grabbed |
 | `onChange` | — | `(op, targets) => void`: while dragging, the operation since the grab |
 | `onDrop` | — | `(op, targets) => void`: on release, the whole operation |
+| `outline` | `false` | Outline the targets, under the handles: `true`, or [`SelectionOutline`](#selectionoutline) options like `{ color: "#ffffff" }` |
 
 `gizmo.dragging` is `true` while a handle is held, and `gizmo.visible = false` hides it. Clicks that miss the handles fall through to the tools below (the camera), so add the gizmo **after** the camera tool.
 
@@ -226,6 +227,28 @@ An operation is one of:
 { mode: "rotate", axis, angle, center }  // right-handed, radians, around the unit axis
 { mode: "scale",  axis, factor, center } // axis null: uniform
 ```
+
+## SelectionOutline
+
+A colored line around the selected objects, like a 3D editor's selection. Where something in front hides part of them, that part's outline is drawn faintly, so you still see where the whole selection is. A group is outlined as one shape.
+
+```js
+const selection = scene.use(new SelectionOutline());
+selection.targets = [chair]; // change at any time; [] outlines nothing
+```
+
+The gizmo demo above uses it through `TransformGizmo({ outline: true })`: whatever the gizmo moves is outlined. Turn the view so the torus goes behind another shape to see the faint part.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `targets` | `[]` | Objects to outline, or a function asked every frame, like `() => gizmo.targets` |
+| `color` | `"#ffa64d"` | Line color |
+| `width` | `2` | Line width in CSS pixels |
+| `hidden` | `0.35` | Opacity of the outline where the objects are hidden behind others. `0` doesn't show it |
+
+`selection.visible = false` hides it. It draws on the finished picture, after [post effects](./post), so it looks the same with both renderers. Add it **before** tools with handles (like `TransformGizmo`), so the handles stay on top: tools draw in the order they were added.
+
+For outlines on every object as a drawing style, see the [`outline()`](./post#outlines) post effect instead.
 
 ## All together
 

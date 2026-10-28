@@ -71,6 +71,8 @@ scene.add({ mesh, material: { fill: "#f0843a", smooth: true, effects: [toon()] }
 
 Smooth surfaces only get inner lines where their shading keeps a hard edge: a [`smooth`](./faces) sphere gets none, a cube gets all twelve edges. Lines are drawn on the nearer side of each edge, so they hug the object in front.
 
+To highlight only the selected objects, like a 3D editor does, use the [`SelectionOutline`](./tools#selectionoutline) tool instead.
+
 The WebGL renderer finds the lines in the picture, from the faces' depth and normals. The canvas renderer draws the meshes' outer edges and creases as lines, sorted with the faces: close, but a little more angular on curved shapes.
 
 ## Writing your own

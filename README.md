@@ -28,7 +28,7 @@ Trid gives you a scene, shapes you can model in code, lights, effects, model loa
 - **OBJ files** — load models from a URL (with their `.mtl` colors and textures), or let users drop their own `.obj` files on the canvas.
 - **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` / `exportModel` write meshes, objects or whole scenes as OBJ files with their MTL materials and textures.
 - **Camera** — position, yaw, pitch and field of view (50° by default), with near-plane clipping.
-- **Tools** — orbit and fly cameras, object dragging, hover highlight, a move / rotate / scale gizmo (with a pivot of your choice), a view axes gizmo, a floor grid, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles, with the hit point and texture coordinates under the mouse. Writing your own is a plain object with a few methods.
+- **Tools** — orbit and fly cameras, object dragging, hover highlight, a selection outline, a move / rotate / scale gizmo (with a pivot of your choice), a view axes gizmo, a floor grid, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles, with the hit point and texture coordinates under the mouse. Writing your own is a plain object with a few methods.
 - **Pure math** — every transform and projection step is exported, plus 4×4 matrices and rotations, so you can use the pipeline piece by piece.
 
 ## Install
@@ -151,6 +151,5 @@ Uses Node's built-in test runner (Node 21+), so there's nothing to install. The 
 Roughly in order:
 
 - **More import and export formats** — STL; basic glTF later
-- **More tools** — a selection outline
 - **More post effects** — antialiasing (FXAA)
 - **More tests** — the canvas renderer's drawing and the remaining math functions

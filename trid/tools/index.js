@@ -8,3 +8,4 @@ export { FpsMeter } from "./fpsMeter.js";
 export { ObjUploader } from "./objUploader.js";
 export { ViewGizmo } from "./viewGizmo.js";
 export { TransformGizmo } from "./transformGizmo.js";
+export { SelectionOutline } from "./selectionOutline.js";
