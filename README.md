@@ -122,7 +122,7 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 npm test
 ```
 
-Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes (lathe poles included), mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, booleans, deformers, mesh cleanup, mesh and scene queries, noise, textures, OBJ / MTL, picking, tools, groups and matrices, lights, shadows, post effects, grids, the field of view, see-through backgrounds, and the WebGL renderer's GPU memory on a fake WebGL context.
+Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover the whole transform pipeline (rotations, camera, projection, near-plane clipping, matrices and normals), what the canvas renderer draws (order, culling, clipping, light, gradients, outlines, split faces, texture placement), shapes (lathe poles included), mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, booleans, deformers, mesh cleanup, mesh and scene queries, smooth normals, texture mapping, material and post effects, noise, procedural textures, OBJ / MTL loading and export, screenshots and downloads, picking, tools, groups, lights, shadows, grids, see-through backgrounds, and the WebGL renderer's GPU memory on a fake WebGL context.
 
 ## Upgrading
 
@@ -157,6 +157,5 @@ Nothing changes for existing scenes: shadows, outlines and the selection outline
 
 Roughly in order:
 
-- **More tests** — the canvas renderer's drawing and the remaining math functions
 - **More import and export formats** — STL; basic glTF later
 - **More post effects** — antialiasing (FXAA)
