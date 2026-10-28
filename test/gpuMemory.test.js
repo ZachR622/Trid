@@ -213,9 +213,31 @@ test("shadows: casters drawn once more from the light; the map is made once, rem
   sun.shadows = { size: 512 };
   frames(1);
   assert.equal(count.createTexture, made + 1);
-  assert.equal(renderer._shadow.size, 512);
+  assert.equal(renderer._shadow.maps.get(0).size, 512);
   ghost.castShadow = true;
   sun.shadows = false;
   frames(130); // unused GPU memory is looked at every 60 frames
+  assert.equal(renderer._shadow, null);
+});
+
+test("point light shadows: six sides drawn per frame, two lights of each kind at most", () => {
+  const { renderer, scene, add, frames, count } = setup({ releaseAfter: 30 });
+  add({ mesh: makeShape("sphere"), material: { fill: "#f00" } });
+  frames(1);
+  const plain = count.drawArrays;
+  const bulb = { type: "point", position: { x: 0, y: 2, z: 0 }, shadows: true };
+  scene.lights = [{ type: "ambient", intensity: 0.3 }, bulb];
+  frames(1);
+  assert.equal(count.drawArrays - plain, plain + 6); // the sphere, plus once per side of the cube
+  assert.equal(renderer._shadow.maps.get(2).cube, true);
+  assert.equal(renderer._shadow.maps.get(2).size, 512);
+  // Three of each kind: only two of each cast
+  const sun = (x) => ({ type: "directional", direction: { x, y: 1, z: 0 }, shadows: true });
+  const lamp = (x) => ({ type: "point", position: { x, y: 2, z: 0 }, shadows: true });
+  scene.lights = [sun(0), sun(1), sun(-1), lamp(0), lamp(1), lamp(-1)];
+  frames(1);
+  assert.deepEqual([...renderer._shadow.maps.keys()].sort(), [0, 1, 2, 3]);
+  scene.lights = [];
+  frames(130);
   assert.equal(renderer._shadow, null);
 });

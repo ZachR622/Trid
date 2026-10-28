@@ -463,13 +463,13 @@ export interface DirectionalLight {
   color?: string;
   intensity?: number;
   enabled?: boolean;
-  /** Cast shadows (the first directional light with it does): true, or settings */
+  /** Cast shadows: true, or settings */
   shadows?: boolean | ShadowOptions;
 }
 
-/** Shadow settings of a directional light. */
+/** Shadow settings of a light. */
 export interface ShadowOptions {
-  /** Shadow map width in pixels (WebGL, default 2048). Bigger: sharper, slower */
+  /** Shadow map width in pixels (WebGL; default 2048, or 512 per side for a point light). Bigger: sharper, slower */
   size?: number;
   /** Edge blur, in shadow map pixels (default 1.5; 0 = sharp) */
   softness?: number;
@@ -481,8 +481,16 @@ export interface ShadowOptions {
 
 /** Settings used for `shadows: true`. */
 export const DEFAULT_SHADOWS: Readonly<Required<Omit<ShadowOptions, "ground">> & { ground: null }>;
-/** A light's shadow settings, defaults filled in. */
-export function shadowOptions(value: boolean | ShadowOptions): Required<Omit<ShadowOptions, "ground">> & { ground: number | null };
+/** Default shadow map size of a point light, for each of its six sides (512). */
+export const POINT_SHADOW_SIZE: number;
+/** How many lights of each kind cast shadows at once: 2 directional, 2 point. */
+export const MAX_SHADOWS: Readonly<{ directional: number; point: number }>;
+/** A light's shadow settings, defaults filled in (`point`: a point light's smaller default size). */
+export function shadowOptions(value: boolean | ShadowOptions, point?: boolean): Required<Omit<ShadowOptions, "ground">> & { ground: number | null };
+/** How far a point light's shadow map reaches: its `range`, or to the far side of the farthest caster. */
+export function pointShadowFar(casters: SceneObject[], pos: Vec3, range: number): number;
+/** Like `flattenOnGround`, for a point light at `pos`: shadows spread out from below it. */
+export function flattenFromPoint(pts: Vec3[], pos: Vec3, ground: number): Vec3[];
 /** False when the object or one of its groups sets `key` to false. */
 export function shadowFlag(obj: SceneObject, key: "castShadow" | "receiveShadow"): boolean;
 /** The shadow map's box around casting objects (`matrix`: world → -1..1, column-major). */
@@ -502,6 +510,8 @@ export interface PointLight {
   /** Fades out smoothly and reaches nothing past this distance (default: no fading) */
   range?: number;
   enabled?: boolean;
+  /** Cast shadows: true, or settings (`size` defaults to 512, for each of the six sides) */
+  shadows?: boolean | ShadowOptions;
 }
 
 export type Light = AmbientLight | DirectionalLight | PointLight;
@@ -521,9 +531,15 @@ export interface SceneLights {
   lights: { point: boolean; dir: Vec3 | null; pos: Vec3 | null; color: [number, number, number]; range: number }[];
   /** Unit direction of the first directional light */
   mainDir: Vec3;
-  /** The light casting shadows (`index` in `lights`) and its settings, or null */
-  shadow: ({ index: number; dir: Vec3 } & Required<Omit<ShadowOptions, "ground">> & { ground: number | null }) | null;
+  /** The lights casting shadows (`index` in `lights`) with their settings, directional ones first */
+  shadows: ShadowLight[];
+  /** The first directional light casting shadows, or null */
+  shadow: ShadowLight | null;
 }
+
+/** A light casting shadows, as `sceneLights` reports it. */
+export type ShadowLight = { index: number; point: boolean; dir: Vec3 | null; pos: Vec3 | null; range: number }
+  & Required<Omit<ShadowOptions, "ground">> & { ground: number | null };
 
 /** A scene's lights, colors parsed and multiplied by intensity, directions unit length. */
 export function sceneLights(
