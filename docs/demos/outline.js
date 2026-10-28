@@ -1,5 +1,5 @@
 import { Scene, WebGLRenderer, OrbitCamera, toon, outline, worldObjects } from "./trid/index.js";
-import { makeFox, makePlatform } from "./fox.js";
+import { makeFox, makePlatform, foxLights } from "./fox.js";
 
 const p = (x, y, z) => ({ x, y, z });
 
@@ -10,11 +10,7 @@ export default function (canvas) {
     width: 800, height: 400, background: "#f3e9d8", camera: { fov: 0.6 },
     renderer: webgl ? new WebGLRenderer() : undefined,
     post: [lines],
-    lights: [
-      { type: "ambient", intensity: 0.55 },
-      { type: "directional", direction: p(-0.4, 0.8, 1), intensity: 0.6, color: "#fff4e6" },
-      { type: "directional", direction: p(0.6, 0.6, -1), intensity: 0.45, color: "#ffe9d6" },
-    ],
+    lights: foxLights(),
   });
 
   scene.add(makePlatform());

@@ -209,3 +209,13 @@ export function makePlatform(fill = "#7a4a2a") {
     : { fill, smooth: true };
   return { name: "platform", mesh: stand, pos: p(0, -0.04, 0), material };
 }
+
+/** Warm lights that suit the fox: soft ambient, a key light from the front, fill from below, a rim from behind. */
+export function foxLights() {
+  return [
+    { type: "ambient", intensity: 0.55 },
+    { type: "directional", direction: p(-0.4, 0.8, 1), intensity: 0.6, color: "#fff4e6" }, // key, from the front
+    { type: "directional", direction: p(0.5, -0.3, 0.6), intensity: 0.25, color: "#fff4e6" }, // fill from below, so the chin isn't dark
+    { type: "directional", direction: p(0.6, 0.6, -1), intensity: 0.45, color: "#ffe9d6" }, // rim, from behind
+  ];
+}

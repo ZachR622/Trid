@@ -96,6 +96,16 @@ See [A texture per face](./textures#a-texture-per-face).
 
 To save meshes as OBJ files, see [Exporting](./export#obj-files).
 
+## Example: the fox, saved and loaded back
+
+The fox from the [home page](/) is made in code. Here it's saved as an OBJ file and its MTL file (with [`exportOBJ` and `exportMTL`](./export#colors-and-textures-mtl)), and the text is read straight back with `parseOBJ` and `parseMTL`: the fox you see is the copy from the file. The buttons save the two files, to open in Blender or load with `loadOBJ(url, { materials: true })` (keep them in the same folder).
+
+<Demo src="foxobj" hint="the fox loaded back from fox.obj · drag to orbit" />
+
+<<< @/demos/foxobj.js
+
+It looks the same as the original, but it's one mesh instead of a group of parts: each face keeps its material name (`mesh.materialNames` and `mesh.faceMaterials`), so the colors come back, and the file's normals keep it smooth. An app would usually do this once, ship the `.obj` file, and skip building the model on every visit: the fox takes about half a second to build, and about a third of that to read from the file (plus the download).
+
 ::: tip Use `fit`
 OBJ files come in any size and are rarely centered. `{ fit: 1 }` centers the model on the origin and scales it so its largest side is 1 unit.
 :::

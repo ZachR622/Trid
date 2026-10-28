@@ -9,7 +9,7 @@ let unmounted = false;
 
 onMounted(async () => {
   // Loaded here, so the fox is only built in the browser
-  const [{ Scene, WebGLRenderer, OrbitCamera }, { makeFox, makePlatform }] = await Promise.all([
+  const [{ Scene, WebGLRenderer, OrbitCamera }, { makeFox, makePlatform, foxLights }] = await Promise.all([
     import("../../../trid/index.js"),
     import("../../demos/fox.js"),
   ]);
@@ -22,12 +22,7 @@ onMounted(async () => {
     background: "transparent",
     camera: { fov: 0.6 },
     renderer: webgl ? new WebGLRenderer() : undefined,
-    lights: [
-      { type: "ambient", intensity: 0.55 },
-      { type: "directional", direction: p(-0.4, 0.8, 1), intensity: 0.6, color: "#fff4e6" },  // key, from the front
-      { type: "directional", direction: p(0.5, -0.3, 0.6), intensity: 0.25, color: "#fff4e6" }, // fill from below, so the chin isn't dark
-      { type: "directional", direction: p(0.6, 0.6, -1), intensity: 0.45, color: "#ffe9d6" },  // rim, from behind
-    ],
+    lights: foxLights(),
   });
   scene.add(makePlatform());
   // Without WebGL the canvas renderer sorts and draws every face itself: a lighter fox keeps it smooth
