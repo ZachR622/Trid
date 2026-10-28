@@ -70,7 +70,7 @@ The `light` and `ambient` options set those two: `new Scene(canvas, { light: { x
 
 ## Shadows
 
-Give a directional light `shadows: true` and objects cast shadows on each other and on the floor:
+Give a light `shadows: true` and objects cast shadows on each other and on the floor:
 
 ```js
 const scene = new Scene(canvas, {
@@ -86,11 +86,19 @@ const scene = new Scene(canvas, {
 
 <<< @/demos/shadows.js
 
-The first directional light with `shadows` casts them; point lights don't, yet. A shadow takes away that light's share only, so the ambient light and other lights still reach shadowed places. Objects cast and receive shadows unless they say otherwise:
+Directional and point lights can both cast shadows, up to two of each at once (`MAX_SHADOWS`): the first ones in `scene.lights` with `shadows`. Others still light the scene, without shadows. A shadow takes away that light's share only, so the ambient light and other lights still reach shadowed places.
+
+A point light's shadows spread out from it, longer the lower it is, like under a lamp:
+
+```js
+scene.lights.push({ type: "point", position: { x: 0, y: 1.2, z: 0 }, color: "#ffd9a0", range: 4, shadows: true });
+```
+
+Objects cast and receive shadows unless they say otherwise:
 
 | Object field | Default | Meaning |
 | --- | --- | --- |
-| `castShadow` | `true` | `false`: this object (and its children, for a group) casts no shadow. Good for a floor, a sky or glowing things |
+| `castShadow` | `true` | `false`: this object (and its children, for a group) casts no shadow. Good for a floor, a sky, or a little bulb drawn where a point light is |
 | `receiveShadow` | `true` | `false`: no shadow falls on it (WebGL) |
 
 Only faces cast shadows: lines (wireframes) and see-through faces don't, and the see-through parts of a texture (a PNG's holes) let the light through.
@@ -100,7 +108,7 @@ Instead of `true`, `shadows` can be settings:
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `softness` | `1.5` | Blur of the shadows' edges. `0`: sharp |
-| `size` | `2048` | Width of the shadow map in pixels (WebGL). Bigger is sharper, but slower |
+| `size` | `2048`, point lights `512` | Width of the shadow map in pixels (WebGL; a point light has six, one per side of a cube around it). Bigger is sharper, but slower |
 | `bias` | `1` | Raise it if lit surfaces get dark speckles; too high and shadows come loose from their objects |
 | `ground` | found | The floor's height, for the canvas renderer (see below) |
 
@@ -108,8 +116,8 @@ Change them at any time: `sun.shadows = { softness: 4 }`, or `sun.shadows = fals
 
 ### With each renderer
 
-- **WebGL** uses a shadow map: each frame, the scene is drawn once more from the light, in a box fitted around the objects that cast shadows. Every object can shade every other one, and itself. Shadows cover a scene the size of those objects; for a big world with small details, the map's pixels get big too (raise `size`, or turn `castShadow` off for objects far away).
-- **The canvas renderer** draws ground shadows: the objects are flattened onto the floor along the light, as one soft dark shape on the floor's faces. The floor is the height where flat faces turned up have the most area (or `ground`), and only faces lying there get shadows: objects don't shadow each other. It's quick and suits objects standing on a floor; for more, use WebGL.
+- **WebGL** uses shadow maps: each frame, the scene is drawn once more from each light casting shadows. A directional light's map is a box fitted around the objects that cast shadows; for a big world with small details, its pixels get big too (raise `size`, or turn `castShadow` off for objects far away). A point light draws six maps, one for each side of a cube around it, reaching as far as its `range` (or the farthest object casting shadows). Every object can shade every other one, and itself.
+- **The canvas renderer** draws ground shadows: the objects are flattened onto the floor along the light (spreading out from a point light), as one soft dark shape per light on the floor's faces. A point light below the floor casts none on it. The floor is the height where flat faces turned up have the most area (or `ground`), and only faces lying there get shadows: objects don't shadow each other. It's quick and suits objects standing on a floor; for more, use WebGL.
 
 ## Lights and effects
 

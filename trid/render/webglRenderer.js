@@ -5,7 +5,7 @@ import { clear, edgeSegments, wireEdges } from "./draw.js";
 import { parseColor } from "./color.js";
 import { materialsOf } from "./canvasRenderer.js";
 import { sceneLights, MAX_LIGHTS } from "./lights.js";
-import { shadowFrame, shadowFlag } from "./shadows.js";
+import { shadowFrame, shadowFlag, pointShadowFar } from "./shadows.js";
 import { FRAME_GLSL, GEOMETRY_GLSL, postPasses, activePost, runCanvasPost, wantsGeometry, maskedObjects } from "./post.js";
 import { uvsFor, uvTransform, mappingKey } from "./uvMapping.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
@@ -78,35 +78,60 @@ uniform vec4 uBackground;
 uniform vec3 uCamWorld;
 uniform sampler2D uTexture;
 uniform float uUseTexture;
-// Shadows (trid/render/shadows.js): which light casts them (-1: none), and its shadow map
-uniform int uShadowLight;
-uniform sampler2D uShadowMap;
-uniform mat4 uShadowMatrix;
-uniform float uShadowTexel; // one pixel of the map, in its 0..1 units
-uniform float uShadowSoft;  // edge blur, in map pixels
-uniform float uShadowOffset; // how far the test point moves along the normal, in world units
-uniform float uShadowBias;
+// Shadows (trid/render/shadows.js). Four slots: 0 and 1 for directional lights (flat maps),
+// 2 and 3 for point lights (cube maps, one side per direction)
+uniform int uShadowSlot[${MAX_LIGHTS}]; // each light's slot, -1: no shadows
+uniform vec4 uShadowOn; // which slots are in use
+uniform sampler2D uShadowMap0;
+uniform sampler2D uShadowMap1;
+uniform samplerCube uShadowCube0;
+uniform samplerCube uShadowCube1;
+uniform mat4 uShadowMatrix[2]; // directional slots: world → map
+uniform vec4 uShadowPoint[2]; // point slots: light position, far
+// Per slot: one map pixel (0..1 units), edge blur (map pixels), normal offset, distance bias
+uniform vec4 uShadowInfo[4];
 uniform float uReceive;
 varying vec3 vNormal;
 varying vec3 vWorld;
 varying vec3 vLocal;
 varying vec2 vUV;
 ${SURFACE_GLSL}
-float tridShadowDepth(vec2 uv) {
-  return dot(texture2D(uShadowMap, uv), vec4(1.0, 1.0 / 255.0, 1.0 / 65025.0, 1.0 / 16581375.0));
+float tridUnpack(vec4 v) {
+  return dot(v, vec4(1.0, 1.0 / 255.0, 1.0 / 65025.0, 1.0 / 16581375.0));
 }
-// How much of the shadow-casting light reaches a point: 1 = all, 0 = in shadow
-float tridShadow(vec3 n, vec3 p) {
-  vec4 q = uShadowMatrix * vec4(p + n * uShadowOffset, 1.0);
+// How much of a directional light reaches a point: 1 = all, 0 = in shadow
+float tridShadow(sampler2D map, mat4 m, vec4 info, vec3 n, vec3 p) {
+  vec4 q = m * vec4(p + n * info.z, 1.0);
   vec3 c = q.xyz * 0.5 + 0.5;
   if (c.x < 0.0 || c.x > 1.0 || c.y < 0.0 || c.y > 1.0 || c.z < 0.0) return 1.0;
-  float z = min(c.z, 0.999) - uShadowBias; // past the casters: compared as just behind them
+  float z = min(c.z, 0.999) - info.w; // past the casters: compared as just behind them
   float lit = 0.0;
   // 4 × 4 samples spread over the blur: soft edges
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
-      vec2 o = (vec2(float(i), float(j)) - 1.5) / 1.5 * uShadowSoft * uShadowTexel;
-      lit += z <= tridShadowDepth(c.xy + o) ? 1.0 : 0.0;
+      vec2 o = (vec2(float(i), float(j)) - 1.5) / 1.5 * info.y * info.x;
+      lit += z <= tridUnpack(texture2D(map, c.xy + o)) ? 1.0 : 0.0;
+    }
+  }
+  return lit / 16.0;
+}
+// The same for a point light: its cube map keeps distances (÷ far) in every direction
+float tridShadowCube(samplerCube map, vec4 light, vec4 info, vec3 n, vec3 p) {
+  float dist = length(p - light.xyz);
+  vec3 d = p + n * info.z * dist - light.xyz; // a map pixel covers more, farther away
+  float z = length(d) / light.w;
+  if (z >= 1.0) return 1.0;
+  z -= info.w * dist / light.w;
+  // Soft edges: samples across the direction
+  vec3 u = normalize(d);
+  vec3 t1 = normalize(cross(abs(u.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), u));
+  vec3 t2 = cross(u, t1);
+  float spread = info.y * info.x * 2.0 * length(d); // a side spans 2 units at distance 1
+  float lit = 0.0;
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      vec2 o = (vec2(float(i), float(j)) - 1.5) / 1.5 * spread;
+      lit += z <= tridUnpack(textureCube(map, d + t1 * o.x + t2 * o.y)) ? 1.0 : 0.0;
     }
   }
   return lit / 16.0;
@@ -114,6 +139,13 @@ float tridShadow(vec3 n, vec3 p) {
 // The light reaching a point: the same math as lightAt in trid/render/lights.js, with shadows
 vec3 tridLighting(vec3 n, vec3 p) {
   vec3 c = uAmbientColor;
+  vec4 shade = vec4(1.0); // each slot's shadow here
+  if (uReceive > 0.5) {
+    if (uShadowOn.x > 0.5) shade.x = tridShadow(uShadowMap0, uShadowMatrix[0], uShadowInfo[0], n, p);
+    if (uShadowOn.y > 0.5) shade.y = tridShadow(uShadowMap1, uShadowMatrix[1], uShadowInfo[1], n, p);
+    if (uShadowOn.z > 0.5) shade.z = tridShadowCube(uShadowCube0, uShadowPoint[0], uShadowInfo[2], n, p);
+    if (uShadowOn.w > 0.5) shade.w = tridShadowCube(uShadowCube1, uShadowPoint[1], uShadowInfo[3], n, p);
+  }
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= uLightCount) break;
     vec4 l = uLightVec[i];
@@ -130,7 +162,8 @@ vec3 tridLighting(vec3 n, vec3 p) {
       }
     }
     float k = max(0.0, dot(n, d)) * fade;
-    if (i == uShadowLight && uReceive > 0.5 && k > 0.0) k *= tridShadow(n, p);
+    int s = uShadowSlot[i];
+    k *= s == 0 ? shade.x : s == 1 ? shade.y : s == 2 ? shade.z : s == 3 ? shade.w : 1.0;
     c += uLightColor[i].rgb * k;
   }
   return c;
@@ -175,7 +208,7 @@ ${fx.calls}
 }
 
 const FACE_UNIFORMS = ["uUVTransform", "uNormalMatrix", "uAmbientColor", "uAmbient", "uLightDir", "uLightVec", "uLightColor", "uLightCount", "uShade", "uTime", "uBackground", "uCamWorld", "uTexture", "uUseTexture",
-  "uShadowLight", "uShadowMap", "uShadowMatrix", "uShadowTexel", "uShadowSoft", "uShadowOffset", "uShadowBias", "uReceive"];
+  "uShadowSlot", "uShadowOn", "uShadowMap0", "uShadowMap1", "uShadowCube0", "uShadowCube1", "uShadowMatrix", "uShadowPoint", "uShadowInfo", "uReceive"];
 
 // Each line segment is a thin rectangle facing the screen, `uWidth` pixels wide
 const LINE_VS = `
@@ -213,17 +246,32 @@ void main() {
 
 const UNIFORMS = ["uModel", "uCamPos", "uCamRot", "uF", "uAspect", "uNear", "uFar", "uColor"];
 
-// The shadow map: each pixel keeps the distance to the nearest face, seen from the light
+// Shadow maps: each pixel keeps the distance to the nearest face, seen from the light.
+// Directional lights: through `uShadowMatrix`. Point lights: one side of a cube around
+// the light at a time (`uFace` turns the direction from the light into that side's
+// x, y and depth), keeping distance ÷ far.
 const SHADOW_VS = `
 attribute vec3 aPos;
 attribute vec2 aUV;
 uniform mat4 uModel;
 uniform mat4 uShadowMatrix;
 uniform mat3 uUVTransform;
+uniform vec4 uPointLight; // position, far (0: a directional light)
+uniform mat3 uFace;
 varying vec2 vUV;
+varying vec3 vFromLight;
 void main() {
   vUV = (uUVTransform * vec3(aUV, 1.0)).xy;
-  gl_Position = uShadowMatrix * (uModel * vec4(aPos, 1.0));
+  vec4 w = uModel * vec4(aPos, 1.0);
+  if (uPointLight.w > 0.0) {
+    vFromLight = w.xyz - uPointLight.xyz;
+    vec3 q = uFace * vFromLight;
+    float f = uPointLight.w, n = f * 0.001;
+    gl_Position = vec4(q.xy, (f + n) / (f - n) * q.z - 2.0 * f * n / (f - n), q.z);
+  } else {
+    vFromLight = vec3(0.0);
+    gl_Position = uShadowMatrix * w;
+  }
 }
 `;
 
@@ -236,15 +284,29 @@ precision mediump float;
 uniform vec4 uColor;
 uniform sampler2D uTexture;
 uniform float uUseTexture;
+uniform vec4 uPointLight;
 varying vec2 vUV;
+varying vec3 vFromLight;
 void main() {
   // See-through parts of a texture cast no shadow
   if (uColor.a * mix(1.0, texture2D(uTexture, vUV).a, uUseTexture) < 0.5) discard;
+  float d = uPointLight.w > 0.0 ? min(length(vFromLight) / uPointLight.w, 0.9999) : gl_FragCoord.z;
   // The distance (0..1) spread over four bytes
-  vec4 e = fract(gl_FragCoord.z * vec4(1.0, 255.0, 65025.0, 16581375.0));
+  vec4 e = fract(d * vec4(1.0, 255.0, 65025.0, 16581375.0));
   gl_FragColor = e - e.yzww * vec4(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0, 0.0);
 }
 `;
+
+// The six sides of a point light's cube map, in WebGL's order (+X, -X, +Y, -Y, +Z, -Z):
+// rows giving a direction's x and y on that side, and its depth (column-major for mat3)
+const CUBE_FACES = [
+  [[0, 0, -1], [0, -1, 0], [1, 0, 0]],
+  [[0, 0, 1], [0, -1, 0], [-1, 0, 0]],
+  [[1, 0, 0], [0, 0, 1], [0, 1, 0]],
+  [[1, 0, 0], [0, 0, -1], [0, -1, 0]],
+  [[1, 0, 0], [0, -1, 0], [0, 0, 1]],
+  [[-1, 0, 0], [0, -1, 0], [0, 0, -1]],
+].map(([a, b, c]) => new Float32Array([a[0], b[0], c[0], a[1], b[1], c[1], a[2], b[2], c[2]]));
 
 // Depth and normals of the faces, for post effects with `geometry: true`
 // (the packing is read back by GEOMETRY_GLSL in trid/render/post.js)
@@ -437,7 +499,7 @@ export class WebGLRenderer {
     this._posts = new Map(); // post effect pass programs, one per pass code
     this._post = null; // render targets for post effects, made when first needed
     this._geo = null; // depth and normals program, for post effects with `geometry`
-    this._shadow = null; // shadow map and its program, made when a light first casts shadows
+    this._shadow = null; // shadow maps (one per slot) and their program, made when a light first casts shadows
 
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
@@ -531,8 +593,14 @@ export class WebGLRenderer {
     }
 
     // Shadows: drawn from the light first, then the main framebuffer again
-    if (lights.shadow) {
-      lights.shadow.map = this._shadowPass(lights.shadow, opaque);
+    if (lights.shadows.length) {
+      const casters = opaque.filter((d) => d.kind === "face" && shadowFlag(d.obj, "castShadow"));
+      const objs = [...new Set(casters.map((d) => d.obj))];
+      let flat = 0, cube = 2; // slots: 0, 1 for directional lights, 2, 3 for point lights
+      for (const sh of lights.shadows) {
+        sh.map = sh.point ? this._pointShadowPass(sh, casters, objs, cube++) : this._shadowPass(sh, casters, objs, flat++);
+      }
+      lights.gl = shadowUniforms(lights.shadows);
       gl.bindFramebuffer(gl.FRAMEBUFFER, gpuPost.length ? this._sceneTarget(w, h) : null);
       gl.viewport(0, 0, w, h);
     }
@@ -599,7 +667,15 @@ export class WebGLRenderer {
     const oldest = this._frame - this.releaseAfter;
     for (const [item, frame] of this._meshUse) if (frame < oldest) this.release(item);
     for (const [item, frame] of this._textureUse) if (frame < oldest) this.release(item);
-    if (this._shadow && this._shadow.used < this._frame - 60) this._freeShadow();
+    if (this._shadow) {
+      for (const [slot, t] of this._shadow.maps) {
+        if (t.used < this._frame - 60) {
+          this._freeShadowMap(t);
+          this._shadow.maps.delete(slot);
+        }
+      }
+      if (!this._shadow.maps.size) this._freeShadow();
+    }
     // Post effect pictures of a size no longer used (after a resize, or effects removed)
     if (this._post) {
       const keep = [];
@@ -728,35 +804,72 @@ export class WebGLRenderer {
   }
 
   /**
-   * Draws the shadow map for the light casting shadows: the opaque faces of
-   * objects that cast them, seen from the light, in a box fitted around them.
-   *
-   * @returns {{ tex:WebGLTexture, matrix:Float32Array, size:number, radius:number } | null}
+   * The shadow map of a slot: a flat one (directional lights) or a cube of six
+   * (point lights), `size` pixels wide, made again when either changes.
    */
-  _shadowPass(shadow, draws) {
+  _shadowMap(slot, cube, size) {
     const gl = this.gl;
-    const casters = draws.filter((d) => d.kind === "face" && shadowFlag(d.obj, "castShadow"));
-    const frame = shadowFrame([...new Set(casters.map((d) => d.obj))], shadow.dir);
-    if (!frame) return null;
-    const size = Math.min(shadow.size, gl.getParameter(gl.MAX_TEXTURE_SIZE) || shadow.size);
-
-    let S = this._shadow;
-    if (S && S.size !== size) {
-      this._freeShadow();
-      S = null;
+    const S = (this._shadow ??= { maps: new Map(), prog: null });
+    let t = S.maps.get(slot);
+    if (t && (t.cube !== cube || t.size !== size)) {
+      this._freeShadowMap(t);
+      t = null;
     }
-    if (!S) {
-      S = this._shadow = { size, target: this._makeTarget(size, size, true), used: this._frame };
-      gl.bindTexture(gl.TEXTURE_2D, S.target.tex);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); // packed distances: never blended
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-      gl.bindTexture(gl.TEXTURE_2D, null);
+    if (!t) {
+      const target = cube ? gl.TEXTURE_CUBE_MAP : gl.TEXTURE_2D;
+      const tex = gl.createTexture();
+      gl.bindTexture(target, tex);
+      const sides = cube ? 6 : 1;
+      for (let f = 0; f < sides; f++) {
+        gl.texImage2D(cube ? gl.TEXTURE_CUBE_MAP_POSITIVE_X + f : gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      }
+      gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, gl.NEAREST); // packed distances: never blended
+      gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindTexture(target, null);
+      const depth = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, size, size);
+      gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+      const fbs = [];
+      for (let f = 0; f < sides; f++) {
+        const fb = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, cube ? gl.TEXTURE_CUBE_MAP_POSITIVE_X + f : gl.TEXTURE_2D, tex, 0);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+        fbs.push(fb);
+      }
+      t = { cube, size, tex, depth, fbs };
+      S.maps.set(slot, t);
     }
-    S.used = this._frame;
-    S.prog ??= program(gl, SHADOW_VS, SHADOW_FS, ["aPos", "aUV"], ["uModel", "uShadowMatrix", "uUVTransform", "uColor", "uTexture", "uUseTexture"]);
-    const prog = S.prog, u = prog.uniforms, a = prog.attributes;
+    t.used = this._frame;
+    S.prog ??= program(gl, SHADOW_VS, SHADOW_FS, ["aPos", "aUV"],
+      ["uModel", "uShadowMatrix", "uUVTransform", "uColor", "uTexture", "uUseTexture", "uPointLight", "uFace"]);
+    return t;
+  }
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, S.target.fb);
+  _freeShadowMap(t) {
+    const gl = this.gl;
+    for (const fb of t.fbs) gl.deleteFramebuffer(fb);
+    gl.deleteRenderbuffer(t.depth);
+    gl.deleteTexture(t.tex);
+  }
+
+  /** Frees every shadow map and their program. */
+  _freeShadow() {
+    const S = this._shadow;
+    if (!S) return;
+    for (const t of S.maps.values()) this._freeShadowMap(t);
+    if (S.prog) this.gl.deleteProgram(S.prog.program);
+    this._shadow = null;
+  }
+
+  /** Clears one side of a shadow map and draws the casting faces into it. */
+  _drawCasters(fb, size, casters, setup) {
+    const gl = this.gl;
+    const prog = this._shadow.prog, u = prog.uniforms, a = prog.attributes;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.viewport(0, 0, size, size);
     gl.clearColor(1, 1, 1, 1); // the farthest distance: nothing there
     gl.depthMask(true);
@@ -765,11 +878,10 @@ export class WebGLRenderer {
     gl.disable(gl.CULL_FACE); // both sides cast: open meshes don't leak light
     gl.disable(gl.POLYGON_OFFSET_FILL);
     gl.useProgram(prog.program);
-    gl.uniformMatrix4fv(u.uShadowMatrix, false, frame.matrix);
     gl.uniform1i(u.uTexture, 0);
+    setup(u);
     const locs = [a.aPos, a.aUV].filter((loc) => loc >= 0);
     for (const loc of locs) gl.enableVertexAttribArray(loc);
-
     for (const d of casters) {
       if (!d.count) continue;
       const buf = this._faceBuffer(d.geo, d.obj.mesh, d.mat.shade === false ? null : creaseOf(d.mat.smooth), d.mat.mapping);
@@ -788,19 +900,48 @@ export class WebGLRenderer {
       if (a.aUV >= 0) gl.vertexAttribPointer(a.aUV, 2, gl.FLOAT, false, 32, 24);
       gl.drawArrays(gl.TRIANGLES, d.first, d.count);
     }
-
     for (const loc of locs) gl.disableVertexAttribArray(loc);
     gl.enable(gl.BLEND);
-    return { tex: S.target.tex, matrix: frame.matrix, size, radius: frame.radius };
   }
 
-  /** Frees the shadow map and its program. */
-  _freeShadow() {
-    const S = this._shadow;
-    if (!S) return;
-    this._freeTarget(S.target);
-    if (S.prog) this.gl.deleteProgram(S.prog.program);
-    this._shadow = null;
+  /**
+   * The shadow map of a directional light: the casting faces seen from the
+   * light, in a box fitted around them.
+   *
+   * @returns {{ tex:WebGLTexture, matrix:Float32Array, size:number, radius:number } | null}
+   */
+  _shadowPass(shadow, casters, objs, slot) {
+    const gl = this.gl;
+    const frame = shadowFrame(objs, shadow.dir);
+    if (!frame) return null;
+    const size = Math.min(shadow.size, gl.getParameter(gl.MAX_TEXTURE_SIZE) || shadow.size);
+    const t = this._shadowMap(slot, false, size);
+    this._drawCasters(t.fbs[0], size, casters, (u) => {
+      gl.uniformMatrix4fv(u.uShadowMatrix, false, frame.matrix);
+      gl.uniform4f(u.uPointLight, 0, 0, 0, 0);
+    });
+    return { tex: t.tex, matrix: frame.matrix, size, radius: frame.radius };
+  }
+
+  /**
+   * The shadow map of a point light: six sides of a cube around it, each
+   * keeping the distance to the nearest casting face in its directions.
+   *
+   * @returns {{ tex:WebGLTexture, far:number, size:number } | null}
+   */
+  _pointShadowPass(shadow, casters, objs, slot) {
+    const gl = this.gl;
+    if (!objs.length) return null;
+    const far = pointShadowFar(objs, shadow.pos, shadow.range);
+    const size = Math.min(shadow.size, gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE) || shadow.size);
+    const t = this._shadowMap(slot, true, size);
+    for (let f = 0; f < 6; f++) {
+      this._drawCasters(t.fbs[f], size, casters, (u) => {
+        gl.uniform4f(u.uPointLight, shadow.pos.x, shadow.pos.y, shadow.pos.z, far);
+        gl.uniformMatrix3fv(u.uFace, false, CUBE_FACES[f]);
+      });
+    }
+    return { tex: t.tex, far, size };
   }
 
   /**
@@ -1009,7 +1150,8 @@ export class WebGLRenderer {
       vec, color, count: L.lights.length,
       ambient: L.ambient, ambientLevel: L.ambientLevel,
       dir: [L.mainDir.x, L.mainDir.y, L.mainDir.z],
-      shadow: L.shadow, // the light casting shadows; `map` is added by _shadowPass
+      shadows: L.shadows, // the lights casting shadows; their `map` is added by the shadow passes
+      gl: null, // their uniforms (shadowUniforms), set once the maps are drawn
     };
   }
 
@@ -1053,19 +1195,22 @@ export class WebGLRenderer {
       gl.uniform1f(u.uTime, view.time);
       gl.uniform4fv(u.uBackground, view.background);
       gl.uniform3fv(u.uCamWorld, view.camPos);
-      const sh = lights.shadow?.map;
-      gl.uniform1i(u.uShadowLight, sh ? lights.shadow.index : -1);
-      if (sh) {
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, sh.tex);
-        gl.uniform1i(u.uShadowMap, 1);
-        gl.uniformMatrix4fv(u.uShadowMatrix, false, sh.matrix);
-        gl.uniform1f(u.uShadowTexel, 1 / sh.size);
-        gl.uniform1f(u.uShadowSoft, lights.shadow.softness);
-        // About two map pixels along the normal, and one pixel of distance: no speckles on lit faces
-        const pixel = (2 * sh.radius) / sh.size;
-        gl.uniform1f(u.uShadowOffset, pixel * 1.5 * lights.shadow.bias);
-        gl.uniform1f(u.uShadowBias, (1 / sh.size) * lights.shadow.bias);
+      // Shadow maps on texture units 1, 2 (flat) and 3, 4 (cubes)
+      const sg = lights.gl;
+      gl.uniform1iv(u.uShadowSlot, sg?.slots ?? NO_SHADOW_SLOTS);
+      gl.uniform4fv(u.uShadowOn, sg?.on ?? [0, 0, 0, 0]);
+      gl.uniform1i(u.uShadowMap0, 1);
+      gl.uniform1i(u.uShadowMap1, 2);
+      gl.uniform1i(u.uShadowCube0, 3);
+      gl.uniform1i(u.uShadowCube1, 4);
+      if (sg) {
+        for (let k = 0; k < 4; k++) {
+          gl.activeTexture(gl.TEXTURE1 + k);
+          gl.bindTexture(k < 2 ? gl.TEXTURE_2D : gl.TEXTURE_CUBE_MAP, sg.tex[k]);
+        }
+        gl.uniformMatrix4fv(u.uShadowMatrix, false, sg.matrices);
+        gl.uniform4fv(u.uShadowPoint, sg.points);
+        gl.uniform4fv(u.uShadowInfo, sg.info);
         gl.uniform1f(u.uReceive, shadowFlag(d.obj, "receiveShadow") ? 1 : 0);
       }
       for (const e of prog.effectUniforms) {
@@ -1348,6 +1493,40 @@ export class WebGLRenderer {
     }
     return c;
   }
+}
+
+/** No light casts shadows: every light's slot is -1. */
+const NO_SHADOW_SLOTS = new Int32Array(MAX_LIGHTS).fill(-1);
+
+/**
+ * The face shader's shadow uniforms for this frame, from the lights casting
+ * shadows (with their `map` drawn): each light's slot, the slots in use, and
+ * per slot its texture, matrix or position, and settings.
+ */
+function shadowUniforms(shadows) {
+  const slots = new Int32Array(MAX_LIGHTS).fill(-1);
+  const on = [0, 0, 0, 0], tex = [null, null, null, null];
+  const matrices = new Float32Array(32), points = new Float32Array(8), info = new Float32Array(16);
+  let flat = 0, cube = 2;
+  for (const sh of shadows) {
+    const slot = sh.point ? cube++ : flat++;
+    const m = sh.map;
+    if (!m) continue;
+    slots[sh.index] = slot;
+    on[slot] = 1;
+    tex[slot] = m.tex;
+    if (sh.point) {
+      points.set([sh.pos.x, sh.pos.y, sh.pos.z, m.far], (slot - 2) * 4);
+      // Offset and bias grow with the distance in the shader: a map pixel covers more farther away
+      info.set([1 / m.size, sh.softness, (2 / m.size) * 1.5 * sh.bias, (2 / m.size) * sh.bias], slot * 4);
+    } else {
+      matrices.set(m.matrix, slot * 16);
+      // About two map pixels along the normal, and one pixel of distance: no speckles on lit faces
+      const pixel = (2 * m.radius) / m.size;
+      info.set([1 / m.size, sh.softness, pixel * 1.5 * sh.bias, sh.bias / m.size], slot * 4);
+    }
+  }
+  return { slots, on, tex, matrices, points, info };
 }
 
 /** Every graphics card buffer of a mesh's geometry. */

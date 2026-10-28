@@ -1,49 +1,60 @@
 /**
- * Shadows from a directional light.
+ * Shadows from directional and point lights.
  *
  *   scene.lights = [
  *     { type: "ambient", intensity: 0.3 },
  *     { type: "directional", direction: { x: -0.5, y: 1, z: -0.8 }, intensity: 0.7, shadows: true },
+ *     { type: "point", position: { x: 0, y: 1, z: 0 }, range: 4, shadows: true },
  *   ];
  *
- * - The first directional light with `shadows` casts them (point lights
- *   don't, yet). `shadows` is `true` or options, see `shadowOptions`
+ * - Lights with `shadows` cast them: up to `MAX_SHADOWS.directional`
+ *   directional and `MAX_SHADOWS.point` point lights at once (the first
+ *   ones in the list; others light without shadows). `shadows` is `true`
+ *   or options, see `shadowOptions`
  * - Objects cast and receive shadows unless they (or a group they're in)
  *   have `castShadow: false` / `receiveShadow: false`. Only faces cast
  *   shadows, not lines or see-through faces
  *
- * WebGL renderer: a shadow map. The scene is drawn from the light into a
- * picture of distances, fitted around the casting objects every frame;
- * each pixel then checks whether something is nearer the light than it.
+ * WebGL renderer: shadow maps. The scene is drawn from the light into a
+ * picture of distances (a directional light: one, fitted around the casting
+ * objects every frame; a point light: six, one per side of a cube around
+ * it); each pixel then checks whether something is nearer the light than it.
  *
  * Canvas renderer: ground shadows. The casting objects are flattened onto
  * the floor (the level where most of the area of flat, upward faces is, or
- * `ground`) and drawn as one darker shape on the floor's faces. Objects
- * don't shadow each other there.
+ * `ground`) along the light, and drawn as one darker shape per light on the
+ * floor's faces. Objects don't shadow each other there.
  */
 
 import { transformPoint } from "../math/matrix.js";
 import { newell } from "./normals.js";
 
-/** Settings used for `shadows: true`. */
+/** Settings used for `shadows: true` (point lights: `size` is `POINT_SHADOW_SIZE`). */
 export const DEFAULT_SHADOWS = Object.freeze({ size: 2048, softness: 1.5, bias: 1, ground: null });
+
+/** Default shadow map size of a point light: each of its six sides. */
+export const POINT_SHADOW_SIZE = 512;
+
+/** How many lights of each kind can cast shadows at once. */
+export const MAX_SHADOWS = Object.freeze({ directional: 2, point: 2 });
 
 /**
  * A light's shadow settings, defaults filled in.
  *
  * @param {boolean|Object} value - The light's `shadows`
+ * @param {boolean} [point=false] - For a point light (smaller default `size`)
  * @returns {{ size:number, softness:number, bias:number, ground:number|null }}
- *   - `size`: width of the shadow map in pixels (WebGL). Bigger: sharper, slower
+ *   - `size`: width of the shadow map in pixels (WebGL; a point light has six). Bigger: sharper, slower
  *   - `softness`: blur of the shadows' edges, in shadow map pixels (0: sharp)
  *   - `bias`: pushes the test away from surfaces, against speckles ("shadow acne")
  *     on surfaces facing the light. Raise it if they appear; too high and shadows
  *     come loose from their objects
  *   - `ground`: the floor's height for the canvas renderer (default: found)
  */
-export function shadowOptions(value) {
+export function shadowOptions(value, point = false) {
   const o = value && typeof value === "object" ? value : {};
   return {
-    size: Math.max(64, Math.min(8192, Math.round(o.size ?? DEFAULT_SHADOWS.size))),
+    size: Math.max(64, Math.min(8192, Math.round(o.size ?? (point ? POINT_SHADOW_SIZE : DEFAULT_SHADOWS.size)))),
     softness: Math.max(0, o.softness ?? DEFAULT_SHADOWS.softness),
     bias: Math.max(0, o.bias ?? DEFAULT_SHADOWS.bias),
     ground: typeof o.ground === "number" ? o.ground : null,
@@ -119,6 +130,28 @@ export function shadowFrame(casters, dir) {
 }
 
 /**
+ * How far a point light's shadow map reaches: its `range`, or else to the
+ * far side of the farthest casting object.
+ *
+ * @param {Object[]} casters - Objects with `mesh` and `world`
+ * @param {{x:number,y:number,z:number}} pos - The light's position
+ * @param {number} range - The light's range (0: none)
+ */
+export function pointShadowFar(casters, pos, range) {
+  if (range > 0) return range;
+  let far = 0;
+  for (const obj of casters) {
+    if (!obj.mesh?.vertices?.length) continue;
+    const s = meshSphere(obj.mesh);
+    const w = obj.world;
+    const c = transformPoint(w, s.c);
+    const k = Math.max(Math.hypot(w[0], w[1], w[2]), Math.hypot(w[4], w[5], w[6]), Math.hypot(w[8], w[9], w[10]));
+    far = Math.max(far, Math.hypot(c.x - pos.x, c.y - pos.y, c.z - pos.z) + s.r * k);
+  }
+  return far * 1.01 || 1;
+}
+
+/**
  * The floor for ground shadows: the height where receiving objects have the
  * most area of flat faces turned up. Null when there's none.
  *
@@ -152,26 +185,47 @@ export function findGround(receivers) {
  * @param {number} ground
  */
 export function flattenOnGround(pts, dir, ground) {
-  const eps = 1e-5;
-  if (pts.every((p) => p.y <= ground + eps)) return [];
-  // Cut off what's below the ground
-  let poly = pts;
-  if (pts.some((p) => p.y < ground)) {
-    poly = [];
-    for (let i = 0; i < pts.length; i++) {
-      const a = pts[i], b = pts[(i + 1) % pts.length];
-      const aIn = a.y >= ground, bIn = b.y >= ground;
-      if (aIn) poly.push(a);
-      if (aIn !== bIn) {
-        const t = (ground - a.y) / (b.y - a.y);
-        poly.push({ x: a.x + (b.x - a.x) * t, y: ground, z: a.z + (b.z - a.z) * t });
-      }
-    }
-  }
-  return poly.map((p) => {
+  return cutY(pts, ground, true).map((p) => {
     const t = (p.y - ground) / dir.y;
     return { x: p.x - dir.x * t, y: ground, z: p.z - dir.z * t };
   });
+}
+
+/**
+ * Like `flattenOnGround`, for a point light at `pos` (above the ground): the
+ * polygon's part between the ground and the light's height, pushed down
+ * along the rays from the light, so shadows spread out with distance.
+ *
+ * @param {{x:number,y:number,z:number}[]} pts - World points
+ * @param {{x:number,y:number,z:number}} pos - The light's position
+ * @param {number} ground
+ */
+export function flattenFromPoint(pts, pos, ground) {
+  // Nothing at the light's height or above casts on the floor (its ray never comes down)
+  const top = pos.y - Math.max(1e-4, (pos.y - ground) * 1e-3);
+  return cutY(cutY(pts, ground, true), top, false).map((p) => {
+    const t = (pos.y - ground) / (pos.y - p.y);
+    return { x: pos.x + (p.x - pos.x) * t, y: ground, z: pos.z + (p.z - pos.z) * t };
+  });
+}
+
+/** A polygon's part above (`keepAbove`) or below a height. Empty when nothing of it is there. */
+function cutY(pts, y, keepAbove) {
+  const eps = 1e-5;
+  const inside = (p) => (keepAbove ? p.y >= y : p.y <= y);
+  if (keepAbove ? pts.every((p) => p.y <= y + eps) : pts.every((p) => p.y >= y - eps)) return [];
+  if (pts.every(inside)) return pts;
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const aIn = inside(a), bIn = inside(b);
+    if (aIn) out.push(a);
+    if (aIn !== bIn) {
+      const t = (y - a.y) / (b.y - a.y);
+      out.push({ x: a.x + (b.x - a.x) * t, y, z: a.z + (b.z - a.z) * t });
+    }
+  }
+  return out;
 }
 
 function cross(a, b) {

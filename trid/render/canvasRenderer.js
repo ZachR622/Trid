@@ -8,7 +8,7 @@ import { textureReady, textureSize, textureIsLive, textureVersion } from "../loa
 import { uvsFor, uvTransform, applyUVTransform } from "./uvMapping.js";
 import { DEFAULT_LIGHT, DEFAULT_AMBIENT, sceneLights, lightAt as lightOf, lightLevels } from "./lights.js";
 import { runCanvasPost, activePost, maskedObjects } from "./post.js";
-import { shadowFlag, findGround, flattenOnGround } from "./shadows.js";
+import { shadowFlag, findGround, flattenOnGround, flattenFromPoint } from "./shadows.js";
 
 export { newell };
 
@@ -131,10 +131,13 @@ export class CanvasRenderer {
     const contours = activePost(scene.post).filter((e) => e.contour).map((e) => ({ e, mask: maskedObjects(e) }));
     const outlines = [];
     // Ground shadows (see trid/render/shadows.js): the floor's faces, then the shadows, then the rest
-    const sun = lights.shadow && lights.shadow.dir.y > 0.01 ? lights.shadow : null;
-    const ground = sun ? sun.ground ?? findGround(drawn.filter((o) => materialsOf(o) && shadowFlag(o, "receiveShadow"))) : null;
-    const shadowing = ground !== null && (camera.y ?? 0) > ground;
-    const shadowPolys = [];
+    const asked = lights.shadows.find((sh) => sh.ground !== null)?.ground;
+    const ground = !lights.shadows.length ? null
+      : asked ?? findGround(drawn.filter((o) => materialsOf(o) && shadowFlag(o, "receiveShadow")));
+    // Lights that can throw a shadow down onto it: suns from above, bulbs above it
+    const casting = ground === null ? [] : lights.shadows.filter((sh) => (sh.point ? sh.pos.y > ground + 1e-3 : sh.dir.y > 0.01));
+    const shadowing = casting.length > 0 && (camera.y ?? 0) > ground;
+    const shadowPolys = casting.map(() => []); // per light
 
     for (const obj of drawn) {
       const mats = materialsOf(obj);
@@ -150,10 +153,13 @@ export class CanvasRenderer {
       if (shadowing && mats && shadowFlag(obj, "castShadow")) {
         for (const face of obj.mesh.faces ?? []) {
           if (face.length < 3) continue;
-          const flat = flattenOnGround(face.map((i) => world[i]), sun.dir, ground);
-          if (flat.length < 3) continue;
-          const clipped = clipPolygon(flat.map((p) => worldToCamera(p, camera)), near);
-          if (clipped.length >= 3) shadowPolys.push(clipped.map(toScreen));
+          const pts = face.map((i) => world[i]);
+          casting.forEach((sh, k) => {
+            const flat = sh.point ? flattenFromPoint(pts, sh.pos, ground) : flattenOnGround(pts, sh.dir, ground);
+            if (flat.length < 3) return;
+            const clipped = clipPolygon(flat.map((p) => worldToCamera(p, camera)), near);
+            if (clipped.length >= 3) shadowPolys[k].push(clipped.map(toScreen));
+          });
         }
       }
       const onGround = shadowing && mats && shadowFlag(obj, "receiveShadow");
@@ -460,11 +466,11 @@ export class CanvasRenderer {
       }
     };
 
-    const floor = shadowing && shadowPolys.length ? items.filter((it) => it.ground) : [];
+    const floor = shadowing && shadowPolys.some((p) => p.length) ? items.filter((it) => it.ground) : [];
     if (floor.length) {
       // Everything else stands on the floor, so it's in front of it: floor, shadows, then the rest
       for (let n = 0; n < items.length; n++) if (items[n].ground) drawItem(n);
-      this._groundShadow(ctx, w, h, shadowPolys, floor, lights, sun, ground);
+      this._groundShadow(ctx, w, h, shadowPolys, floor, lights, casting, ground);
       for (let n = 0; n < items.length; n++) if (!items[n].ground) drawItem(n);
     } else {
       for (let n = 0; n < items.length; n++) drawItem(n);
@@ -478,33 +484,23 @@ export class CanvasRenderer {
   }
 
   /**
-   * Darkens the floor where the shadows fall: the shadow shapes, blurred,
-   * kept only on the floor's faces, as dark as the light they take away.
+   * Darkens the floor where the shadows fall: for each light, its shadow
+   * shapes, blurred, kept only on the floor's faces, as dark as the light
+   * it takes away there.
+   *
+   * @param {Object[][][]} polys - Per light: screen polygons
    */
-  _groundShadow(ctx, w, h, polys, floor, lights, sun, ground) {
+  _groundShadow(ctx, w, h, polys, floor, lights, casting, ground) {
     const [shade, mask] = [0, 1].map((i) => {
       const c = (this._scratch ??= [])[i] ??= document.createElement("canvas");
       if (c.width !== w || c.height !== h) {
         c.width = w;
         c.height = h;
       }
-      const g = c.getContext("2d");
-      g.clearRect(0, 0, w, h);
-      return { c, g };
+      return { c, g: c.getContext("2d") };
     });
-    // The shadows, all turned the same way so overlaps don't cancel out
-    if (typeof shade.g.filter === "string" && sun.softness > 0) shade.g.filter = `blur(${sun.softness}px)`;
-    shade.g.beginPath();
-    for (const poly of polys) {
-      const p = signedArea(poly) < 0 ? poly.slice().reverse() : poly;
-      shade.g.moveTo(p[0].x, p[0].y);
-      for (let k = 1; k < p.length; k++) shade.g.lineTo(p[k].x, p[k].y);
-      shade.g.closePath();
-    }
-    shade.g.fillStyle = "#000000";
-    shade.g.fill();
-    shade.g.filter = "none";
-    // Only on the floor
+    // The floor, once
+    mask.g.clearRect(0, 0, w, h);
     mask.g.beginPath();
     for (const it of floor) {
       mask.g.moveTo(it.poly[0].x, it.poly[0].y);
@@ -515,20 +511,42 @@ export class CanvasRenderer {
     mask.g.fill();
     mask.g.lineWidth = 1;
     mask.g.stroke();
-    shade.g.globalCompositeOperation = "destination-in";
-    shade.g.drawImage(mask.c, 0, 0);
-    shade.g.globalCompositeOperation = "source-over";
 
-    // As dark as the share of the floor's light this light gives
-    const up = { x: 0, y: 1, z: 0 }, at = { x: 0, y: ground, z: 0 };
-    const all = Math.max(...lightOf(lights, up, at));
-    const without = Math.max(...lightOf({ ...lights, lights: lights.lights.filter((_, i) => i !== sun.index) }, up, at));
-    const alpha = all > 0 ? Math.min(1, Math.max(0, 1 - without / all)) : 0;
-    if (alpha <= 0) return;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(shade.c, 0, 0);
-    ctx.restore();
+    const up = { x: 0, y: 1, z: 0 };
+    casting.forEach((sh, n) => {
+      if (!polys[n].length) return;
+      // As dark as this light's share of the floor's light (under a bulb: right below it)
+      const at = sh.point ? { x: sh.pos.x, y: ground, z: sh.pos.z } : { x: 0, y: ground, z: 0 };
+      const all = Math.max(...lightOf(lights, up, at));
+      const without = Math.max(...lightOf({ ...lights, lights: lights.lights.filter((_, i) => i !== sh.index) }, up, at));
+      const alpha = all > 0 ? Math.min(1, Math.max(0, 1 - without / all)) : 0;
+      if (alpha <= 0) return;
+
+      // The shadows, all turned the same way so overlaps don't cancel out
+      const g = shade.g;
+      g.globalCompositeOperation = "source-over";
+      g.clearRect(0, 0, w, h);
+      if (typeof g.filter === "string" && sh.softness > 0) g.filter = `blur(${sh.softness}px)`;
+      g.beginPath();
+      for (const poly of polys[n]) {
+        const p = signedArea(poly) < 0 ? poly.slice().reverse() : poly;
+        g.moveTo(p[0].x, p[0].y);
+        for (let k = 1; k < p.length; k++) g.lineTo(p[k].x, p[k].y);
+        g.closePath();
+      }
+      g.fillStyle = "#000000";
+      g.fill();
+      g.filter = "none";
+      // Only on the floor
+      g.globalCompositeOperation = "destination-in";
+      g.drawImage(mask.c, 0, 0);
+      g.globalCompositeOperation = "source-over";
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(shade.c, 0, 0);
+      ctx.restore();
+    });
   }
 
   /**

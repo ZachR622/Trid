@@ -5,6 +5,7 @@ Tools for making your own shapes in code, beyond `makeShape`, `lathe` and `extru
 ```js
 import {
   spline, resamplePath, sweep, loft, subdivideMesh, bevelMesh, blobMesh, blobField, sdfMesh,
+  booleanMesh, unionMesh, subtractMesh, intersectMesh,
   taperMesh, twistMesh, bendMesh, bulgeMesh, weldVertices, cleanMesh, validateMesh, fixWinding,
   meshQuery, raycastMesh, pointInMesh, distanceToMesh, closestPointOnMesh, isClosed, raycastScene,
 } from "./trid/index.js";
@@ -15,6 +16,7 @@ import {
 | [Curves, sweeps & lofts](./curves) | `spline`, `resamplePath`, `sweep`, `loft` |
 | [Subdivision & bevels](./smoothing) | `subdivideMesh`, `bevelMesh` |
 | [Blobs](./blobs) | `blobMesh`, `blobField`, `sdfMesh` |
+| [Booleans](./booleans) | `booleanMesh`, `unionMesh`, `subtractMesh`, `intersectMesh` |
 | [Deformers](./deformers) | `taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh` |
 | [Cleanup and checks](./cleanup) | `weldVertices`, `cleanMesh`, `validateMesh`, `fixWinding` |
 | [Rays, inside and distance](./queries) | `meshQuery`, `raycastScene`, `isClosed` and one-off helpers |
@@ -29,6 +31,7 @@ import {
 | A vase, a wheel, a lamp: turned around an axis | [`lathe`](../shapes#lathe-profile-opts) |
 | A flat outline with depth: a logo, a key, a star | [`extrude`](../shapes#extrude-outline-depth-0-2) |
 | Something smooth, built from a few boxes | [`subdivideMesh`](./smoothing#subdividemesh-mesh-opts) |
+| Holes, windows, notches, cut-outs; or one solid from overlapping parts | [Booleans](./booleans): subtract, union, intersect |
 | Furniture, devices, robots: soft edges | [`bevelMesh`](./smoothing#bevelmesh-mesh-opts), or `makeShape("box", { radius })` |
 | A trunk that tapers, a twisted column, a bent arm | [Deformers](./deformers) |
 | Rocks, terrain, wobbly surfaces | [`displaceMesh`](../shapes#mesh-helpers) with [noise](../noise) |

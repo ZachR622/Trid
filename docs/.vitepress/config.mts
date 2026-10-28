@@ -46,6 +46,7 @@ export default defineConfig({
               { text: "Curves, sweeps & lofts", link: "/modeling/curves" },
               { text: "Subdivision & bevels", link: "/modeling/smoothing" },
               { text: "Blobs", link: "/modeling/blobs" },
+              { text: "Booleans", link: "/modeling/booleans" },
               { text: "Deformers", link: "/modeling/deformers" },
               { text: "Cleanup and checks", link: "/modeling/cleanup" },
               { text: "Rays, inside and distance", link: "/modeling/queries" },
