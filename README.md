@@ -23,7 +23,7 @@ Trid gives you a scene, shapes you can model in code, lights, effects, model loa
 - **Lights** — ambient, directional and point lights, with colors and intensities, as many as you need (up to 8 at once besides ambient).
 - **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files, or made from the shape (planar, box, sphere and cylinder mapping). Repeat, offset and rotate them, or give each face its own material. Or paint one in code: wood, marble, bricks and more, all seamless.
 - **Effects** — stack shader effects like toon, rim and edge glow, gradients and fog on a material, or write your own in GLSL.
-- **Post effects** — bloom, vignette, color grading and film grain over the whole picture, or your own full-screen shaders (several passes if needed).
+- **Post effects** — bloom, vignette, color grading, film grain and cartoon outlines over the whole picture, or your own full-screen shaders (several passes if needed, reading the scene's depth and normals if wanted).
 - **Two renderers** — the canvas 2D context by default, or `WebGLRenderer` for exact depth and big models, with the same scene code.
 - **OBJ files** — load models from a URL (with their `.mtl` colors and textures), or let users drop their own `.obj` files on the canvas.
 - **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` / `exportModel` write meshes, objects or whole scenes as OBJ files with their MTL materials and textures.
@@ -152,5 +152,5 @@ Roughly in order:
 
 - **More import and export formats** — STL; basic glTF later
 - **More tools** — a selection outline
-- **More post effects** — outlines (from depth), antialiasing (FXAA)
+- **More post effects** — antialiasing (FXAA)
 - **More tests** — the canvas renderer's drawing and the remaining math functions

@@ -18,11 +18,23 @@
  * - `uniforms`: settings used by the code, like `{ uStrength: 0.5 }`. Same
  *   types as material effects; read every frame
  * - `enabled: false` turns the effect off without removing it
+ * - `geometry: true`: the effect also reads the scene's depth and normals
+ *   (WebGL renderer). Its GLSL can then call `depthAt(uv)`, `normalAt(uv)`
+ *   and `maskAt(uv)`, see below. The renderer draws them in one extra pass,
+ *   only while such an effect is on
+ * - `objects`: with `geometry`, the objects `maskAt` is 1 on (their children
+ *   too). Default: every object
  *
  * In GLSL, every pass can call:
  * - `frame(uv)`: the previous pass's picture (the first pass: the picture
  *   this effect starts from)
  * - `source(uv)`: the picture this effect starts from
+ * With `geometry: true`, also:
+ * - `depthAt(uv)`: distance from the camera, along its view (`f.far` or more
+ *   where nothing is drawn). Only opaque faces count, not lines
+ * - `normalAt(uv)`: the surface's normal, in camera space (z points away from
+ *   the camera, so faces seen from the front have z < 0)
+ * - `maskAt(uv)`: 1 on the effect's `objects`, else 0 (nothing drawn: 0)
  * Colors are premultiplied by alpha (the same as plain colors where the
  * picture is opaque, which it is when the scene has an opaque background).
  *
@@ -32,6 +44,7 @@
  */
 
 import { parseColor } from "./color.js";
+import { DEFAULT_NEAR } from "../math/transform.js";
 
 /**
  * What a post effect knows about the picture. GLSL fields and the canvas
@@ -44,6 +57,8 @@ import { parseColor } from "./color.js";
  * @property {{x:number,y:number}} texel - GLSL only: one pixel of the input picture, in uv units
  * @property {number} time - Seconds since the renderer started
  * @property {number[]} background - The scene's background color [r, g, b, a]
+ * @property {number} near - The camera's near distance
+ * @property {number} far - The camera's far distance (WebGL renderer: what's farther isn't drawn)
  */
 
 /** The GLSL declaration of `Frame`, and the `frame` / `source` helpers. */
@@ -54,12 +69,60 @@ struct Frame {
   vec2 texel;
   float time;
   vec4 background;
+  float near;
+  float far;
 };
 uniform sampler2D uFrame;
 uniform sampler2D uSource;
 vec4 frame(vec2 uv) { return texture2D(uFrame, uv); }
 vec4 source(vec2 uv) { return texture2D(uSource, uv); }
 `;
+
+/**
+ * GLSL helpers for effects with `geometry: true`: `depthAt`, `normalAt` and
+ * `maskAt`. They read a picture where each pixel packs the surface's normal
+ * (red, green) and its distance on a log scale between near and far (blue,
+ * alpha), with the mask in alpha's lowest bit.
+ */
+export const GEOMETRY_GLSL = `
+uniform sampler2D uGeometry;
+uniform float uGeoNear;
+uniform float uGeoRange; // log(far / near)
+vec4 geoTexel(vec2 uv) { return floor(texture2D(uGeometry, uv) * 255.0 + 0.5); }
+float depthAt(vec2 uv) {
+  vec4 g = geoTexel(uv);
+  return uGeoNear * exp((g.b * 128.0 + floor(g.a / 2.0)) / 32766.0 * uGeoRange);
+}
+vec3 normalAt(vec2 uv) {
+  vec2 p = geoTexel(uv).rg / 127.5 - 1.0;
+  vec3 n = vec3(p, 1.0 - abs(p.x) - abs(p.y));
+  if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+  return normalize(n);
+}
+float maskAt(vec2 uv) { return mod(geoTexel(uv).a, 2.0); }
+`;
+
+/** Whether a post effect reads the scene's depth and normals (`geometry: true`, with GLSL). */
+export function wantsGeometry(effect) {
+  return !!effect?.geometry && postPasses(effect).length > 0;
+}
+
+/**
+ * Every object an effect's `objects` list covers, children included, as a
+ * Set. Null when the effect has no list (it covers everything).
+ */
+export function maskedObjects(effect) {
+  const list = effect?.objects;
+  if (!Array.isArray(list)) return null;
+  const out = new Set();
+  const visit = (o) => {
+    if (!o || typeof o !== "object" || out.has(o)) return;
+    out.add(o);
+    if (Array.isArray(o.children)) o.children.forEach(visit);
+  };
+  list.forEach(visit);
+  return out;
+}
 
 /** A post effect's passes, as `{ glsl, scale }`. Empty when it has no GLSL (canvas only). */
 export function postPasses(effect) {
@@ -90,6 +153,8 @@ export function runCanvasPost(scene, list, start) {
     time: (performance.now() - start) / 1000,
     canvas,
     rgba: (v) => (typeof v === "string" ? parseColor(ctx, v).map((x, i) => (i < 3 ? x / 255 : x)) : v),
+    near: scene.camera?.near ?? DEFAULT_NEAR,
+    far: scene.camera?.far ?? 1000,
   };
   frame.background = frame.rgba(scene.background ?? "transparent");
   for (const e of effects) {
@@ -288,6 +353,95 @@ vec4 post(vec4 color, Frame f) {
       ctx.drawImage(copy, 0, 0);
     },
   };
+}
+
+/** Crease angle the outline uses when `creases` isn't given, in degrees. */
+export const DEFAULT_OUTLINE_CREASE = 40;
+
+/**
+ * Cartoon-style lines: around each object (where the distance jumps:
+ * silhouettes, and where one object passes in front of another) and,
+ * with `creases`, inside it where the surface turns sharply (a cube's edges).
+ * Lines are drawn on the nearer side of a jump, so they hug the objects.
+ *
+ * Smooth-shaded surfaces (`smooth: true`) only get lines where their shading
+ * keeps a hard edge; flat-shaded ones get one wherever faces meet at more
+ * than `creases` degrees.
+ *
+ * The canvas renderer draws the meshes' outer edges and creases as lines
+ * instead (sorted with the faces), so the same scene looks close on both.
+ *
+ * @param {Object} [opts]
+ * @param {string} [opts.color="#1a1a1a"] - Line color (its alpha makes lines see-through)
+ * @param {number} [opts.width=2] - Line width, in pixels (WebGL: up to 16)
+ * @param {number|false} [opts.creases=40] - Draw a line where the surface turns by more than this
+ *   many degrees. `false`: outer lines only
+ * @param {number} [opts.depth=1] - How readily a jump in distance makes a line (WebGL): higher finds
+ *   smaller steps (an object resting on another), 0 = none (creases only)
+ * @param {Object[]} [opts.objects] - Only outline these objects (and their children). Default: all
+ */
+export function outline({ color = "#1a1a1a", width = 2, creases = DEFAULT_OUTLINE_CREASE, depth = 1, objects } = {}) {
+  return {
+    name: "outline",
+    geometry: true,
+    contour: true,
+    objects,
+    uniforms: { uColor: color, uWidth: width, uCreaseAngle: creases === false ? 180 : creases, uDepth: depth },
+    passes: [
+      {
+        // Where the lines are, 1 pixel thin (red channel)
+        glsl: `
+vec4 post(vec4 color, Frame f) {
+  if (maskAt(f.uv) < 0.5) return vec4(0.0); // not an outlined object (or nothing there)
+  float zc = depthAt(f.uv);
+  vec2 d = f.texel;
+
+  // Jumps in distance. 1 / distance changes evenly across a flat face, so its
+  // second difference is 0 there and big at a jump; > 0 only on the nearer side.
+  float ic = 1.0 / zc;
+  float jx = 2.0 * ic - 1.0 / depthAt(f.uv - vec2(d.x, 0.0)) - 1.0 / depthAt(f.uv + vec2(d.x, 0.0));
+  float jy = 2.0 * ic - 1.0 / depthAt(f.uv - vec2(0.0, d.y)) - 1.0 / depthAt(f.uv + vec2(0.0, d.y));
+  float line = smoothstep(0.03, 0.08, max(jx, jy) / ic * uDepth);
+
+  // Creases: the normal turns sharply toward the next pixel, on the same surface
+  if (uCreaseAngle < 180.0) {
+    vec3 nc = normalAt(f.uv);
+    float bend = 0.0;
+    for (int k = 0; k < 2; k++) {
+      vec2 uv = f.uv + (k == 0 ? vec2(d.x, 0.0) : vec2(0.0, d.y));
+      if (abs(depthAt(uv) - zc) > zc * 0.05) continue; // another object: the jump test handles it
+      bend = max(bend, 1.0 - dot(nc, normalAt(uv)));
+    }
+    float limit = 1.0 - cos(radians(uCreaseAngle));
+    line = max(line, smoothstep(limit * 0.8, limit * 1.2 + 1e-3, bend));
+  }
+  return vec4(line, 0.0, 0.0, 1.0);
+}`,
+      },
+      // Widened to `width` pixels: across, then down (soft at the ends)
+      { glsl: widen("vec2(1.0, 0.0)", "return vec4(w, 0.0, 0.0, 1.0);") },
+      {
+        glsl: widen("vec2(0.0, 1.0)", `
+  float a = w * uColor.a;
+  return source(f.uv) * (1.0 - a) + vec4(uColor.rgb * a, a);`),
+      },
+    ],
+  };
+}
+
+/** One direction of the outline's widening: the strongest line nearby, by distance. */
+function widen(dir, finish) {
+  return `
+vec4 post(vec4 color, Frame f) {
+  float reach = max(uWidth, 1.0) * 0.5 + 0.5; // full strength up to here, fading over the next pixel
+  float w = 0.0;
+  for (int i = -8; i <= 8; i++) {
+    float o = float(i);
+    if (abs(o) > reach) continue;
+    w = max(w, frame(f.uv + ${dir} * o * f.texel).r * clamp(reach - abs(o), 0.0, 1.0));
+  }
+${finish}
+}`;
 }
 
 // --- Helpers for the canvas versions ---

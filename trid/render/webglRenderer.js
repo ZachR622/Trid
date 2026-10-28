@@ -5,7 +5,7 @@ import { clear, edgeSegments, wireEdges } from "./draw.js";
 import { parseColor } from "./color.js";
 import { materialsOf } from "./canvasRenderer.js";
 import { sceneLights, MAX_LIGHTS } from "./lights.js";
-import { FRAME_GLSL, postPasses, activePost, runCanvasPost } from "./post.js";
+import { FRAME_GLSL, GEOMETRY_GLSL, postPasses, activePost, runCanvasPost, wantsGeometry, maskedObjects } from "./post.js";
 import { uvsFor, uvTransform, mappingKey } from "./uvMapping.js";
 import { newell, cornerNormals, creaseOf } from "./normals.js";
 import { SURFACE_GLSL, buildEffects, effectsKey, uniformType } from "./effects.js";
@@ -181,6 +181,61 @@ void main() {
 
 const UNIFORMS = ["uModel", "uCamPos", "uCamRot", "uF", "uAspect", "uNear", "uFar", "uColor"];
 
+// Depth and normals of the faces, for post effects with `geometry: true`
+// (the packing is read back by GEOMETRY_GLSL in trid/render/post.js)
+const GEO_VS = `
+attribute vec3 aPos;
+attribute vec3 aNormal;
+attribute vec2 aUV;
+varying vec3 vNormal; // camera space
+varying vec2 vUV;
+varying float vDepth;
+uniform mat3 uUVTransform;
+uniform mat3 uNormalMatrix;
+${COMMON}
+void main() {
+  vec3 n = uNormalMatrix * aNormal;
+  vNormal = rotX(rotY(n, uCamRot.x), uCamRot.y);
+  vUV = (uUVTransform * vec3(aUV, 1.0)).xy;
+  vec3 c = toCamera(toWorld(aPos));
+  vDepth = c.z;
+  gl_Position = toClip(c);
+}
+`;
+
+const GEO_FS = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec4 uColor;
+uniform sampler2D uTexture;
+uniform float uUseTexture;
+uniform float uGeoNear;
+uniform float uGeoRange;
+uniform float uMask;
+varying vec3 vNormal;
+varying vec2 vUV;
+varying float vDepth;
+void main() {
+  // See-through parts of a texture don't count, like in the face shader
+  if (uColor.a * mix(1.0, texture2D(uTexture, vUV).a, uUseTexture) < 0.004) discard;
+  vec3 n = normalize(vNormal);
+  if (!gl_FrontFacing) n = -n;
+  // Octahedral packing: the unit normal folded onto a square
+  n /= abs(n.x) + abs(n.y) + abs(n.z);
+  vec2 p = n.z >= 0.0 ? n.xy : (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+  vec2 rg = floor((p * 0.5 + 0.5) * 255.0 + 0.5);
+  // Distance on a log scale, 15 bits: 0 = near, 32766 = far (32767: nothing drawn)
+  float d = clamp(log(max(vDepth, uGeoNear) / uGeoNear) / uGeoRange, 0.0, 1.0);
+  float q = floor(d * 32766.0 + 0.5);
+  float hi = floor(q / 128.0);
+  float lo = q - hi * 128.0;
+  gl_FragColor = vec4(rg, hi, lo * 2.0 + uMask) / 255.0;
+}
+`;
+
 // Post effects: one big triangle covering the screen
 const POST_VS = `
 attribute vec2 aPos;
@@ -192,7 +247,7 @@ void main() {
 `;
 
 /** Fragment shader for one pass of a post effect (see trid/render/post.js). */
-function postFS(glsl, uniforms) {
+function postFS(glsl, uniforms, geometry = false) {
   const decls = uniforms.map((u) => `uniform ${u.type} ${u.name};`).join("\n");
   return `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -204,8 +259,10 @@ uniform vec2 uSize;
 uniform vec2 uTexel;
 uniform float uTime;
 uniform vec4 uBackground;
+uniform float uNear, uFar;
 varying vec2 vUV;
 ${FRAME_GLSL}
+${geometry ? GEOMETRY_GLSL : ""}
 ${decls}
 ${glsl}
 void main() {
@@ -215,12 +272,14 @@ void main() {
   f.texel = uTexel;
   f.time = uTime;
   f.background = uBackground;
+  f.near = uNear;
+  f.far = uFar;
   gl_FragColor = clamp(post(frame(vUV), f), 0.0, 1.0);
 }
 `;
 }
 
-const POST_UNIFORMS = ["uFrame", "uSource", "uSize", "uTexel", "uTime", "uBackground"];
+const POST_UNIFORMS = ["uFrame", "uSource", "uSize", "uTexel", "uTime", "uBackground", "uNear", "uFar", "uGeometry", "uGeoNear", "uGeoRange"];
 const COPY_GLSL = "vec4 post(vec4 color, Frame f) { return color; }";
 
 /**
@@ -242,7 +301,8 @@ const COPY_GLSL = "vec4 post(vec4 color, Frame f) { return color; }";
  *
  * Post effects (`scene.post`, see trid/render/post.js) run on the graphics
  * card too: the scene is drawn into a texture, then each pass draws the
- * next picture from it.
+ * next picture from it. Effects with `geometry: true` (like `outline()`) also
+ * get the faces' depth and normals, drawn in one extra pass.
  *
  * Meshes and textures that haven't been drawn for `releaseAfter` frames
  * are freed from the graphics card, so replacing them (`obj.mesh = newMesh`)
@@ -311,6 +371,7 @@ export class WebGLRenderer {
     this._line = program(gl, LINE_VS, LINE_FS, ["aA", "aB", "aCorner"], [...UNIFORMS, "uRes", "uWidth"]);
     this._posts = new Map(); // post effect pass programs, one per pass code
     this._post = null; // render targets for post effects, made when first needed
+    this._geo = null; // depth and normals program, for post effects with `geometry`
 
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
@@ -407,7 +468,16 @@ export class WebGLRenderer {
     gl.depthMask(false);
     for (const d of clear2) this._draw(d, view, lights, w, h);
 
-    if (gpuPost.length) this._runPost(gpuPost, view, w, h);
+    if (gpuPost.length) {
+      // Depth and normals for the effects that read them: one picture per `objects` list
+      const geometry = new Map();
+      for (const e of gpuPost) {
+        if (!wantsGeometry(e)) continue;
+        const key = Array.isArray(e.objects) ? e.objects : null;
+        if (!geometry.has(key)) geometry.set(key, this._geometryPass(opaque, view, w, h, maskedObjects(e), key));
+      }
+      this._runPost(gpuPost, view, w, h, geometry);
+    }
 
     ctx.drawImage(this.canvas, 0, 0);
     runCanvasPost(scene, post.filter((e) => !postPasses(e).length), this._start);
@@ -464,6 +534,12 @@ export class WebGLRenderer {
         else keep.push(t);
       }
       this._post.pool = keep;
+      for (const [key, t] of this._post.geometry) {
+        if (t.used < this._frame - 60) {
+          this._freeTarget(t);
+          this._post.geometry.delete(key);
+        }
+      }
       if (this._post.used < this._frame - 60) this._freePost();
     }
   }
@@ -483,7 +559,7 @@ export class WebGLRenderer {
       P = null;
     }
     if (!P) {
-      P = this._post = { w, h, pool: [], used: this._frame };
+      P = this._post = { w, h, pool: [], geometry: new Map(), used: this._frame };
       P.scene = this._makeTarget(w, h, true);
       if (this._webgl2 && this._options.antialias) {
         const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) || 0);
@@ -555,6 +631,7 @@ export class WebGLRenderer {
     const gl = this.gl;
     this._freeTarget(P.scene);
     for (const t of P.pool) this._freeTarget(t);
+    for (const t of P.geometry.values()) this._freeTarget(t);
     if (P.msaa) {
       gl.deleteFramebuffer(P.msaa.fb);
       gl.deleteRenderbuffer(P.msaa.color);
@@ -576,16 +653,90 @@ export class WebGLRenderer {
     return t;
   }
 
+  /**
+   * Draws the opaque faces' depth and normals (see GEO_FS) into a picture
+   * kept for this `objects` list. `mask`: the objects marked in it (null: all).
+   */
+  _geometryPass(draws, view, w, h, mask, key) {
+    const gl = this.gl;
+    const P = this._post;
+    let t = P.geometry.get(key);
+    if (!t) {
+      t = this._makeTarget(w, h, true);
+      // Packed numbers: never blend neighboring pixels
+      gl.bindTexture(gl.TEXTURE_2D, t.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      P.geometry.set(key, t);
+    }
+    t.used = this._frame;
+    this._geo ??= program(gl, GEO_VS, GEO_FS, ["aPos", "aNormal", "aUV"],
+      [...UNIFORMS, "uUVTransform", "uNormalMatrix", "uTexture", "uUseTexture", "uGeoNear", "uGeoRange", "uMask"]);
+    const prog = this._geo;
+    const u = prog.uniforms, a = prog.attributes;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, t.fb);
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(0.5, 0.5, 1, 254 / 255); // "nothing drawn": the farthest distance, mask 0
+    gl.depthMask(true);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.useProgram(prog.program);
+    gl.uniform3fv(u.uCamPos, view.camPos);
+    gl.uniform2fv(u.uCamRot, view.camRot);
+    gl.uniform1f(u.uF, view.f);
+    gl.uniform1f(u.uAspect, view.aspect);
+    gl.uniform1f(u.uNear, view.near);
+    gl.uniform1f(u.uFar, view.far);
+    gl.uniform1f(u.uGeoNear, view.near);
+    gl.uniform1f(u.uGeoRange, Math.log(view.far / view.near));
+    gl.uniform1i(u.uTexture, 0);
+    const locs = [a.aPos, a.aNormal, a.aUV].filter((loc) => loc >= 0);
+    for (const loc of locs) gl.enableVertexAttribArray(loc);
+
+    for (const d of draws) {
+      if (d.kind !== "face") continue;
+      const buf = this._faceBuffer(d.geo, d.obj.mesh, d.mat.shade === false ? null : creaseOf(d.mat.smooth), d.mat.mapping);
+      if (!d.count) continue;
+      gl.uniformMatrix4fv(u.uModel, false, d.obj.world);
+      gl.uniform4fv(u.uColor, d.color);
+      gl.uniform1f(u.uMask, !mask || mask.has(d.obj) ? 1 : 0);
+      const m = uvTransform(d.mat) ?? [1, 0, 0, 1, 0, 0];
+      gl.uniformMatrix3fv(u.uUVTransform, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
+      gl.uniformMatrix3fv(u.uNormalMatrix, false, d.place.normals);
+      gl.frontFace(d.place.mirrored ? gl.CCW : gl.CW);
+      if (d.mat.doubleSided) gl.disable(gl.CULL_FACE);
+      else gl.enable(gl.CULL_FACE);
+      const tex = d.mat.texture
+        ? this._texture(d.mat.texture, d.mat, d.obj.mesh, !!uvsFor(d.obj.mesh, d.mat.mapping).faceUVs)
+        : null;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.uniform1f(u.uUseTexture, tex ? 1 : 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf.buffer);
+      gl.vertexAttribPointer(a.aPos, 3, gl.FLOAT, false, 32, 0);
+      if (a.aNormal >= 0) gl.vertexAttribPointer(a.aNormal, 3, gl.FLOAT, false, 32, 12);
+      if (a.aUV >= 0) gl.vertexAttribPointer(a.aUV, 2, gl.FLOAT, false, 32, 24);
+      gl.drawArrays(gl.TRIANGLES, d.first, d.count);
+    }
+
+    for (const loc of locs) gl.disableVertexAttribArray(loc);
+    gl.enable(gl.BLEND);
+    return t;
+  }
+
   /** The program for one pass's code, compiled once. Null if it doesn't compile (reported once). */
-  _postProgram(glsl, uniforms) {
+  _postProgram(glsl, uniforms, geometry = false) {
     const list = Object.entries(uniforms ?? {})
       .map(([name, value]) => ({ name, type: uniformType(value) }))
       .filter((u) => u.type);
-    const key = glsl + "|" + list.map((u) => u.name + ":" + u.type).join(",");
+    const key = (geometry ? "geo|" : "") + glsl + "|" + list.map((u) => u.name + ":" + u.type).join(",");
     if (this._posts.has(key)) return this._posts.get(key);
     let p = null;
     try {
-      p = program(this.gl, POST_VS, postFS(glsl, list), ["aPos"], [...POST_UNIFORMS, ...list.map((u) => u.name)]);
+      p = program(this.gl, POST_VS, postFS(glsl, list, geometry), ["aPos"], [...POST_UNIFORMS, ...list.map((u) => u.name)]);
       p.list = list;
     } catch (err) {
       console.error("Trid: a post effect's shader failed to compile, skipping it.\n" + err.message);
@@ -598,7 +749,7 @@ export class WebGLRenderer {
    * Runs the post effects on the scene's picture, then draws the result on
    * the WebGL canvas.
    */
-  _runPost(effects, view, w, h) {
+  _runPost(effects, view, w, h, geometry = new Map()) {
     const gl = this.gl;
     const P = this._post;
     // Multisampled drawing: resolve it into the scene's texture
@@ -616,7 +767,7 @@ export class WebGLRenderer {
     gl.disable(gl.POLYGON_OFFSET_FILL);
     gl.bindBuffer(gl.ARRAY_BUFFER, P.quad);
 
-    const pass = (prog, input, source, target, tw, th, uniforms) => {
+    const pass = (prog, input, source, target, tw, th, uniforms, geo = null) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fb : null);
       gl.viewport(0, 0, tw, th);
       gl.useProgram(prog.program);
@@ -631,6 +782,15 @@ export class WebGLRenderer {
       gl.uniform2f(u.uTexel, 1 / input.w, 1 / input.h);
       gl.uniform1f(u.uTime, view.time);
       gl.uniform4fv(u.uBackground, view.background);
+      gl.uniform1f(u.uNear, view.near);
+      gl.uniform1f(u.uFar, view.far);
+      if (geo) {
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, geo.tex);
+        gl.uniform1i(u.uGeometry, 2);
+        gl.uniform1f(u.uGeoNear, view.near);
+        gl.uniform1f(u.uGeoRange, Math.log(view.far / view.near));
+      }
       for (const x of prog.list) this._setUniform(view.ctx, u[x.name], x.type, uniforms?.[x.name]);
       const a = prog.attributes.aPos;
       gl.enableVertexAttribArray(a);
@@ -642,12 +802,13 @@ export class WebGLRenderer {
     let source = P.scene; // the picture the current effect starts from
     for (const e of effects) {
       let prev = source;
+      const geo = wantsGeometry(e) ? geometry.get(Array.isArray(e.objects) ? e.objects : null) ?? null : null;
       for (const ps of postPasses(e)) {
-        const prog = this._postProgram(ps.glsl, e.uniforms);
+        const prog = this._postProgram(ps.glsl, e.uniforms, !!geo);
         if (!prog) continue;
         const tw = Math.max(1, Math.round(w * ps.scale)), th = Math.max(1, Math.round(h * ps.scale));
         const target = this._poolTarget(tw, th, [source, prev]);
-        pass(prog, prev, source, target, tw, th, e.uniforms);
+        pass(prog, prev, source, target, tw, th, e.uniforms, geo);
         prev = target;
       }
       source = prev;
@@ -656,6 +817,8 @@ export class WebGLRenderer {
     // Onto the canvas
     pass(this._postProgram(COPY_GLSL, {}), source, source, null, w, h, {});
 
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, null);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.activeTexture(gl.TEXTURE0);
@@ -677,6 +840,7 @@ export class WebGLRenderer {
     for (const p of new Set(this._faces.values())) gl.deleteProgram(p.program);
     for (const p of this._posts.values()) if (p) gl.deleteProgram(p.program);
     gl.deleteProgram(this._line.program);
+    if (this._geo) gl.deleteProgram(this._geo.program);
     this._freePost();
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }

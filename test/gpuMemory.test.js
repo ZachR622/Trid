@@ -48,7 +48,7 @@ globalThis.HTMLVideoElement = FakeVideo;
 globalThis.document = { createElement: () => new FakeCanvas() };
 
 let current = fakeGL();
-const { WebGLRenderer, makeShape, updateTexture, worldMatrix } = await import("../trid/index.js");
+const { WebGLRenderer, makeShape, updateTexture, worldMatrix, outline } = await import("../trid/index.js");
 
 function setup(opts) {
   current = fakeGL();
@@ -169,4 +169,30 @@ test("groups: each child is drawn with its world matrix; mirrored ones flip the 
   assert.ok(sent.includes(worldMatrix(child).map((x) => x.toFixed(9)).join()));
   assert.ok(sent.includes(worldMatrix(mirrored).map((x) => x.toFixed(9)).join()));
   assert.deepEqual([...new Set(calls.frontFace)].sort(), ["CCW", "CW"]);
+});
+
+test("outline(): one extra draw per face group for depth and normals; its picture is made once and freed when off", () => {
+  const { renderer, scene, add, frames, count, calls } = setup({ releaseAfter: 30 });
+  add({ mesh: makeShape("cube"), material: { fill: "#f00" } });
+  frames(1);
+  const plain = calls.models.length;
+  const fx = outline();
+  scene.post = [fx];
+  frames(1);
+  assert.equal(calls.models.length - plain, 2 * plain); // each side of the cube, then again for depth and normals
+  const made = count.createTexture;
+  frames(20);
+  assert.equal(count.createTexture, made); // nothing new per frame
+  // Two outlines with different `objects` lists: one picture each
+  scene.post = [fx, outline({ objects: [scene.objects[0]] })];
+  frames(1);
+  assert.equal(renderer._post.geometry.size, 2);
+  const both = count.createTexture;
+  frames(20);
+  assert.equal(count.createTexture, both);
+  // Off for a while: everything for post effects is freed
+  const freed = count.deleteTexture;
+  scene.post = [];
+  frames(130);
+  assert.ok(count.deleteTexture - freed >= 3, `${count.deleteTexture - freed} textures freed`);
 });

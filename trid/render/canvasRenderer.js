@@ -7,7 +7,7 @@ import { newell, cornerNormals, creaseOf } from "./normals.js";
 import { textureReady, textureSize, textureIsLive, textureVersion } from "../loaders/texture.js";
 import { uvsFor, uvTransform, applyUVTransform } from "./uvMapping.js";
 import { DEFAULT_LIGHT, DEFAULT_AMBIENT, sceneLights, lightAt as lightOf, lightLevels } from "./lights.js";
-import { runCanvasPost } from "./post.js";
+import { runCanvasPost, activePost, maskedObjects } from "./post.js";
 
 export { newell };
 
@@ -126,6 +126,9 @@ export class CanvasRenderer {
     const camPos = { x: camera.x ?? 0, y: camera.y ?? 0, z: camera.z ?? 0 };
     const time = (performance.now() - this._start) / 1000;
     const background = this._rgba(ctx, scene.background ?? "transparent");
+    // Post effects drawn as lines along the meshes (outline()): silhouettes and creases
+    const contours = activePost(scene.post).filter((e) => e.contour).map((e) => ({ e, mask: maskedObjects(e) }));
+    const outlines = [];
 
     for (const obj of drawn) {
       const mats = materialsOf(obj);
@@ -213,11 +216,23 @@ export class CanvasRenderer {
         return (looks[k] ??= prepare(mats[k]));
       };
 
+      // Outline lines (outline()): placed in the drawing order once the faces are sorted
+      const lines = contours.length ? this._contours(obj, cam, flip, near, toScreen, contours) : null;
+      if (lines) outlines.push(lines);
+      let pendingF = -1, pendingStart = items.length;
+      // Marks the items of the last face with the face they come from
+      const attach = () => {
+        if (lines && pendingF >= 0) for (let k = pendingStart; k < items.length; k++) items[k].face = { lines, F: pendingF };
+      };
+
       const faces = split ? split.faces : sourceFaces;
       for (let f = 0; f < faces.length; f++) {
         const face = faces[f];
         if (face.length < 3) continue;
         const F = split ? split.origins[f] : f; // the mesh face this one comes from
+        attach();
+        pendingF = F;
+        pendingStart = items.length;
         const L = lookOf(F);
         const { fill, shade, outline, corners } = L;
         const pts = face.map((i) => cam[i]);
@@ -333,11 +348,31 @@ export class CanvasRenderer {
           edges,
         });
       }
+      attach();
     }
 
     items.sort((a, b) => b.depth - a.depth);
 
-    for (const it of items) {
+    // Each outline line is drawn once every face around its two ends is: those
+    // faces don't cover it then, but nearer ones of other objects still do
+    const linesAfter = new Map(); // item index → lines to draw after it
+    if (outlines.length) {
+      items.forEach((it, k) => {
+        if (it.face) it.face.lines.last[it.face.F] = k;
+      });
+      for (const L of outlines) {
+        for (const ln of L.list) {
+          let k = -1;
+          for (const F of ln.faces) k = Math.max(k, L.last[F] ?? -1);
+          if (k < 0) continue;
+          if (!linesAfter.has(k)) linesAfter.set(k, []);
+          linesAfter.get(k).push(ln);
+        }
+      }
+    }
+
+    for (let n = 0; n < items.length; n++) {
+      const it = items[n];
       ctx.beginPath();
       if (it.line) {
         ctx.moveTo(it.line[0].x, it.line[0].y);
@@ -385,6 +420,21 @@ export class CanvasRenderer {
         ctx.strokeStyle = it.fill.css;
         ctx.stroke();
       }
+
+      const after = linesAfter.get(n);
+      if (after) {
+        ctx.save();
+        ctx.lineCap = "round";
+        for (const ln of after) {
+          ctx.beginPath();
+          ctx.moveTo(ln.p.x, ln.p.y);
+          ctx.lineTo(ln.q.x, ln.q.y);
+          ctx.lineWidth = ln.width;
+          ctx.strokeStyle = ln.color;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
     }
 
     // Meshes marked as changed have been redrawn from their new data
@@ -392,6 +442,64 @@ export class CanvasRenderer {
 
     // Post effects that have a canvas version (see trid/render/post.js)
     runCanvasPost(scene, scene.post, this._start);
+  }
+
+  /**
+   * Outline lines of one object, for post effects with `contour` (outline()):
+   * its silhouette (edges between a face seen from the front and one seen
+   * from behind, or with no other face) and its creases (two front faces
+   * meeting at more than the effect's `uCreaseAngle`).
+   *
+   * @returns {{ list: {p:Object, q:Object, faces:number[], color:string, width:number}[], last: number[] }|null}
+   *   `faces`: the mesh faces around the line's two ends. `last` is filled in after sorting
+   */
+  _contours(obj, cam, flip, near, toScreen, contours) {
+    const used = contours.filter((c) => !c.mask || c.mask.has(obj));
+    if (!used.length) return null;
+    const faces = obj.mesh.faces ?? [];
+    const { edges, spot, facesAt } = meshTopology(obj.mesh);
+    // Each face's normal in camera space, and whether it faces the camera
+    const info = faces.map((face) => {
+      if (face.length < 3) return null;
+      const pts = face.map((i) => cam[i]);
+      const n = normalize(newell(pts));
+      const c = centroid(pts);
+      const back = (n.x * c.x + n.y * c.y + n.z * c.z >= 0) !== (flip < 0);
+      return { n, front: !back };
+    });
+    const mats = materialsOf(obj);
+    const faceMats = obj.mesh.faceMaterials;
+    const shown = (F) => {
+      if (!info[F]) return false;
+      if (info[F].front) return true;
+      return !!(mats[faceMats?.[F] ?? 0] ?? mats[0])?.doubleSided;
+    };
+
+    const list = [];
+    for (const c of used) {
+      const u = c.e.uniforms ?? {};
+      const angle = u.uCreaseAngle ?? 180;
+      const cos = angle >= 180 ? -2 : Math.cos((angle * Math.PI) / 180);
+      const rgba = typeof u.uColor === "string" ? null : u.uColor;
+      const color = rgba ? `rgba(${Math.round(rgba[0] * 255)}, ${Math.round(rgba[1] * 255)}, ${Math.round(rgba[2] * 255)}, ${rgba[3] ?? 1})` : u.uColor ?? "#1a1a1a";
+      const width = u.uWidth ?? 2;
+      for (const { a, b, f1, f2 } of edges) {
+        let line;
+        if (f2 < 0) line = shown(f1); // open border
+        else {
+          const s1 = shown(f1), s2 = shown(f2);
+          if (s1 && s2) {
+            const p = info[f1].n, q = info[f2].n;
+            line = info[f1].front !== info[f2].front || p.x * q.x + p.y * q.y + p.z * q.z < cos;
+          } else line = s1 || s2; // the other one faces away
+        }
+        if (!line) continue;
+        const seg = clipNear(cam[a], cam[b], near);
+        if (!seg) continue;
+        list.push({ p: toScreen(seg[0]), q: toScreen(seg[1]), faces: [...new Set([...facesAt[spot[a]], ...facesAt[spot[b]]])], color, width });
+      }
+    }
+    return list.length ? { list, last: [] } : null;
   }
 
   /**
@@ -705,6 +813,65 @@ function withMidpoints(vertices, mids) {
     out.push({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 });
   }
   return out;
+}
+
+const edgeCache = new WeakMap();
+
+/**
+ * Each edge of a mesh's faces once, with the (up to two) faces on its sides.
+ * Vertices at the same spot count as one, so seams (where a shape repeats
+ * vertices for its texture coordinates) aren't taken for open borders.
+ * Cached until the mesh's arrays change or `mesh.dirty` is set.
+ *
+ * @returns {{a:number, b:number, f1:number, f2:number}[]} `f2` is -1 on an open border
+ */
+export function meshEdges(mesh) {
+  return meshTopology(mesh).edges;
+}
+
+/**
+ * meshEdges, plus `spot` (vertex → id of its position) and `facesAt`
+ * (position id → the faces touching it).
+ */
+function meshTopology(mesh) {
+  const v = mesh.vertices, faces = mesh.faces ?? [];
+  const hit = edgeCache.get(mesh);
+  if (hit && !mesh.dirty && hit.v === v && hit.faces === faces && hit.counts === `${v.length}/${faces.length}`) return hit.topology;
+
+  // One id per spot
+  let size = 0;
+  for (const p of v) size = Math.max(size, Math.abs(p.x), Math.abs(p.y), Math.abs(p.z));
+  const step = (size || 1) * 1e-6;
+  const ids = new Map();
+  const spot = v.map((p) => {
+    const key = `${Math.round(p.x / step)},${Math.round(p.y / step)},${Math.round(p.z / step)}`;
+    let id = ids.get(key);
+    if (id === undefined) ids.set(key, (id = ids.size));
+    return id;
+  });
+
+  const byKey = new Map();
+  const edges = [];
+  const facesAt = Array.from({ length: ids.size }, () => []);
+  faces.forEach((f, F) => {
+    if (f.length < 3) return;
+    for (const i of f) if (facesAt[spot[i]].at(-1) !== F) facesAt[spot[i]].push(F);
+    for (let k = 0; k < f.length; k++) {
+      const a = f[k], b = f[(k + 1) % f.length];
+      const sa = spot[a], sb = spot[b];
+      if (sa === sb) continue;
+      const key = sa < sb ? sa * 4294967296 + sb : sb * 4294967296 + sa;
+      const e = byKey.get(key);
+      if (!e) {
+        const n = { a, b, f1: F, f2: -1 };
+        byKey.set(key, n);
+        edges.push(n);
+      } else if (e.f2 < 0 && e.f1 !== F) e.f2 = F;
+    }
+  });
+  const topology = { edges, spot, facesAt };
+  edgeCache.set(mesh, { v, faces, counts: `${v.length}/${faces.length}`, topology });
+  return topology;
 }
 
 function centroid(pts) {

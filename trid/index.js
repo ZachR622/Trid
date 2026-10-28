@@ -19,7 +19,7 @@ export { gridMesh, gridHelper } from "./render/grid.js";
 export { cloneMesh, transformMesh, displaceMesh, mergeMeshes, meshBounds } from "./render/meshUtils.js";
 
 // Renderers
-export { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf } from "./render/canvasRenderer.js";
+export { CanvasRenderer, DEFAULT_LIGHT, DEFAULT_AMBIENT, materialsOf, meshEdges } from "./render/canvasRenderer.js";
 export { WebGLRenderer, DEFAULT_FAR } from "./render/webglRenderer.js";
 
 // Lights
@@ -32,7 +32,10 @@ export {
 } from "./render/effects.js";
 
 // Post effects
-export { vignette, bloom, grade, grain, postPasses, activePost, runCanvasPost, FRAME_GLSL } from "./render/post.js";
+export {
+  vignette, bloom, grade, grain, outline, postPasses, activePost, runCanvasPost, wantsGeometry, maskedObjects,
+  FRAME_GLSL, GEOMETRY_GLSL, DEFAULT_OUTLINE_CREASE,
+} from "./render/post.js";
 
 // Procedural textures
 export { makeTexture, texturePixels, colorBytes, TEXTURE_STYLES } from "./render/proceduralTextures.js";

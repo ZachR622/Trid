@@ -704,6 +704,10 @@ export interface PostFrame {
   canvas: HTMLCanvasElement;
   /** Turns a uniform value (CSS color, array) into RGBA 0..1 */
   rgba(value: UniformValue): RGBA;
+  /** The camera's near distance */
+  near: number;
+  /** The camera's far distance */
+  far: number;
 }
 
 /** One pass of a post effect. */
@@ -727,7 +731,45 @@ export interface PostEffect<U extends Record<string, UniformValue> = Record<stri
   uniforms?: U;
   /** Set to false to turn it off without removing it */
   enabled?: boolean;
+  /** Also read the scene's depth and normals (WebGL): GLSL gets `depthAt(uv)`, `normalAt(uv)` and `maskAt(uv)` */
+  geometry?: boolean;
+  /** With `geometry`: the objects `maskAt` is 1 on (children included). Default: all */
+  objects?: SceneObject[];
+  /** Canvas renderer: draw the meshes' silhouettes and creases as lines, using `uColor`, `uWidth` and `uCreaseAngle` */
+  contour?: boolean;
 }
+
+/** Cartoon-style lines around objects and along their sharp creases. */
+export function outline(opts?: {
+  color?: string;
+  width?: number;
+  /** Degrees the surface must turn for an inner line (default 40); false = outer lines only */
+  creases?: number | false;
+  /** How readily a jump in distance makes a line (default 1; 0 = none) */
+  depth?: number;
+  /** Only outline these objects (and their children) */
+  objects?: SceneObject[];
+}): PostEffect<{
+  uColor: string;
+  uWidth: number;
+  uCreaseAngle: number;
+  uDepth: number;
+}>;
+
+/** Crease angle `outline()` uses by default, in degrees (40). */
+export const DEFAULT_OUTLINE_CREASE: number;
+
+/** Whether a post effect reads the scene's depth and normals (`geometry: true`, with GLSL). */
+export function wantsGeometry(effect: PostEffect): boolean;
+
+/** The objects an effect's `objects` list covers, children included (null: all). */
+export function maskedObjects(effect: PostEffect): Set<SceneObject> | null;
+
+/** GLSL helpers `depthAt`, `normalAt` and `maskAt`, for effects with `geometry: true`. */
+export const GEOMETRY_GLSL: string;
+
+/** Each edge of a mesh's faces once, with the faces on its sides (`f2` = -1 on an open border). */
+export function meshEdges(mesh: Mesh): { a: number; b: number; f1: number; f2: number }[];
 
 /** Darkens the corners of the picture. */
 export function vignette(opts?: { strength?: number; radius?: number; softness?: number; color?: string }): PostEffect<{

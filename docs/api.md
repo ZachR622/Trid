@@ -12,13 +12,13 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/math/projection.js` | [`project`, `screen`](#projection) |
 | `trid/render/draw.js` | [`clear`, `point`, `line`, `drawWireframe`, `drawInstance`](#drawing) |
 | `trid/render/loop.js` | [`loop`](#frame-loop) |
-| `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`, `materialsOf`](#canvasrenderer) |
+| `trid/render/canvasRenderer.js` | [`CanvasRenderer`, `DEFAULT_LIGHT`, `DEFAULT_AMBIENT`, `materialsOf`, `meshEdges`](#canvasrenderer) |
 | `trid/render/uvMapping.js` | [`computeUVs`, `mapUVs`](./textures#texture-mapping), [`uvsFor`, `uvTransform`, `applyUVTransform`, `mappingOf`, `mappingKey`, `MAPPINGS`](#texture-mapping) |
 | `trid/render/webglRenderer.js` | [`WebGLRenderer`, `DEFAULT_FAR`](#webglrenderer) |
 | `trid/render/normals.js` | [`cornerNormals`, `creaseOf`, `newell`, `DEFAULT_CREASE`](#normals) |
 | `trid/render/effects.js` | [`toon`, `rim`, `edgeGlow`, `unlit`, `gradient`, `fog`](./effects#built-in-effects), [`buildEffects`, `effectsKey`, `uniformType`, `SURFACE_GLSL`](#effects) |
 | `trid/render/lights.js` | [`defaultLights`, `MAX_LIGHTS`](./lights), [`sceneLights`, `lightAt`, `lightLevels`, `rangeFade`](#lights) |
-| `trid/render/post.js` | [`bloom`, `vignette`, `grade`, `grain`](./post#built-in-effects), [`postPasses`, `activePost`, `runCanvasPost`, `FRAME_GLSL`](#post-effects) |
+| `trid/render/post.js` | [`bloom`, `vignette`, `grade`, `grain`](./post#built-in-effects), [`outline`, `DEFAULT_OUTLINE_CREASE`](./post#outlines), [`postPasses`, `activePost`, `runCanvasPost`, `wantsGeometry`, `maskedObjects`, `FRAME_GLSL`, `GEOMETRY_GLSL`](#post-effects) |
 | `trid/render/grid.js` | [`gridMesh`, `gridHelper`](./shapes#floor-grids) |
 | `trid/render/color.js` | [`parseColor`](#parsecolor) |
 | `trid/render/shapes.js` | [`makeShape`, `lathe`, `extrude`, `triangulate`, `scaleMesh`](./shapes) |
@@ -204,6 +204,10 @@ From `trid/render/post.js`. The built-in effects and how to write your own are o
 - **`activePost(list)`** returns the effects that are on.
 - **`runCanvasPost(scene, list, start)`** runs the effects' `canvas` functions on the scene's canvas.
 - **`FRAME_GLSL`** is the GLSL declaration of `Frame` and the `frame` / `source` helpers.
+- **`GEOMETRY_GLSL`** declares `depthAt`, `normalAt` and `maskAt`, added for effects with `geometry: true` (see [Reading depth and normals](./post#reading-depth-and-normals)).
+- **`wantsGeometry(effect)`** is `true` for an effect with `geometry: true` and GLSL.
+- **`maskedObjects(effect)`** returns the objects an effect's `objects` list covers, children included, as a `Set` (`null` without a list).
+- **`DEFAULT_OUTLINE_CREASE`** is the crease angle `outline()` uses by default: 40°.
 
 ### Textures
 
@@ -226,6 +230,7 @@ From `trid/render/uvMapping.js`. Using mappings is explained on the [Textures](.
 - **`uvTransform(material)`** turns `textureRepeat`, `textureOffset` and `textureRotation` into a 2D matrix `[a, b, c, d, e, f]` (`u' = a·u + c·v + e`, `v' = b·u + d·v + f`), or `null` when they change nothing. **`applyUVTransform(m, uv)`** applies it to one coordinate.
 - **`mappingOf(mapping)`** returns the mapping as `{ type, axis }` and throws for an unknown one. **`mappingKey(mapping)`** is a short string for caches. **`MAPPINGS`** lists the mapping types.
 - **`materialsOf(obj)`** (from `canvasRenderer.js`) returns an object's materials as a list, or `null` for a wireframe.
+- **`meshEdges(mesh)`** (from `canvasRenderer.js`) returns each edge of a mesh's faces once, as `{ a, b, f1, f2 }`: its two vertices and the faces on its sides (`f2` is -1 on an open border). Vertices at the same spot count as one, so texture seams aren't borders. Cached per mesh. The canvas renderer uses it for outlines.
 
 ### parseColor
 
