@@ -98,6 +98,7 @@ export { weldVertices, cleanMesh, validateMesh, fixWinding } from "./modeling/cl
 export { subdivideMesh } from "./modeling/subdivide.js";
 export { blobMesh, blobField, sdfMesh } from "./modeling/blobs.js";
 export { bevelMesh } from "./modeling/bevel.js";
+export { booleanMesh, unionMesh, subtractMesh, intersectMesh } from "./modeling/boolean.js";
 export {
   meshQuery, raycastMesh, pointInMesh, distanceToMesh, closestPointOnMesh, isClosed, raycastScene, clearQueryCache,
 } from "./modeling/query.js";

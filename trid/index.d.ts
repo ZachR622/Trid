@@ -2075,6 +2075,41 @@ export interface BevelOptions {
  */
 export function bevelMesh(mesh: Mesh, opts?: BevelOptions): Mesh;
 
+// Modeling: booleans (CSG)
+
+/** A mesh, or a scene object / group placed where it stands. */
+export type BooleanInput = Mesh | SceneObjectInput;
+
+export interface BooleanOptions {
+  /**
+   * Materials of faces from the cutters: "transfer" (default) keeps their own, numbered after
+   * the first mesh's (like Blender); "index" keeps their numbers, picking from the first mesh's list
+   */
+  materials?: "transfer" | "index";
+  /** How close counts as touching (default: a hundred-thousandth of the meshes' size) */
+  epsilon?: number;
+}
+
+/** A boolean's result: a new mesh, with `materials` when the inputs are objects with materials. */
+export type BooleanResult = Mesh & { faceMaterials: number[]; materials?: Material[] };
+
+/**
+ * Combines closed meshes, like Blender's Boolean modifier: union, subtract ("difference")
+ * or intersect. `b` can be a list, applied one after the other.
+ */
+export function booleanMesh(
+  a: BooleanInput,
+  b: BooleanInput | BooleanInput[],
+  op: "union" | "subtract" | "difference" | "intersect",
+  opts?: BooleanOptions,
+): BooleanResult;
+/** `a` joined with `b` (a list: all of them). */
+export function unionMesh(a: BooleanInput, b: BooleanInput | BooleanInput[], opts?: BooleanOptions): BooleanResult;
+/** `a` with `b` cut out of it (a list: all of them). */
+export function subtractMesh(a: BooleanInput, b: BooleanInput | BooleanInput[], opts?: BooleanOptions): BooleanResult;
+/** Only where `a` and `b` overlap (a list: all of them). */
+export function intersectMesh(a: BooleanInput, b: BooleanInput | BooleanInput[], opts?: BooleanOptions): BooleanResult;
+
 // Modeling: queries (rays, inside, distance)
 
 /** Which faces a ray counts: "both" (default), "front" (hit from outside) or "back" (hit from inside). */
