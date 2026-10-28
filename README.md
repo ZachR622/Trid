@@ -41,7 +41,7 @@ No bundler? Use the CDN with an import map, or copy the `trid/` folder next to y
 
 ```html
 <script type="importmap">
-  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.6/trid/index.js" } }
+  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.7/trid/index.js" } }
 </script>
 ```
 
@@ -126,6 +126,13 @@ Uses Node's built-in test runner (Node 21+), so there's nothing to install. The 
 
 ## Upgrading
 
+### From 0.6 to 0.7
+
+Nothing changes for existing scenes: shadows, outlines and the selection outline are all off until asked for. Only names Trid now uses itself could clash with yours:
+
+- In **post effect GLSL**, `Frame` has two more fields (`f.near`, `f.far`), and the uniforms `uNear`, `uFar`, `uGeometry`, `uGeoNear` and `uGeoRange` are taken. A post effect declaring its own uniform with one of those names needs to rename it.
+- In **material effect GLSL**, the functions `tridShadow` and `tridShadowDepth` and the uniforms starting with `uShadow` (plus `uReceive`) are taken. Effect uniforms are renamed by Trid, so only helper functions with those names would clash.
+
 ### From 0.5 to 0.6
 
 - **The cone's tip is a single point** (a pole), so the cone is closed: `isClosed` and `validateMesh` no longer report a hole there. It has fewer vertices than before (its tip ring of 32 is now 1), and its side faces are triangles. Any `lathe` profile point with `r: 0` works the same way.
@@ -150,6 +157,8 @@ Uses Node's built-in test runner (Node 21+), so there's nothing to install. The 
 
 Roughly in order:
 
+- **More shadows** — point lights casting shadows, and several lights at once
+- **Combining shapes** — union, subtract and intersect meshes (CSG)
+- **More tests** — the canvas renderer's drawing and the remaining math functions
 - **More import and export formats** — STL; basic glTF later
 - **More post effects** — antialiasing (FXAA)
-- **More tests** — the canvas renderer's drawing and the remaining math functions

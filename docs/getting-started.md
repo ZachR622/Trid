@@ -39,7 +39,7 @@ For a plain HTML page, load Trid from [jsDelivr](https://www.jsdelivr.com/) with
 
 ```html
 <script type="importmap">
-  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.6/trid/index.js" } }
+  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.7/trid/index.js" } }
 </script>
 <script type="module">
   import { Scene, makeShape } from "trid3d";
