@@ -164,6 +164,10 @@ export interface SceneObjectInput {
   hoverable?: boolean;
   /** Set to false so `pick` / `pickHit` never find this object or its children (helpers like a grid) */
   pickable?: boolean;
+  /** Set to false so this object (and its children) casts no shadow */
+  castShadow?: boolean;
+  /** Set to false so no shadow falls on this object (and its children) */
+  receiveShadow?: boolean;
 }
 
 /**
@@ -459,7 +463,34 @@ export interface DirectionalLight {
   color?: string;
   intensity?: number;
   enabled?: boolean;
+  /** Cast shadows (the first directional light with it does): true, or settings */
+  shadows?: boolean | ShadowOptions;
 }
+
+/** Shadow settings of a directional light. */
+export interface ShadowOptions {
+  /** Shadow map width in pixels (WebGL, default 2048). Bigger: sharper, slower */
+  size?: number;
+  /** Edge blur, in shadow map pixels (default 1.5; 0 = sharp) */
+  softness?: number;
+  /** Raise if lit surfaces get speckles; too high and shadows come loose (default 1) */
+  bias?: number;
+  /** Floor height for the canvas renderer's ground shadows (default: found) */
+  ground?: number;
+}
+
+/** Settings used for `shadows: true`. */
+export const DEFAULT_SHADOWS: Readonly<Required<Omit<ShadowOptions, "ground">> & { ground: null }>;
+/** A light's shadow settings, defaults filled in. */
+export function shadowOptions(value: boolean | ShadowOptions): Required<Omit<ShadowOptions, "ground">> & { ground: number | null };
+/** False when the object or one of its groups sets `key` to false. */
+export function shadowFlag(obj: SceneObject, key: "castShadow" | "receiveShadow"): boolean;
+/** The shadow map's box around casting objects (`matrix`: world → -1..1, column-major). */
+export function shadowFrame(casters: SceneObject[], dir: Vec3): { matrix: Float32Array; radius: number } | null;
+/** The floor height for ground shadows: where receivers have the most area of upward flat faces. */
+export function findGround(receivers: SceneObject[]): number | null;
+/** A world polygon's part above `ground`, flattened onto it along the light (`dir`: where it comes from). */
+export function flattenOnGround(pts: Vec3[], dir: Vec3, ground: number): Vec3[];
 
 /** Light from a point, like a bulb. */
 export interface PointLight {
@@ -490,6 +521,8 @@ export interface SceneLights {
   lights: { point: boolean; dir: Vec3 | null; pos: Vec3 | null; color: [number, number, number]; range: number }[];
   /** Unit direction of the first directional light */
   mainDir: Vec3;
+  /** The light casting shadows (`index` in `lights`) and its settings, or null */
+  shadow: ({ index: number; dir: Vec3 } & Required<Omit<ShadowOptions, "ground">> & { ground: number | null }) | null;
 }
 
 /** A scene's lights, colors parsed and multiplied by intensity, directions unit length. */

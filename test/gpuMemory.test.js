@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 
 /** A fake WebGL context: every call works; uploads and frees are counted. */
 function fakeGL() {
-  const count = { texImage2D: 0, createBuffer: 0, deleteBuffer: 0, createTexture: 0, deleteTexture: 0, generateMipmap: 0 };
+  const count = { texImage2D: 0, createBuffer: 0, deleteBuffer: 0, createTexture: 0, deleteTexture: 0, generateMipmap: 0, drawArrays: 0 };
   const calls = { models: [], frontFace: [] };
   const special = {
     uniformMatrix4fv: (loc, transpose, m) => calls.models.push([...m]),
@@ -195,4 +195,27 @@ test("outline(): one extra draw per face group for depth and normals; its pictur
   scene.post = [];
   frames(130);
   assert.ok(count.deleteTexture - freed >= 3, `${count.deleteTexture - freed} textures freed`);
+});
+
+test("shadows: casters drawn once more from the light; the map is made once, remade for a new size, freed when off", () => {
+  const { renderer, scene, add, frames, count } = setup({ releaseAfter: 30 });
+  add({ mesh: makeShape("sphere"), material: { fill: "#f00" } });
+  const ghost = add({ mesh: makeShape("sphere"), material: { fill: "#0f0" }, castShadow: false });
+  frames(1);
+  const plain = count.drawArrays; // two spheres
+  const sun = { type: "directional", direction: { x: 0, y: 1, z: 0 }, shadows: true };
+  scene.lights = [{ type: "ambient", intensity: 0.3 }, sun];
+  frames(1);
+  assert.equal(count.drawArrays - plain, plain + 1); // both drawn, plus the one casting shadows
+  const made = count.createTexture;
+  frames(20);
+  assert.equal(count.createTexture, made);
+  sun.shadows = { size: 512 };
+  frames(1);
+  assert.equal(count.createTexture, made + 1);
+  assert.equal(renderer._shadow.size, 512);
+  ghost.castShadow = true;
+  sun.shadows = false;
+  frames(130); // unused GPU memory is looked at every 60 frames
+  assert.equal(renderer._shadow, null);
 });

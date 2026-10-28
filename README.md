@@ -20,7 +20,7 @@ Trid gives you a scene, shapes you can model in code, lights, effects, model loa
 - **Modeling** — smooth curves through a few points (`spline`), shapes swept along a 3D path (`sweep`: tails, horns, pipes, rails), surfaces through cross-sections (`loft`: bodies, bottles, hulls, heads), subdivision surfaces with creases (`subdivideMesh`: box modeling), shapes that melt together (`blobMesh`: creatures, clay; or any distance field with `sdfMesh`), rounded or cut edges on any mesh (`bevelMesh`), taper, twist, bend and bulge deformers, mesh cleanup and checks (weld, clean, validate, fix winding), and rays, inside tests and distances against meshes and scenes (`meshQuery`, `raycastScene`).
 - **Mesh helpers** — clone, transform, displace, merge and measure meshes; seeded random numbers and smooth noise (`fbm2`, `fbm3`, tileable) for rocks, terrain and procedural textures.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth.
-- **Lights** — ambient, directional and point lights, with colors and intensities, as many as you need (up to 8 at once besides ambient).
+- **Lights and shadows** — ambient, directional and point lights, with colors and intensities, as many as you need (up to 8 at once besides ambient). A directional light can cast soft shadows (a shadow map with WebGL, ground shadows on the canvas).
 - **Textures** — images, canvases or videos on faces, with texture coordinates from built-in shapes and OBJ files, or made from the shape (planar, box, sphere and cylinder mapping). Repeat, offset and rotate them, or give each face its own material. Or paint one in code: wood, marble, bricks and more, all seamless.
 - **Effects** — stack shader effects like toon, rim and edge glow, gradients and fog on a material, or write your own in GLSL.
 - **Post effects** — bloom, vignette, color grading, film grain and cartoon outlines over the whole picture, or your own full-screen shaders (several passes if needed, reading the scene's depth and normals if wanted).
@@ -122,7 +122,7 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 npm test
 ```
 
-Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes (lathe poles included), mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, deformers, mesh cleanup, mesh and scene queries, noise, textures, OBJ / MTL, picking, tools, groups and matrices, lights, post effects, grids, the field of view, see-through backgrounds, and the WebGL renderer's GPU memory on a fake WebGL context.
+Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover shapes (lathe poles included), mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, deformers, mesh cleanup, mesh and scene queries, noise, textures, OBJ / MTL, picking, tools, groups and matrices, lights, shadows, post effects, grids, the field of view, see-through backgrounds, and the WebGL renderer's GPU memory on a fake WebGL context.
 
 ## Upgrading
 

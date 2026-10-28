@@ -18,6 +18,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/render/normals.js` | [`cornerNormals`, `creaseOf`, `newell`, `DEFAULT_CREASE`](#normals) |
 | `trid/render/effects.js` | [`toon`, `rim`, `edgeGlow`, `unlit`, `gradient`, `fog`](./effects#built-in-effects), [`buildEffects`, `effectsKey`, `uniformType`, `SURFACE_GLSL`](#effects) |
 | `trid/render/lights.js` | [`defaultLights`, `MAX_LIGHTS`](./lights), [`sceneLights`, `lightAt`, `lightLevels`, `rangeFade`](#lights) |
+| `trid/render/shadows.js` | [`DEFAULT_SHADOWS`](./lights#shadows), [`shadowOptions`, `shadowFlag`, `shadowFrame`, `findGround`, `flattenOnGround`](#shadows) |
 | `trid/render/post.js` | [`bloom`, `vignette`, `grade`, `grain`](./post#built-in-effects), [`outline`, `DEFAULT_OUTLINE_CREASE`](./post#outlines), [`postPasses`, `activePost`, `runCanvasPost`, `wantsGeometry`, `maskedObjects`, `FRAME_GLSL`, `GEOMETRY_GLSL`](#post-effects) |
 | `trid/render/grid.js` | [`gridMesh`, `gridHelper`](./shapes#floor-grids) |
 | `trid/render/color.js` | [`parseColor`](#parsecolor) |
@@ -191,10 +192,20 @@ From `trid/render/effects.js`. The built-in effects and how to write your own ar
 
 From `trid/render/lights.js`. Using lights is explained on the [Lights](./lights) page. The helpers below are what the renderers use:
 
-- **`sceneLights(scene, rgba)`** returns a scene's lights ready for shading: `{ ambient, ambientLevel, lights, mainDir }`, colors parsed by `rgba(css)` and multiplied by their intensity. A scene-like object with only `light` / `ambient` gets the default pair.
+- **`sceneLights(scene, rgba)`** returns a scene's lights ready for shading: `{ ambient, ambientLevel, lights, mainDir, shadow }`, colors parsed by `rgba(css)` and multiplied by their intensity. `shadow` is the light casting shadows (`index` in `lights`, `dir`, and its settings), or `null`. A scene-like object with only `light` / `ambient` gets the default pair.
 - **`lightAt(lights, normal, position)`** returns the light reaching a point as `[r, g, b]`: the same math as the WebGL shader.
 - **`lightLevels(color, ambientLevel)`** returns `{ light, diffuse }`, the numbers effects get.
 - **`rangeFade(dist, range)`** is how much of a point light reaches `dist` away.
+
+### Shadows
+
+From `trid/render/shadows.js`. Using shadows is explained on the [Lights](./lights#shadows) page. Used by the renderers:
+
+- **`shadowOptions(value)`** returns a light's shadow settings with the defaults (`DEFAULT_SHADOWS`) filled in.
+- **`shadowFlag(obj, "castShadow" | "receiveShadow")`** is `false` when the object or a group above it sets that field to `false`.
+- **`shadowFrame(casters, dir)`** returns `{ matrix, radius }`: the WebGL shadow map's box around the casting objects, facing along the light.
+- **`findGround(receivers)`** returns the floor height for ground shadows, or `null`.
+- **`flattenOnGround(points, dir, ground)`** flattens a world polygon onto the floor along the light, cutting off what's below it.
 
 ### Post effects
 

@@ -24,6 +24,7 @@ export { WebGLRenderer, DEFAULT_FAR } from "./render/webglRenderer.js";
 
 // Lights
 export { defaultLights, sceneLights, lightAt, lightLevels, rangeFade, MAX_LIGHTS } from "./render/lights.js";
+export { shadowOptions, shadowFlag, shadowFrame, findGround, flattenOnGround, DEFAULT_SHADOWS } from "./render/shadows.js";
 
 // Effects
 export {

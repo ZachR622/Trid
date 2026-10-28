@@ -8,6 +8,7 @@ import { textureReady, textureSize, textureIsLive, textureVersion } from "../loa
 import { uvsFor, uvTransform, applyUVTransform } from "./uvMapping.js";
 import { DEFAULT_LIGHT, DEFAULT_AMBIENT, sceneLights, lightAt as lightOf, lightLevels } from "./lights.js";
 import { runCanvasPost, activePost, maskedObjects } from "./post.js";
+import { shadowFlag, findGround, flattenOnGround } from "./shadows.js";
 
 export { newell };
 
@@ -129,6 +130,11 @@ export class CanvasRenderer {
     // Post effects drawn as lines along the meshes (outline()): silhouettes and creases
     const contours = activePost(scene.post).filter((e) => e.contour).map((e) => ({ e, mask: maskedObjects(e) }));
     const outlines = [];
+    // Ground shadows (see trid/render/shadows.js): the floor's faces, then the shadows, then the rest
+    const sun = lights.shadow && lights.shadow.dir.y > 0.01 ? lights.shadow : null;
+    const ground = sun ? sun.ground ?? findGround(drawn.filter((o) => materialsOf(o) && shadowFlag(o, "receiveShadow"))) : null;
+    const shadowing = ground !== null && (camera.y ?? 0) > ground;
+    const shadowPolys = [];
 
     for (const obj of drawn) {
       const mats = materialsOf(obj);
@@ -139,6 +145,18 @@ export class CanvasRenderer {
       const cam = world.map((p) => worldToCamera(p, camera));
       const color = obj.color ?? scene.color;
       const lineWidth = obj.lineWidth ?? scene.lineWidth;
+
+      // Its faces flattened on the floor along the light
+      if (shadowing && mats && shadowFlag(obj, "castShadow")) {
+        for (const face of obj.mesh.faces ?? []) {
+          if (face.length < 3) continue;
+          const flat = flattenOnGround(face.map((i) => world[i]), sun.dir, ground);
+          if (flat.length < 3) continue;
+          const clipped = clipPolygon(flat.map((p) => worldToCamera(p, camera)), near);
+          if (clipped.length >= 3) shadowPolys.push(clipped.map(toScreen));
+        }
+      }
+      const onGround = shadowing && mats && shadowFlag(obj, "receiveShadow");
 
       if (!mats) {
         for (const [i, j] of edgeSegments(wireEdges(obj.mesh))) {
@@ -219,10 +237,13 @@ export class CanvasRenderer {
       // Outline lines (outline()): placed in the drawing order once the faces are sorted
       const lines = contours.length ? this._contours(obj, cam, flip, near, toScreen, contours) : null;
       if (lines) outlines.push(lines);
-      let pendingF = -1, pendingStart = items.length;
-      // Marks the items of the last face with the face they come from
+      let pendingF = -1, pendingStart = items.length, pendingGround = false;
+      // Marks the items of the last face with the face they come from, and whether it's floor
       const attach = () => {
-        if (lines && pendingF >= 0) for (let k = pendingStart; k < items.length; k++) items[k].face = { lines, F: pendingF };
+        for (let k = pendingStart; k < items.length; k++) {
+          if (lines && pendingF >= 0) items[k].face = { lines, F: pendingF };
+          if (pendingGround) items[k].ground = true;
+        }
       };
 
       const faces = split ? split.faces : sourceFaces;
@@ -233,6 +254,8 @@ export class CanvasRenderer {
         attach();
         pendingF = F;
         pendingStart = items.length;
+        // Floor: lying on the ground level, facing up
+        pendingGround = onGround && face.every((i) => Math.abs(world[i].y - ground) < 1e-4) && newell(face.map((i) => world[i])).y * flip > 0;
         const L = lookOf(F);
         const { fill, shade, outline, corners } = L;
         const pts = face.map((i) => cam[i]);
@@ -371,7 +394,7 @@ export class CanvasRenderer {
       }
     }
 
-    for (let n = 0; n < items.length; n++) {
+    const drawItem = (n) => {
       const it = items[n];
       ctx.beginPath();
       if (it.line) {
@@ -380,7 +403,7 @@ export class CanvasRenderer {
         ctx.lineWidth = it.lineWidth;
         ctx.strokeStyle = it.color;
         ctx.stroke();
-        continue;
+        return;
       }
 
       if (it.texture) {
@@ -435,6 +458,16 @@ export class CanvasRenderer {
         }
         ctx.restore();
       }
+    };
+
+    const floor = shadowing && shadowPolys.length ? items.filter((it) => it.ground) : [];
+    if (floor.length) {
+      // Everything else stands on the floor, so it's in front of it: floor, shadows, then the rest
+      for (let n = 0; n < items.length; n++) if (items[n].ground) drawItem(n);
+      this._groundShadow(ctx, w, h, shadowPolys, floor, lights, sun, ground);
+      for (let n = 0; n < items.length; n++) if (!items[n].ground) drawItem(n);
+    } else {
+      for (let n = 0; n < items.length; n++) drawItem(n);
     }
 
     // Meshes marked as changed have been redrawn from their new data
@@ -442,6 +475,60 @@ export class CanvasRenderer {
 
     // Post effects that have a canvas version (see trid/render/post.js)
     runCanvasPost(scene, scene.post, this._start);
+  }
+
+  /**
+   * Darkens the floor where the shadows fall: the shadow shapes, blurred,
+   * kept only on the floor's faces, as dark as the light they take away.
+   */
+  _groundShadow(ctx, w, h, polys, floor, lights, sun, ground) {
+    const [shade, mask] = [0, 1].map((i) => {
+      const c = (this._scratch ??= [])[i] ??= document.createElement("canvas");
+      if (c.width !== w || c.height !== h) {
+        c.width = w;
+        c.height = h;
+      }
+      const g = c.getContext("2d");
+      g.clearRect(0, 0, w, h);
+      return { c, g };
+    });
+    // The shadows, all turned the same way so overlaps don't cancel out
+    if (typeof shade.g.filter === "string" && sun.softness > 0) shade.g.filter = `blur(${sun.softness}px)`;
+    shade.g.beginPath();
+    for (const poly of polys) {
+      const p = signedArea(poly) < 0 ? poly.slice().reverse() : poly;
+      shade.g.moveTo(p[0].x, p[0].y);
+      for (let k = 1; k < p.length; k++) shade.g.lineTo(p[k].x, p[k].y);
+      shade.g.closePath();
+    }
+    shade.g.fillStyle = "#000000";
+    shade.g.fill();
+    shade.g.filter = "none";
+    // Only on the floor
+    mask.g.beginPath();
+    for (const it of floor) {
+      mask.g.moveTo(it.poly[0].x, it.poly[0].y);
+      for (let k = 1; k < it.poly.length; k++) mask.g.lineTo(it.poly[k].x, it.poly[k].y);
+      mask.g.closePath();
+    }
+    mask.g.fillStyle = mask.g.strokeStyle = "#ffffff";
+    mask.g.fill();
+    mask.g.lineWidth = 1;
+    mask.g.stroke();
+    shade.g.globalCompositeOperation = "destination-in";
+    shade.g.drawImage(mask.c, 0, 0);
+    shade.g.globalCompositeOperation = "source-over";
+
+    // As dark as the share of the floor's light this light gives
+    const up = { x: 0, y: 1, z: 0 }, at = { x: 0, y: ground, z: 0 };
+    const all = Math.max(...lightOf(lights, up, at));
+    const without = Math.max(...lightOf({ ...lights, lights: lights.lights.filter((_, i) => i !== sun.index) }, up, at));
+    const alpha = all > 0 ? Math.min(1, Math.max(0, 1 - without / all)) : 0;
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(shade.c, 0, 0);
+    ctx.restore();
   }
 
   /**
@@ -813,6 +900,15 @@ function withMidpoints(vertices, mids) {
     out.push({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 });
   }
   return out;
+}
+
+function signedArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return a;
 }
 
 const edgeCache = new WeakMap();

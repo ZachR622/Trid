@@ -68,6 +68,49 @@ The `light` and `ambient` options set those two: `new Scene(canvas, { light: { x
 - `scene.light` is the direction of the first directional light (`null` if there's none). Change its fields, or set a new one.
 - `scene.ambient` is the intensity of the first ambient light (0 if there's none). Setting it only changes the ambient light, not the directional one.
 
+## Shadows
+
+Give a directional light `shadows: true` and objects cast shadows on each other and on the floor:
+
+```js
+const scene = new Scene(canvas, {
+  renderer: new WebGLRenderer(),
+  lights: [
+    { type: "ambient", intensity: 0.35 },
+    { type: "directional", direction: { x: -0.6, y: 1, z: -0.4 }, intensity: 0.75, shadows: true },
+  ],
+});
+```
+
+<Demo src="shadows" hint="the sun circles · drag to orbit" />
+
+<<< @/demos/shadows.js
+
+The first directional light with `shadows` casts them; point lights don't, yet. A shadow takes away that light's share only, so the ambient light and other lights still reach shadowed places. Objects cast and receive shadows unless they say otherwise:
+
+| Object field | Default | Meaning |
+| --- | --- | --- |
+| `castShadow` | `true` | `false`: this object (and its children, for a group) casts no shadow. Good for a floor, a sky or glowing things |
+| `receiveShadow` | `true` | `false`: no shadow falls on it (WebGL) |
+
+Only faces cast shadows: lines (wireframes) and see-through faces don't, and the see-through parts of a texture (a PNG's holes) let the light through.
+
+Instead of `true`, `shadows` can be settings:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `softness` | `1.5` | Blur of the shadows' edges. `0`: sharp |
+| `size` | `2048` | Width of the shadow map in pixels (WebGL). Bigger is sharper, but slower |
+| `bias` | `1` | Raise it if lit surfaces get dark speckles; too high and shadows come loose from their objects |
+| `ground` | found | The floor's height, for the canvas renderer (see below) |
+
+Change them at any time: `sun.shadows = { softness: 4 }`, or `sun.shadows = false`.
+
+### With each renderer
+
+- **WebGL** uses a shadow map: each frame, the scene is drawn once more from the light, in a box fitted around the objects that cast shadows. Every object can shade every other one, and itself. Shadows cover a scene the size of those objects; for a big world with small details, the map's pixels get big too (raise `size`, or turn `castShadow` off for objects far away).
+- **The canvas renderer** draws ground shadows: the objects are flattened onto the floor along the light, as one soft dark shape on the floor's faces. The floor is the height where flat faces turned up have the most area (or `ground`), and only faces lying there get shadows: objects don't shadow each other. It's quick and suits objects standing on a floor; for more, use WebGL.
+
 ## Lights and effects
 
 [Effects](./effects) get the light at the point they draw: `s.lightColor` (the light added up, as a color), `s.light` (its brightness), `s.diffuse` and `s.ambient`. `toon` keeps the lights' colors and steps only the brightness, and `gradient` (with `lit`) is tinted by them. See [What `s` contains](./effects#what-s-contains).
