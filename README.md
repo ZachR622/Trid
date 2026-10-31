@@ -41,7 +41,7 @@ No bundler? Use the CDN with an import map, or copy the `trid/` folder next to y
 
 ```html
 <script type="importmap">
-  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.7/trid/index.js" } }
+  { "imports": { "trid3d": "https://cdn.jsdelivr.net/npm/trid3d@0.8/trid/index.js" } }
 </script>
 ```
 
@@ -125,6 +125,13 @@ npm test
 Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover the whole transform pipeline (rotations, camera, projection, near-plane clipping, matrices and normals), what the canvas renderer draws (order, culling, clipping, light, gradients, outlines, split faces, texture placement), shapes (lathe poles included), mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, booleans, mirrors and arrays, deformers, sculpting brushes, remeshing, lattices, modifier stacks, mesh cleanup, mesh and scene queries, placing objects (exact contact, lifted out, attached, aligned, spaced), smooth normals, texture mapping, material and post effects, noise, procedural textures, OBJ / MTL loading and export, screenshots and downloads, picking, tools, groups, lights, shadows, grids, see-through backgrounds, and the WebGL renderer's GPU memory on a fake WebGL context.
 
 ## Upgrading
+
+### From 0.7 to 0.8
+
+Everything new comes beside what was there: booleans, mirror and array, placing objects, sculpting brushes and `SculptTool`, remeshing, lattices, the modifier stack, `screenRay`, and shadows from point lights. Two things can look different in scenes that already had them:
+
+- **More lights cast shadows.** A point light with `shadows` now casts them, and so does a second directional light with `shadows`: up to 2 directional and 2 point lights at once (`MAX_SHADOWS`). In 0.7, only the first directional light with `shadows` cast any, and `shadows` on the others did nothing. To keep a light as it looked, set its `shadows: false`.
+- In **material effect GLSL**, the functions `tridShadowCube` and `tridUnpack` are taken too. Only helper functions of your own with those names would clash.
 
 ### From 0.6 to 0.7
 
