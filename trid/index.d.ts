@@ -1968,6 +1968,25 @@ export interface SculptOptions {
 /** Sculpts a mesh with a brush, in place, around a point or along a path. Returns the same mesh. */
 export function sculptMesh<M extends Mesh>(mesh: M, brush: SculptBrush, opts: SculptOptions): M;
 
+export interface RemeshOptions {
+  /** Cells along the shape's longest side (default 64, at most 256) */
+  resolution?: number;
+  /** Or the size of a cell, in units (overrides `resolution`) */
+  size?: number;
+  /** "nets" (default: even faces) or "cubes" (marching cubes) */
+  method?: "nets" | "cubes";
+  /** Smooth normals from the surface (default true) */
+  normals?: boolean;
+  /** Texture coordinates to make: a mapping (default "box"), or false */
+  uvs?: string | object | false;
+}
+
+/**
+ * Rebuilds a shape (a mesh, an object, or a list of them) as one new mesh with small, even
+ * faces, like Blender's Voxel Remesh. Overlapping pieces become one solid. Returns a new mesh.
+ */
+export function remeshMesh(input: Mesh | SceneObjectInput | (Mesh | SceneObjectInput)[], opts?: RemeshOptions): Mesh;
+
 // Modeling: mirror and array
 
 export interface PlaneOptions {

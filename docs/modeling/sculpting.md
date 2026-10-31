@@ -3,7 +3,7 @@
 Blender's sculpt brushes as one function: `sculptMesh(mesh, brush, opts)` pushes, pulls, smooths and carves a mesh around a point or along a path, fading out at a radius. Like the [deformers](./deformers), it changes the mesh **in place** and returns it. The mesh's own normals (from an OBJ file) are removed, and the renderers compute new ones.
 
 ```js
-import { sculptMesh, SCULPT_BRUSHES } from "./trid/index.js";
+import { sculptMesh, SCULPT_BRUSHES, remeshMesh } from "./trid/index.js";
 ```
 
 <Demo src="sculpt" hint="inflate · grab · smooth (the front of a lumpy ball) · flatten · pinch (a raised ridge made sharp) · crease (a smile) · noise — drag to orbit" />
@@ -11,7 +11,7 @@ import { sculptMesh, SCULPT_BRUSHES } from "./trid/index.js";
 <<< @/demos/sculpt.js
 
 ::: tip Give it enough vertices
-A brush only moves vertices, so the mesh needs plenty where it's sculpted: a sphere with many `rings` and `segments`, [blobs](./blobs), lofts and sweeps, or any mesh after [`subdivideMesh`](./smoothing#subdividemesh-mesh-opts). A built-in box has 8 corners and nothing between them to move.
+A brush only moves vertices, so the mesh needs plenty where it's sculpted: a sphere with many `rings` and `segments`, [blobs](./blobs), lofts and sweeps, or any shape after [`remeshMesh`](#remeshmesh-input-opts). A built-in box has 8 corners and nothing between them to move.
 :::
 
 ## `sculptMesh(mesh, brush, opts)`
@@ -54,3 +54,35 @@ A brush with `symmetry` reads the noise on each side as if it were the first, so
 - **Order matters, like in Blender.** Each call works on the mesh as the last one left it. Inflate a ridge, then pinch it, and you get a sharp fin (the blue ball in the demo).
 - **Strokes are exact.** With `along`, each point is weighed by its distance to the whole path, so there are no dabs to space out: a crease is equally deep from one end of the path to the other, and fades past its ends.
 - **Speed.** Only the points in the brush's reach are looked at, plus one pass over the faces. On a 33,000-vertex sphere, a call takes 10 to 30 ms, and a small dab about 4 ms.
+
+## `remeshMesh(input, opts?)`
+
+Rebuilds any shape as one new mesh with small, even faces, like Blender's Voxel Remesh, so it can be sculpted everywhere: a box, a low-poly part, or **several overlapping parts**, which melt into one solid with no walls left inside.
+
+<Demo src="remesh" hint="a creature made of overlapping parts · remeshed into one surface · then sculpted: softer joins, cheeks, a snout — drag to orbit" />
+
+<<< @/demos/remesh.js
+
+```js
+const clay = remeshMesh(makeShape("box"), { resolution: 48 });       // a sculptable box
+const body = remeshMesh([torso, head, ...legs], { size: 0.01 });     // parts → one surface, faces ~1 cm
+sculptMesh(body, "smooth", { center: neck, radius: 0.05, strength: 1, iterations: 8 }); // soften a join
+```
+
+`input` is a mesh, a scene object, or a list of them. Objects are placed by their own `pos`, `rot` and `scale` (like [`mergeMeshes`](../shapes#mesh-helpers)), so a group's children come out where they are in the group.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `resolution` | `64` | Cells along the shape's longest side (at most 256): more cells, smaller faces |
+| `size` | | Or the size of a cell, in units (replaces `resolution`) |
+| `method` | `"nets"` | `"nets"`: even faces. `"cubes"`: marching cubes |
+| `normals` | `true` | Smooth normals taken from the surface |
+| `uvs` | `"box"` | Texture coordinates to make: a [mapping](../textures#texture-mapping), or `false` |
+
+What to expect:
+
+- **The shape is kept, its details down to a cell.** Flat sides stay flat and sizes stay the same; sharp edges and corners are softened a little (by less than a cell). A cube at the default resolution has the same volume to four decimals.
+- **Each closed piece counts as solid**, and pieces turned inside out are fixed first. An open piece (a sheet, a cup without a bottom) becomes a thin shell two cells thick.
+- **Texture coordinates are made again**, and materials per face aren't kept: the result is one surface.
+- **Speed.** About half a second at the default resolution for one part, a second for eight overlapping parts, and about 4 seconds at `resolution: 128`. Remesh once, then sculpt as much as you like.
+- Where two parts only just touch (closer than a cell), the surface can pinch into an edge shared by four faces. Nudge them together, or raise the resolution.
