@@ -1929,6 +1929,88 @@ export function bendMesh<M extends Mesh>(mesh: M, opts?: BendOptions): M;
 /** Pushes the surface out (or in) around a point, fading at `radius`, in place. Returns the same mesh. */
 export function bulgeMesh<M extends Mesh>(mesh: M, opts: BulgeOptions): M;
 
+// Modeling: mirror and array
+
+export interface PlaneOptions {
+  /** The plane where this coordinate is constant (default "x": mirrors left and right) */
+  axis?: "x" | "y" | "z";
+  /** Any plane instead, by its normal (overrides `axis`) */
+  normal?: Vec3;
+  /** A point the plane goes through (default: the origin; for objects, the parent's origin) */
+  center?: Partial<Vec3>;
+}
+
+export interface BisectOptions extends PlaneOptions {
+  /** Side to keep: "+" the side the normal points to (default), "-" the other */
+  keep?: "+" | "-";
+  /** Points closer to the plane are moved onto it (default: a hundred-thousandth of the mesh's size) */
+  distance?: number;
+}
+
+export interface MirrorOptions extends Omit<PlaneOptions, "axis"> {
+  /** Axis, or several mirrored in turn (["x", "z"] gives 4 copies). Default "x" */
+  axis?: "x" | "y" | "z" | ("x" | "y" | "z")[];
+  /** Share the points on the plane and remove faces lying on it: true (default), false, or the distance */
+  weld?: boolean | number;
+  /** Cut away the other side first, so the result is exactly symmetric (default false) */
+  bisect?: boolean;
+  /** Side kept by `bisect`: "+" (default) or "-" */
+  keep?: "+" | "-";
+}
+
+export interface ArrayStep {
+  /** Number of copies, the first where the original is (default 2) */
+  count?: number;
+  /** Move per copy, in units */
+  offset?: Partial<Vec3>;
+  /** Move per copy, in sizes of the mesh or object ({ x: 1 } = touching side by side; the default when no step is given) */
+  relative?: Partial<Vec3>;
+  /** Turn per copy, in radians (like `rot`), around `center` */
+  rotate?: Partial<Vec3>;
+  /** Size factor per copy, around `center` */
+  scale?: number;
+  /** Point the turn and the scale are around (default: the origin) */
+  center?: Partial<Vec3>;
+}
+
+export interface ArrayOptions extends ArrayStep {
+  /** Join copies that touch and remove the faces between them: true, or the distance (default false) */
+  weld?: boolean | number;
+}
+
+export interface RadialArrayStep {
+  /** Number of copies, the first where the original is (default 6) */
+  count?: number;
+  /** Axis they go around (default "y"); same turning direction as `rot` */
+  axis?: "x" | "y" | "z";
+  /** Full turn (default 2π: spread evenly), or the angle from the first copy to the last */
+  angle?: number;
+  /** A point the axis goes through (default: the origin) */
+  center?: Partial<Vec3>;
+}
+
+export interface RadialArrayOptions extends RadialArrayStep {
+  /** Join copies that touch: true, or the distance (default false) */
+  weld?: boolean | number;
+}
+
+/** Mirrors a mesh across a plane and keeps both halves, welded at the seam. Returns a new mesh. */
+export function mirrorMesh(mesh: Mesh, opts?: MirrorOptions): Mesh;
+/** Cuts a mesh along a plane and mirrors the kept side over the other: exactly symmetric. Returns a new mesh. */
+export function symmetrizeMesh(mesh: Mesh, opts?: Omit<MirrorOptions, "bisect">): Mesh;
+/** Cuts a mesh along a plane and keeps one side (the cut is left open). Returns a new mesh. */
+export function bisectMesh(mesh: Mesh, opts?: BisectOptions): Mesh;
+/** Repeats a mesh, each copy a step further (move, turn, scale), joined into one. Returns a new mesh. */
+export function arrayMesh(mesh: Mesh, opts?: ArrayOptions): Mesh;
+/** Copies of a mesh around an axis, joined into one. Returns a new mesh. */
+export function radialArrayMesh(mesh: Mesh, opts?: RadialArrayOptions): Mesh;
+/** A mirrored copy of an object (and its children), sharing meshes and materials. Not added to the scene. */
+export function mirrorObject<O extends SceneObjectInput>(obj: O, opts?: PlaneOptions): O & Transform;
+/** Copies of an object, each a step further, sharing its mesh and material. Not added to the scene. */
+export function arrayObject<O extends SceneObjectInput>(obj: O, opts?: ArrayStep): (O & Transform)[];
+/** Copies of an object around an axis, sharing its mesh and material. Not added to the scene. */
+export function radialArrayObject<O extends SceneObjectInput>(obj: O, opts?: RadialArrayStep): (O & Transform)[];
+
 // Modeling: cleanup and checks
 
 /**

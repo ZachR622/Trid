@@ -6,6 +6,7 @@ Tools for making your own shapes in code, beyond `makeShape`, `lathe` and `extru
 import {
   spline, resamplePath, sweep, loft, subdivideMesh, bevelMesh, blobMesh, blobField, sdfMesh,
   booleanMesh, unionMesh, subtractMesh, intersectMesh,
+  mirrorMesh, symmetrizeMesh, bisectMesh, arrayMesh, radialArrayMesh, mirrorObject, arrayObject, radialArrayObject,
   taperMesh, twistMesh, bendMesh, bulgeMesh, weldVertices, cleanMesh, validateMesh, fixWinding,
   meshQuery, raycastMesh, pointInMesh, distanceToMesh, closestPointOnMesh, isClosed, raycastScene,
 } from "./trid/index.js";
@@ -17,6 +18,7 @@ import {
 | [Subdivision & bevels](./smoothing) | `subdivideMesh`, `bevelMesh` |
 | [Blobs](./blobs) | `blobMesh`, `blobField`, `sdfMesh` |
 | [Booleans](./booleans) | `booleanMesh`, `unionMesh`, `subtractMesh`, `intersectMesh` |
+| [Mirror & array](./symmetry) | `mirrorMesh`, `symmetrizeMesh`, `bisectMesh`, `arrayMesh`, `radialArrayMesh`, and the same for objects |
 | [Deformers](./deformers) | `taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh` |
 | [Cleanup and checks](./cleanup) | `weldVertices`, `cleanMesh`, `validateMesh`, `fixWinding` |
 | [Rays, inside and distance](./queries) | `meshQuery`, `raycastScene`, `isClosed` and one-off helpers |
@@ -33,6 +35,8 @@ import {
 | Something smooth, built from a few boxes | [`subdivideMesh`](./smoothing#subdividemesh-mesh-opts) |
 | Holes, windows, notches, cut-outs; or one solid from overlapping parts | [Booleans](./booleans): subtract, union, intersect |
 | Furniture, devices, robots: soft edges | [`bevelMesh`](./smoothing#bevelmesh-mesh-opts), or `makeShape("box", { radius })` |
+| Anything symmetric: a chair, a face, a car, a creature | Build one half, then [`mirrorMesh`](./symmetry#mirrormesh-mesh-opts); or [`symmetrizeMesh`](./symmetry#symmetrizemesh-mesh-opts) a lopsided one |
+| Rows, fences, stairs, spokes, petals, legs around a table | [`arrayMesh`](./symmetry#arraymesh-mesh-opts) and [`radialArrayMesh`](./symmetry#radialarraymesh-mesh-opts), or the object versions |
 | A trunk that tapers, a twisted column, a bent arm | [Deformers](./deformers) |
 | Rocks, terrain, wobbly surfaces | [`displaceMesh`](../shapes#mesh-helpers) with [noise](../noise) |
 | Eyes, buttons or pebbles placed on a surface | [`meshQuery`](./queries#meshquery-mesh) or [`raycastScene`](./queries#raycastscene-scene-origin-direction-opts) |

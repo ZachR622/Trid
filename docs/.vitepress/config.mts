@@ -47,6 +47,7 @@ export default defineConfig({
               { text: "Subdivision & bevels", link: "/modeling/smoothing" },
               { text: "Blobs", link: "/modeling/blobs" },
               { text: "Booleans", link: "/modeling/booleans" },
+              { text: "Mirror & array", link: "/modeling/symmetry" },
               { text: "Deformers", link: "/modeling/deformers" },
               { text: "Cleanup and checks", link: "/modeling/cleanup" },
               { text: "Rays, inside and distance", link: "/modeling/queries" },

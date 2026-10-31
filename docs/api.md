@@ -28,6 +28,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/modeling/curves.js` | [`spline`, `resamplePath`](./modeling/curves#curves) |
 | `trid/modeling/sweep.js` | [`sweep`](./modeling/curves#sweep-path-opts) |
 | `trid/modeling/loft.js` | [`loft`](./modeling/curves#loft-sections-opts) |
+| `trid/modeling/symmetry.js` | [`mirrorMesh`, `symmetrizeMesh`, `bisectMesh`, `arrayMesh`, `radialArrayMesh`, `mirrorObject`, `arrayObject`, `radialArrayObject`](./modeling/symmetry) |
 | `trid/modeling/deform.js` | [`taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh`](./modeling/deformers) |
 | `trid/modeling/cleanup.js` | [`weldVertices`, `cleanMesh`, `validateMesh`, `fixWinding`](./modeling/cleanup) |
 | `trid/modeling/subdivide.js` | [`subdivideMesh`](./modeling/smoothing#subdividemesh-mesh-opts) |

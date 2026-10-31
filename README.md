@@ -17,7 +17,7 @@ Trid gives you a scene, shapes you can model in code, lights, effects, model loa
 - **Scene** — holds a canvas, a camera, lights and your objects, and runs the frame loop for you. The background can be a color or see-through (`"transparent"`), so a model can float over your page.
 - **Groups** — give any object `children` and they move, turn and scale with it (models made of parts, a moon orbiting a planet).
 - **Shapes** — cubes, boxes (sharp or rounded), spheres, cylinders, cones, tori and planes built in, `lathe` for round shapes (a point on the axis closes it to a tip) and `extrude` for flat ones, or any mesh you define as vertices, faces and edges.
-- **Modeling** — smooth curves through a few points (`spline`), shapes swept along a 3D path (`sweep`: tails, horns, pipes, rails), surfaces through cross-sections (`loft`: bodies, bottles, hulls, heads), subdivision surfaces with creases (`subdivideMesh`: box modeling), shapes that melt together (`blobMesh`: creatures, clay; or any distance field with `sdfMesh`), rounded or cut edges on any mesh (`bevelMesh`), booleans like Blender's (`unionMesh`, `subtractMesh`, `intersectMesh`: holes, windows, one solid from parts), taper, twist, bend and bulge deformers, mesh cleanup and checks (weld, clean, validate, fix winding), and rays, inside tests and distances against meshes and scenes (`meshQuery`, `raycastScene`).
+- **Modeling** — smooth curves through a few points (`spline`), shapes swept along a 3D path (`sweep`: tails, horns, pipes, rails), surfaces through cross-sections (`loft`: bodies, bottles, hulls, heads), subdivision surfaces with creases (`subdivideMesh`: box modeling), shapes that melt together (`blobMesh`: creatures, clay; or any distance field with `sdfMesh`), rounded or cut edges on any mesh (`bevelMesh`), mirror, symmetrize and array like Blender's modifiers (`mirrorMesh`, `symmetrizeMesh`, `arrayMesh`, `radialArrayMesh`, or copies of objects that share their mesh), booleans like Blender's (`unionMesh`, `subtractMesh`, `intersectMesh`: holes, windows, one solid from parts), taper, twist, bend and bulge deformers, mesh cleanup and checks (weld, clean, validate, fix winding), and rays, inside tests and distances against meshes and scenes (`meshQuery`, `raycastScene`).
 - **Mesh helpers** — clone, transform, displace, merge and measure meshes; seeded random numbers and smooth noise (`fbm2`, `fbm3`, tileable) for rocks, terrain and procedural textures.
 - **Filled faces** — give an object a `material` to fill and shade its faces, flat or smooth.
 - **Lights and shadows** — ambient, directional and point lights, with colors and intensities, as many as you need (up to 8 at once besides ambient). Directional and point lights can cast soft shadows (shadow maps with WebGL, ground shadows on the canvas).
@@ -96,7 +96,7 @@ Or let users load their own: `scene.use(new ObjUploader())` accepts dropped `.ob
 | `trid/sceneGraph.js` | Groups: `children`, world matrices |
 | `trid/math/` | Transforms, camera directions, projection, matrices, rotations, random numbers and noise |
 | `trid/render/` | Renderers (Canvas 2D, WebGL), lights, effects, post effects, shapes, grids, mesh helpers, procedural textures, drawing, frame loop |
-| `trid/modeling/` | Modeling tools: curves, sweep, loft, subdivision, blobs, bevel, deformers, cleanup, queries (rays, inside, distance) |
+| `trid/modeling/` | Modeling tools: curves, sweep, loft, subdivision, blobs, bevel, mirror and array, deformers, cleanup, queries (rays, inside, distance) |
 | `trid/loaders/` | OBJ, MTL and texture loading |
 | `trid/export/` | Screenshots, video recording, OBJ and MTL export |
 | `trid/tools/` | Camera, object, gizmo and overlay tools |
@@ -122,7 +122,7 @@ See [`docs/README.md`](https://github.com/ZachR622/Trid/blob/master/docs/README.
 npm test
 ```
 
-Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover the whole transform pipeline (rotations, camera, projection, near-plane clipping, matrices and normals), what the canvas renderer draws (order, culling, clipping, light, gradients, outlines, split faces, texture placement), shapes (lathe poles included), mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, booleans, deformers, mesh cleanup, mesh and scene queries, smooth normals, texture mapping, material and post effects, noise, procedural textures, OBJ / MTL loading and export, screenshots and downloads, picking, tools, groups, lights, shadows, grids, see-through backgrounds, and the WebGL renderer's GPU memory on a fake WebGL context.
+Uses Node's built-in test runner (Node 21+), so there's nothing to install. The tests cover the whole transform pipeline (rotations, camera, projection, near-plane clipping, matrices and normals), what the canvas renderer draws (order, culling, clipping, light, gradients, outlines, split faces, texture placement), shapes (lathe poles included), mesh helpers, curves, sweeps, lofts, subdivision, blobs, bevels, booleans, mirrors and arrays, deformers, mesh cleanup, mesh and scene queries, smooth normals, texture mapping, material and post effects, noise, procedural textures, OBJ / MTL loading and export, screenshots and downloads, picking, tools, groups, lights, shadows, grids, see-through backgrounds, and the WebGL renderer's GPU memory on a fake WebGL context.
 
 ## Upgrading
 
@@ -157,5 +157,11 @@ Nothing changes for existing scenes: shadows, outlines and the selection outline
 
 Roughly in order:
 
+- **Mirror and array** — mirror a mesh or an object across a plane (welded at the seam, optionally cut in half first: symmetrize), and repeat it in a line, a spiral or around an axis
+- **Placing things on other things** — drop an object onto another until they touch, attach it to a surface (turned to its normal), align and distribute objects
+- **Sculpting** — brushes as plain functions (inflate, pinch, smooth, flatten, grab, crease, noise) with a soft falloff, and a sculpting tool to paint them with the mouse
+- **Lattice deform** — a coarse cage of control points around a mesh: move a few and the whole shape follows smoothly
+- **Modifier stack** — a list of modeling steps (mirror, array, bevel, subdivide, deformers, booleans...) applied in order, kept as data so it can be saved, edited and replayed
+- **More transform options** — local or world axes on the transform gizmo, snapping (grid and angle steps), finer drags, setting an object's origin (center, bottom)
 - **More import and export formats** — STL; basic glTF later
 - **More post effects** — antialiasing (FXAA)

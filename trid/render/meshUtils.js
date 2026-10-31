@@ -12,8 +12,8 @@ const fullTransform = ({ pos, rot, scale } = {}) => ({
   scale: { x: 1, y: 1, z: 1, ...scale },
 });
 
-/** A copy of a mesh with a world matrix baked in (normals turned, faces flipped for mirrors). */
-function bake(mesh, world) {
+/** A copy of a mesh with a world matrix baked in (normals turned, faces flipped for mirrors). Not exported from the library. */
+export function bake(mesh, world) {
   const out = cloneMesh(mesh);
   for (const v of out.vertices) Object.assign(v, transformPoint(world, v));
   if (out.normals) {
