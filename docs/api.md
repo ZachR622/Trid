@@ -35,6 +35,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/modeling/blobs.js` | [`blobMesh`, `blobField`, `sdfMesh`](./modeling/blobs) |
 | `trid/modeling/bevel.js` | [`bevelMesh`](./modeling/smoothing#bevelmesh-mesh-opts) |
 | `trid/modeling/boolean.js` | [`booleanMesh`, `unionMesh`, `subtractMesh`, `intersectMesh`](./modeling/booleans) |
+| `trid/modeling/placement.js` | [`dropOnto`, `attachTo`, `alignObjects`, `distributeObjects`](./modeling/placement) |
 | `trid/modeling/query.js` | [`meshQuery`, `raycastMesh`, `pointInMesh`, `distanceToMesh`, `closestPointOnMesh`, `isClosed`, `raycastScene`, `clearQueryCache`](./modeling/queries) |
 | `trid/loaders/texture.js` | [`loadTexture`](./textures), [`textureReady`, `textureSize`, `textureIsLive`](#textures) |
 | `trid/loaders/obj.js` | [`parseOBJ`, `loadOBJ`, `loadMaterials`, `readOBJFile`, `pickOBJFile`, `fitMesh`](./obj) |

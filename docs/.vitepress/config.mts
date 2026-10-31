@@ -51,6 +51,7 @@ export default defineConfig({
               { text: "Deformers", link: "/modeling/deformers" },
               { text: "Cleanup and checks", link: "/modeling/cleanup" },
               { text: "Rays, inside and distance", link: "/modeling/queries" },
+              { text: "Placing objects", link: "/modeling/placement" },
             ],
           },
           { text: "Filled faces", link: "/faces" },

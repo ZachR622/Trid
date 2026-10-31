@@ -2011,6 +2011,82 @@ export function arrayObject<O extends SceneObjectInput>(obj: O, opts?: ArrayStep
 /** Copies of an object around an axis, sharing its mesh and material. Not added to the scene. */
 export function radialArrayObject<O extends SceneObjectInput>(obj: O, opts?: RadialArrayStep): (O & Transform)[];
 
+// Modeling: placing objects
+
+export interface DropOptions {
+  /** Direction it moves in, any length (default down: { x: 0, y: -1, z: 0 }) */
+  direction?: Vec3;
+  /** Stop this far before touching (default 0) */
+  gap?: number;
+  /** Don't move further than this (default Infinity) */
+  maxDistance?: number;
+}
+
+export interface DropResult {
+  /** How far it moved along the direction; negative when it was lifted out of a target */
+  distance: number;
+  /** Where it touches, in the world */
+  point: Vec3;
+  /** The target object it touches */
+  object: SceneObjectInput;
+}
+
+/**
+ * Moves an object along a direction (default down) until it touches a target, exactly;
+ * lifted out and set on top when it's sunk into one. Changes `obj.pos`. Null (and no move)
+ * when nothing is in the way.
+ */
+export function dropOnto(obj: SceneObjectInput, targets: Scene | SceneObjectInput | SceneObjectInput[], opts?: DropOptions): DropResult | null;
+
+export interface AttachOptions {
+  /** Look for the surface nearest to this world point (default: the object's position) */
+  at?: Vec3;
+  /** The object's axis that points out of the surface (default "y"); "-y" etc. for the other way */
+  axis?: "x" | "y" | "z" | "-x" | "-y" | "-z";
+  /** Turn the object so `axis` follows the surface (default true) */
+  align?: boolean;
+  /** The point put on the surface: "base" (default: the middle of its box's side opposite `axis`), "origin", or a point in its own space */
+  anchor?: "base" | "origin" | Vec3;
+  /** Distance out along the surface's normal; negative sinks it in (default 0) */
+  offset?: number;
+}
+
+export interface AttachResult {
+  /** The surface point, in the world */
+  point: Vec3;
+  /** The surface's normal there, pointing out */
+  normal: Vec3;
+  /** The target object it's on */
+  object: SceneObjectInput;
+  /** How far the surface was from `at` */
+  distance: number;
+}
+
+/** Puts an object on the nearest surface of the targets, turned to follow it. Changes `obj.pos` and `obj.rot`. */
+export function attachTo(obj: SceneObjectInput, targets: Scene | SceneObjectInput | SceneObjectInput[], opts?: AttachOptions): AttachResult | null;
+
+export interface AlignOptions {
+  /** Axis, or several (default "y") */
+  axis?: "x" | "y" | "z" | ("x" | "y" | "z")[];
+  /** Which side of their boxes lines up (default "min") */
+  to?: "min" | "center" | "max";
+  /** Line up with a world coordinate or an object's box (default: the box around all of them) */
+  reference?: number | SceneObjectInput;
+}
+
+/** Lines objects up by their boxes, like Blender's Align. Changes their `pos`. Returns the same list. */
+export function alignObjects<T extends SceneObjectInput[]>(objects: T, opts?: AlignOptions): T;
+
+export interface DistributeOptions {
+  /** Axis (default "x") */
+  axis?: "x" | "y" | "z";
+  /** Space between neighbors; without it the first and last stay and the spaces are made equal */
+  gap?: number;
+}
+
+/** Spreads objects out along an axis by their boxes. Changes their `pos`. Returns the same list. */
+export function distributeObjects<T extends SceneObjectInput[]>(objects: T, opts?: DistributeOptions): T;
+
 // Modeling: cleanup and checks
 
 /**

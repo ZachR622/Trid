@@ -8,6 +8,7 @@ import {
   booleanMesh, unionMesh, subtractMesh, intersectMesh,
   mirrorMesh, symmetrizeMesh, bisectMesh, arrayMesh, radialArrayMesh, mirrorObject, arrayObject, radialArrayObject,
   taperMesh, twistMesh, bendMesh, bulgeMesh, weldVertices, cleanMesh, validateMesh, fixWinding,
+  dropOnto, attachTo, alignObjects, distributeObjects,
   meshQuery, raycastMesh, pointInMesh, distanceToMesh, closestPointOnMesh, isClosed, raycastScene,
 } from "./trid/index.js";
 ```
@@ -22,6 +23,7 @@ import {
 | [Deformers](./deformers) | `taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh` |
 | [Cleanup and checks](./cleanup) | `weldVertices`, `cleanMesh`, `validateMesh`, `fixWinding` |
 | [Rays, inside and distance](./queries) | `meshQuery`, `raycastScene`, `isClosed` and one-off helpers |
+| [Placing objects](./placement) | `dropOnto`, `attachTo`, `alignObjects`, `distributeObjects` |
 
 ## Which tool for which shape
 
@@ -39,6 +41,9 @@ import {
 | Rows, fences, stairs, spokes, petals, legs around a table | [`arrayMesh`](./symmetry#arraymesh-mesh-opts) and [`radialArrayMesh`](./symmetry#radialarraymesh-mesh-opts), or the object versions |
 | A trunk that tapers, a twisted column, a bent arm | [Deformers](./deformers) |
 | Rocks, terrain, wobbly surfaces | [`displaceMesh`](../shapes#mesh-helpers) with [noise](../noise) |
+| Parts that rest on each other: a cup on a table, rocks on the ground, a roof on walls | [`dropOnto`](./placement#droponto-obj-targets-opts) |
+| Horns, handles, ears or spikes growing out of a surface | [`attachTo`](./placement#attachto-obj-targets-opts) |
+| Legs on the same floor, things centered or evenly spaced | [`alignObjects`](./placement#alignobjects-objects-opts), [`distributeObjects`](./placement#distributeobjects-objects-opts) |
 | Eyes, buttons or pebbles placed on a surface | [`meshQuery`](./queries#meshquery-mesh) or [`raycastScene`](./queries#raycastscene-scene-origin-direction-opts) |
 | A mesh from a file or your own code that looks wrong | [Cleanup and checks](./cleanup) |
 
