@@ -96,6 +96,7 @@ export { loft } from "./modeling/loft.js";
 export { taperMesh, twistMesh, bendMesh, bulgeMesh } from "./modeling/deform.js";
 export { sculptMesh, SCULPT_BRUSHES } from "./modeling/sculpt.js";
 export { remeshMesh } from "./modeling/remesh.js";
+export { makeLattice, latticePoints, latticeMesh, latticeCage } from "./modeling/lattice.js";
 export {
   mirrorMesh, symmetrizeMesh, bisectMesh, arrayMesh, radialArrayMesh, mirrorObject, arrayObject, radialArrayObject,
 } from "./modeling/symmetry.js";

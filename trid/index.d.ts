@@ -2053,6 +2053,41 @@ export interface RemeshOptions {
  */
 export function remeshMesh(input: Mesh | SceneObjectInput | (Mesh | SceneObjectInput)[], opts?: RemeshOptions): Mesh;
 
+// Modeling: lattice
+
+/** A cage of control points around a box, in a mesh's own space. */
+export interface Lattice {
+  /** The box the points rest on */
+  min: Vec3;
+  max: Vec3;
+  /** Points per side */
+  div: Vec3;
+  /** points[i + div.x * (j + div.y * k)]: i along x, j along y, k along z, from the low corner. Move them freely */
+  points: Vec3[];
+}
+
+export interface LatticeOptions {
+  /** Points per side: a number or { x, y, z } (default 3, at least 2; 1 along a side of no size) */
+  div?: number | Partial<Vec3>;
+  /** Make the box this much bigger on every side (default 0) */
+  padding?: number;
+}
+
+/** A lattice around a mesh's box (or a box { min, max }), its points evenly spread. */
+export function makeLattice(input: Mesh | { min: Vec3; max: Vec3 }, opts?: LatticeOptions): Lattice;
+/** A layer (one index), a row (two) or a point (three) of a lattice's own points; negative indices count from the end. */
+export function latticePoints(lattice: Lattice, which?: { x?: number; y?: number; z?: number }): Vec3[];
+
+export interface LatticeMeshOptions {
+  /** How the points' moves blend: "bspline" (default: smoothest), "cardinal" (passes through the points) or "linear" */
+  interpolation?: "bspline" | "cardinal" | "linear";
+}
+
+/** Deforms a mesh by how far a lattice's points moved from their rest places, in place. Returns the same mesh. */
+export function latticeMesh<M extends Mesh>(mesh: M, lattice: Lattice, opts?: LatticeMeshOptions): M;
+/** The lattice as a wireframe mesh whose vertices are the lattice's own points. */
+export function latticeCage(lattice: Lattice): Mesh;
+
 // Modeling: mirror and array
 
 export interface PlaneOptions {

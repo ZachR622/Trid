@@ -7,7 +7,8 @@ import {
   spline, resamplePath, sweep, loft, subdivideMesh, bevelMesh, blobMesh, blobField, sdfMesh,
   booleanMesh, unionMesh, subtractMesh, intersectMesh,
   mirrorMesh, symmetrizeMesh, bisectMesh, arrayMesh, radialArrayMesh, mirrorObject, arrayObject, radialArrayObject,
-  taperMesh, twistMesh, bendMesh, bulgeMesh, sculptMesh, remeshMesh, weldVertices, cleanMesh, validateMesh, fixWinding,
+  taperMesh, twistMesh, bendMesh, bulgeMesh, sculptMesh, remeshMesh,
+  makeLattice, latticePoints, latticeMesh, latticeCage, weldVertices, cleanMesh, validateMesh, fixWinding,
   dropOnto, attachTo, alignObjects, distributeObjects,
   meshQuery, raycastMesh, pointInMesh, distanceToMesh, closestPointOnMesh, isClosed, raycastScene,
 } from "./trid/index.js";
@@ -22,6 +23,7 @@ import {
 | [Mirror & array](./symmetry) | `mirrorMesh`, `symmetrizeMesh`, `bisectMesh`, `arrayMesh`, `radialArrayMesh`, and the same for objects |
 | [Deformers](./deformers) | `taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh` |
 | [Sculpting](./sculpting) | `sculptMesh`: inflate, grab, smooth, flatten, pinch, crease, noise; `remeshMesh` |
+| [Lattice](./lattice) | `makeLattice`, `latticePoints`, `latticeMesh`, `latticeCage` |
 | [Cleanup and checks](./cleanup) | `weldVertices`, `cleanMesh`, `validateMesh`, `fixWinding` |
 | [Rays, inside and distance](./queries) | `meshQuery`, `raycastScene`, `isClosed` and one-off helpers |
 | [Placing objects](./placement) | `dropOnto`, `attachTo`, `alignObjects`, `distributeObjects` |
@@ -42,6 +44,7 @@ import {
 | Rows, fences, stairs, spokes, petals, legs around a table | [`arrayMesh`](./symmetry#arraymesh-mesh-opts) and [`radialArrayMesh`](./symmetry#radialarraymesh-mesh-opts), or the object versions |
 | Faces, creatures, details: cheeks, snouts, mouths, wrinkles, rough skin | [`sculptMesh`](./sculpting) on a dense mesh, with `symmetry: "x"` |
 | One smooth body from overlapping parts, or any shape made sculptable | [`remeshMesh`](./sculpting#remeshmesh-input-opts) |
+| A whole shape reshaped with a few points: a wider top, a pinched waist, a lean, a twist | [Lattice](./lattice) |
 | A trunk that tapers, a twisted column, a bent arm | [Deformers](./deformers) |
 | Rocks, terrain, wobbly surfaces | [`displaceMesh`](../shapes#mesh-helpers) with [noise](../noise) |
 | Parts that rest on each other: a cup on a table, rocks on the ground, a roof on walls | [`dropOnto`](./placement#droponto-obj-targets-opts) |

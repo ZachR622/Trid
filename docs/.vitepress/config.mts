@@ -50,6 +50,7 @@ export default defineConfig({
               { text: "Mirror & array", link: "/modeling/symmetry" },
               { text: "Deformers", link: "/modeling/deformers" },
               { text: "Sculpting", link: "/modeling/sculpting" },
+              { text: "Lattice", link: "/modeling/lattice" },
               { text: "Cleanup and checks", link: "/modeling/cleanup" },
               { text: "Rays, inside and distance", link: "/modeling/queries" },
               { text: "Placing objects", link: "/modeling/placement" },
