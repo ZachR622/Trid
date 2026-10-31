@@ -2053,6 +2053,53 @@ export interface RemeshOptions {
  */
 export function remeshMesh(input: Mesh | SceneObjectInput | (Mesh | SceneObjectInput)[], opts?: RemeshOptions): Mesh;
 
+// Modeling: modifier stack
+
+/** An edit of a lattice step's points, picked like `latticePoints`; scale and rotate are around their middle. */
+export interface LatticeEdit {
+  /** Which points: one index for a layer, two for a row, three for a point (negative: from the end) */
+  select?: { x?: number; y?: number; z?: number };
+  /** Move them */
+  move?: Partial<Vec3>;
+  /** Scale them: one factor, or per axis */
+  scale?: number | Partial<Vec3>;
+  /** Turn them, in radians, like an object's `rot` */
+  rotate?: Partial<Vec3>;
+}
+
+/** One step of a modifier stack. */
+export type Modifier =
+  | ({ type: "mirror" } & MirrorOptions)
+  | ({ type: "symmetrize" } & Omit<MirrorOptions, "bisect">)
+  | ({ type: "bisect" } & BisectOptions)
+  | ({ type: "array" } & ArrayOptions)
+  | ({ type: "radialArray" } & RadialArrayOptions)
+  | ({ type: "subdivide" } & SubdivideOptions)
+  | ({ type: "bevel" } & BevelOptions)
+  | { type: "boolean"; op?: "union" | "subtract" | "difference" | "intersect"; with: Mesh | SceneObjectInput | (Mesh | SceneObjectInput)[]; materials?: "transfer" | "index"; epsilon?: number }
+  | ({ type: "taper" } & TaperOptions)
+  | ({ type: "twist" } & TwistOptions)
+  | ({ type: "bend" } & BendOptions)
+  | ({ type: "bulge" } & BulgeOptions)
+  | ({ type: "sculpt"; brush: SculptBrush } & SculptOptions)
+  | { type: "noise"; amount?: number; size?: number; seed?: number }
+  | { type: "lattice"; lattice?: Lattice; div?: LatticeOptions["div"]; padding?: number; edits?: LatticeEdit[]; interpolation?: LatticeMeshOptions["interpolation"] }
+  | ({ type: "remesh" } & RemeshOptions)
+  | { type: "weld"; distance?: number }
+  | ({ type: "clean" } & CleanOptions)
+  | { type: "fixWinding" }
+  | { type: "transform"; pos?: Vec3; rot?: Vec3; scale?: Vec3 }
+  | { type: string; [option: string]: any };
+
+/** The modifier types by name; add your own: (mesh, step) => a new mesh, or nothing after changing the mesh in place. */
+export const MODIFIERS: Record<string, (mesh: Mesh, step: any) => Mesh | void>;
+
+/**
+ * Applies modeling steps in order, like Blender's modifier stack; `enabled: false` skips one.
+ * Returns a new mesh (the original is never changed). Errors name the step that failed.
+ */
+export function applyModifiers(mesh: Mesh, modifiers: (Modifier & { enabled?: boolean })[]): Mesh;
+
 // Modeling: lattice
 
 /** A cage of control points around a box, in a mesh's own space. */

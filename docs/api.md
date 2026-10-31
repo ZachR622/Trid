@@ -31,6 +31,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/modeling/symmetry.js` | [`mirrorMesh`, `symmetrizeMesh`, `bisectMesh`, `arrayMesh`, `radialArrayMesh`, `mirrorObject`, `arrayObject`, `radialArrayObject`](./modeling/symmetry) |
 | `trid/modeling/sculpt.js` | [`sculptMesh`, `SCULPT_BRUSHES`](./modeling/sculpting) |
 | `trid/modeling/lattice.js` | [`makeLattice`, `latticePoints`, `latticeMesh`, `latticeCage`](./modeling/lattice) |
+| `trid/modeling/modifiers.js` | [`applyModifiers`, `MODIFIERS`](./modeling/modifiers) |
 | `trid/modeling/remesh.js` | [`remeshMesh`](./modeling/sculpting#remeshmesh-input-opts) |
 | `trid/modeling/deform.js` | [`taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh`](./modeling/deformers) |
 | `trid/modeling/cleanup.js` | [`weldVertices`, `cleanMesh`, `validateMesh`, `fixWinding`](./modeling/cleanup) |
