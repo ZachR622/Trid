@@ -1929,6 +1929,45 @@ export function bendMesh<M extends Mesh>(mesh: M, opts?: BendOptions): M;
 /** Pushes the surface out (or in) around a point, fading at `radius`, in place. Returns the same mesh. */
 export function bulgeMesh<M extends Mesh>(mesh: M, opts: BulgeOptions): M;
 
+// Modeling: sculpting
+
+export type SculptBrush = "inflate" | "grab" | "smooth" | "flatten" | "pinch" | "crease" | "noise";
+
+/** The brushes `sculptMesh` knows. */
+export const SCULPT_BRUSHES: SculptBrush[];
+
+export interface SculptOptions {
+  /** Middle of the brush (or use `along`) */
+  center?: Vec3;
+  /** A stroke: the brush along these points (a path), applied once along all of it */
+  along?: Vec3[];
+  /** Distance where the brush fades to nothing */
+  radius: number;
+  /**
+   * How strong. inflate: distance at the middle (default radius / 5); grab: factor on `delta` (1);
+   * smooth, flatten, pinch: 0 to 1 (0.5, 0.5, 0.3); crease: groove depth (radius × 0.15);
+   * noise: height of the lumps (radius × 0.15). Negative inverts inflate, crease and pinch
+   */
+  strength?: number;
+  /** Shape of the fade (default "smooth"), or a function of distance / radius (0 to 1) */
+  falloff?: "smooth" | "sharp" | "linear" | "constant" | ((t: number) => number);
+  /** Also work mirrored across the mesh's origin on these axes; a symmetric mesh stays symmetric */
+  symmetry?: "x" | "y" | "z" | ("x" | "y" | "z")[];
+  /** grab: how far the middle moves */
+  delta?: Partial<Vec3>;
+  /** smooth: number of passes (default 1) */
+  iterations?: number;
+  /** crease: how much points are pulled toward the brush, 0 to 1 (default 0.5) */
+  pinch?: number;
+  /** noise: lumps per radius (default 3) */
+  scale?: number;
+  /** noise: whole number; another seed gives other lumps */
+  seed?: number;
+}
+
+/** Sculpts a mesh with a brush, in place, around a point or along a path. Returns the same mesh. */
+export function sculptMesh<M extends Mesh>(mesh: M, brush: SculptBrush, opts: SculptOptions): M;
+
 // Modeling: mirror and array
 
 export interface PlaneOptions {

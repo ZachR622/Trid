@@ -94,6 +94,7 @@ export { spline, resamplePath } from "./modeling/curves.js";
 export { sweep } from "./modeling/sweep.js";
 export { loft } from "./modeling/loft.js";
 export { taperMesh, twistMesh, bendMesh, bulgeMesh } from "./modeling/deform.js";
+export { sculptMesh, SCULPT_BRUSHES } from "./modeling/sculpt.js";
 export {
   mirrorMesh, symmetrizeMesh, bisectMesh, arrayMesh, radialArrayMesh, mirrorObject, arrayObject, radialArrayObject,
 } from "./modeling/symmetry.js";

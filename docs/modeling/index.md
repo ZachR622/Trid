@@ -7,7 +7,7 @@ import {
   spline, resamplePath, sweep, loft, subdivideMesh, bevelMesh, blobMesh, blobField, sdfMesh,
   booleanMesh, unionMesh, subtractMesh, intersectMesh,
   mirrorMesh, symmetrizeMesh, bisectMesh, arrayMesh, radialArrayMesh, mirrorObject, arrayObject, radialArrayObject,
-  taperMesh, twistMesh, bendMesh, bulgeMesh, weldVertices, cleanMesh, validateMesh, fixWinding,
+  taperMesh, twistMesh, bendMesh, bulgeMesh, sculptMesh, weldVertices, cleanMesh, validateMesh, fixWinding,
   dropOnto, attachTo, alignObjects, distributeObjects,
   meshQuery, raycastMesh, pointInMesh, distanceToMesh, closestPointOnMesh, isClosed, raycastScene,
 } from "./trid/index.js";
@@ -21,6 +21,7 @@ import {
 | [Booleans](./booleans) | `booleanMesh`, `unionMesh`, `subtractMesh`, `intersectMesh` |
 | [Mirror & array](./symmetry) | `mirrorMesh`, `symmetrizeMesh`, `bisectMesh`, `arrayMesh`, `radialArrayMesh`, and the same for objects |
 | [Deformers](./deformers) | `taperMesh`, `twistMesh`, `bendMesh`, `bulgeMesh` |
+| [Sculpting](./sculpting) | `sculptMesh`: inflate, grab, smooth, flatten, pinch, crease, noise |
 | [Cleanup and checks](./cleanup) | `weldVertices`, `cleanMesh`, `validateMesh`, `fixWinding` |
 | [Rays, inside and distance](./queries) | `meshQuery`, `raycastScene`, `isClosed` and one-off helpers |
 | [Placing objects](./placement) | `dropOnto`, `attachTo`, `alignObjects`, `distributeObjects` |
@@ -39,6 +40,7 @@ import {
 | Furniture, devices, robots: soft edges | [`bevelMesh`](./smoothing#bevelmesh-mesh-opts), or `makeShape("box", { radius })` |
 | Anything symmetric: a chair, a face, a car, a creature | Build one half, then [`mirrorMesh`](./symmetry#mirrormesh-mesh-opts); or [`symmetrizeMesh`](./symmetry#symmetrizemesh-mesh-opts) a lopsided one |
 | Rows, fences, stairs, spokes, petals, legs around a table | [`arrayMesh`](./symmetry#arraymesh-mesh-opts) and [`radialArrayMesh`](./symmetry#radialarraymesh-mesh-opts), or the object versions |
+| Faces, creatures, details: cheeks, snouts, mouths, wrinkles, rough skin | [`sculptMesh`](./sculpting) on a dense mesh, with `symmetry: "x"` |
 | A trunk that tapers, a twisted column, a bent arm | [Deformers](./deformers) |
 | Rocks, terrain, wobbly surfaces | [`displaceMesh`](../shapes#mesh-helpers) with [noise](../noise) |
 | Parts that rest on each other: a cup on a table, rocks on the ground, a roof on walls | [`dropOnto`](./placement#droponto-obj-targets-opts) |
