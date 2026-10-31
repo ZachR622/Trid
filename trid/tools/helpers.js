@@ -1,4 +1,4 @@
-import { worldToCamera, cameraToScreen, DEFAULT_FOV, DEFAULT_NEAR } from "../math/transform.js";
+import { worldToCamera, cameraToScreen, cameraForward, cameraRight, cameraUp, DEFAULT_FOV, DEFAULT_NEAR } from "../math/transform.js";
 import { transformPoint, determinantMat4 } from "../math/matrix.js";
 import { worldMatrix, worldObjects, ancestors } from "../sceneGraph.js";
 import { edgeSegments, wireEdges } from "../render/draw.js";
@@ -279,4 +279,35 @@ function barycentric(x, y, a, b, c) {
 export function worldPerPixel(scene, depth) {
   const fov = scene.camera.fov ?? DEFAULT_FOV;
   return (depth * 2 * Math.tan(fov / 2)) / scene.canvas.height;
+}
+
+/**
+ * The ray from the camera through a canvas pixel, in world space: what's
+ * under the cursor is the first thing it meets (pass it to `raycastScene`).
+ * The exact inverse of how points are drawn.
+ *
+ * @example
+ * const { origin, direction } = screenRay(scene, e.x, e.y);
+ * const hit = raycastScene(scene, origin, direction);
+ *
+ * @param {import("../scene.js").Scene} scene - Scene (for its camera and canvas size)
+ * @param {number} x - Canvas pixels from the left
+ * @param {number} y - Canvas pixels from the top
+ * @returns {{ origin: {x:number,y:number,z:number}, direction: {x:number,y:number,z:number} }}
+ *   The camera's position, and a unit direction
+ */
+export function screenRay(scene, x, y) {
+  const { camera, canvas } = scene;
+  const w = canvas.width, h = canvas.height;
+  const t = Math.tan((camera.fov ?? DEFAULT_FOV) / 2);
+  // Undo screen() and project(): pixel → normalized → camera space at depth 1
+  const cx = ((2 * x) / w - 1) * t * (w / h);
+  const cy = (1 - (2 * y) / h) * t;
+  const f = cameraForward(camera), r = cameraRight(camera), u = cameraUp(camera);
+  const d = { x: f.x + r.x * cx + u.x * cy, y: f.y + r.y * cx + u.y * cy, z: f.z + r.z * cx + u.z * cy };
+  const l = Math.hypot(d.x, d.y, d.z);
+  return {
+    origin: { x: camera.x ?? 0, y: camera.y ?? 0, z: camera.z ?? 0 },
+    direction: { x: d.x / l, y: d.y / l, z: d.z / l },
+  };
 }

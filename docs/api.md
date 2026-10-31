@@ -46,7 +46,7 @@ Everything the library exports, module by module. Points are plain `{ x, y, z }`
 | `trid/loaders/mtl.js` | [`parseMTL`](./obj#from-the-mtl-file) |
 | `trid/render/proceduralTextures.js` | [`makeTexture`, `texturePixels`, `colorBytes`, `TEXTURE_STYLES`](./textures#procedural-textures) |
 | `trid/export/capture.js` | [`screenshot`, `record`, `download`](./export) |
-| `trid/tools/index.js` | [Tools](./tools) (including [`SelectionOutline`](./tools#selectionoutline)), [`pick`, `pickHit`, `isPickable`, `screenBounds`, `worldPerPixel`](#helpers), [`ToolManager`](#toolmanager) |
+| `trid/tools/index.js` | [Tools](./tools) (including [`SelectionOutline`](./tools#selectionoutline) and [`SculptTool`](./tools#sculpttool)), [`pick`, `pickHit`, `isPickable`, `screenBounds`, `worldPerPixel`, `screenRay`](#helpers), [`ToolManager`](#toolmanager) |
 | `trid/sceneGraph.js` | [`worldObjects`, `worldMatrix`, `worldPosition`, `ancestors`, `forEachPlaced`](./groups#where-things-are-parent-and-world) |
 | `trid/math/matrix.js` | [`identityMat4`, `mat4FromTransform`, `mulMat4`, `invertMat4`, `determinantMat4`, `transformPoint`, `transformDirection`, `normalMatrix`, `transformNormal`, `transformOpToLocal`](./groups#matrices) |
 | `trid/math/rotation.js` | [`matFromEuler`, `eulerFromMat`, `matFromAxisAngle`, `mulMat`, `mulVec`, `applyTransformOp`](#rotations) |
@@ -348,6 +348,19 @@ worldPerPixel(scene, depth)  // → number
 ```
 
 How many world units one canvas pixel covers at `depth` units in front of the camera. Multiply pointer `dx` / `dy` by it to make something follow the cursor exactly.
+
+### screenRay
+
+```js
+screenRay(scene, x, y)  // → { origin, direction }
+```
+
+The ray from the camera through a canvas pixel, in world space: what's under the cursor is the first thing it meets. `origin` is the camera's position and `direction` is unit length. It's the exact inverse of how points are drawn, so it pairs with [`raycastScene`](./modeling/queries#raycastscene-scene-origin-direction-opts):
+
+```js
+const { origin, direction } = screenRay(scene, e.x, e.y);
+const hit = raycastScene(scene, origin, direction); // the surface under the cursor
+```
 
 ## Rotations
 

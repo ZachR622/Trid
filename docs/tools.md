@@ -1,6 +1,6 @@
 # Tools
 
-Tools add interaction and overlays to a scene: camera controls, dragging, hover effects, selection outlines, an FPS counter. Add one with `scene.use(tool)`.
+Tools add interaction and overlays to a scene: camera controls, dragging, hover effects, selection outlines, sculpting, an FPS counter. Add one with `scene.use(tool)`.
 
 ```js
 import {
@@ -249,6 +249,52 @@ The gizmo demo above uses it through `TransformGizmo({ outline: true })`: whatev
 `selection.visible = false` hides it. It draws on the finished picture, after [post effects](./post), so it looks the same with both renderers. Add it **before** tools with handles (like `TransformGizmo`), so the handles stay on top: tools draw in the order they were added.
 
 For outlines on every object as a drawing style, see the [`outline()`](./post#outlines) post effect instead.
+
+## SculptTool
+
+Sculpt meshes with the mouse, like Blender's sculpt mode: drag on a mesh to paint a [sculpting brush](./modeling/sculpting) onto it. A circle shows the brush under the cursor.
+
+<Demo src="sculptTool" hint="drag on the ball to sculpt · Ctrl + drag: the other way · Shift + drag: smooth · click a brush above · drag off the ball to orbit" />
+
+<<< @/demos/sculptTool.js
+
+```js
+scene.use(new OrbitCamera());
+const sculpt = scene.use(new SculptTool({ brush: "inflate", radius: 40, symmetry: "x" }));
+sculpt.brush = "crease"; // change anything at any time
+```
+
+| Gesture | Does |
+| --- | --- |
+| Drag on a mesh | The brush |
+| Ctrl + drag | The other way: in instead of out for `inflate` and `crease`, push away for `pinch` |
+| Shift + drag | Smooth |
+| Drag off every mesh | Nothing: the drag goes to the tools below, so an `OrbitCamera` added first still turns the view |
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `brush` | `"inflate"` | One of the [brushes](./modeling/sculpting#brushes): `"inflate"`, `"grab"`, `"smooth"`, `"flatten"`, `"pinch"`, `"crease"`, `"noise"` |
+| `radius` | `40` | Brush radius in CSS pixels: the brush looks the same size however close the mesh is |
+| `strength` | `0.5` | 0 to 1 (more is allowed) |
+| `falloff` | `"smooth"` | How the brush fades to its edge (see [`sculptMesh`](./modeling/sculpting#sculptmesh-mesh-brush-opts)) |
+| `symmetry` | none | `"x"` (or a list of axes): each stroke is mirrored across the mesh's own origin |
+| `spacing` | `0.15` | Distance between dabs along a stroke, in brush radii |
+| `targets` | every object | Objects that can be sculpted, or a function asked on each stroke |
+| `filter` | not `sculptable: false` | Which of them can be sculpted |
+| `button` | `0` | Mouse button that sculpts |
+| `color` | `"#ffffff"` | Color of the brush circle |
+| `onStrokeStart(obj)` | | A stroke starts: save the mesh here for undo |
+| `onStroke(obj)` | | The mesh just changed |
+| `onStrokeEnd(obj)` | | The stroke ended |
+
+How a stroke works:
+
+- **Dabs along the way.** A stroke puts down a dab every `spacing` radii, each along the line from the one before, so `crease` and `pinch` make clean grooves and ridges. A point under a stroke gets several dabs, so each one is small.
+- **Grab** works differently: the area caught at the start follows the cursor, at the depth where it was caught.
+- **Meshes change in place.** Objects sharing a mesh change together. For undo, copy the mesh in `onStrokeStart` (`cloneMesh`). After changing a mesh in code, call `sculpt.refresh()`, so the tool sees its new shape.
+- **It needs vertices.** A mesh needs plenty of them to sculpt well: build it dense, or use [`remeshMesh`](./modeling/sculpting#remeshmesh-input-opts). Objects turned or scaled, inside groups or not, are sculpted where they're drawn.
+
+`sculpt.enabled = false` turns it off (no strokes, no circle) without removing it; `sculpt.sculpting` is the object under a stroke, or `null`.
 
 ## All together
 

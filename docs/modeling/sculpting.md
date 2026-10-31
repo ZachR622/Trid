@@ -1,6 +1,6 @@
 # Sculpting
 
-Blender's sculpt brushes as one function: `sculptMesh(mesh, brush, opts)` pushes, pulls, smooths and carves a mesh around a point or along a path, fading out at a radius. Like the [deformers](./deformers), it changes the mesh **in place** and returns it. The mesh's own normals (from an OBJ file) are removed, and the renderers compute new ones.
+Blender's sculpt brushes as one function: `sculptMesh(mesh, brush, opts)` pushes, pulls, smooths and carves a mesh around a point or along a path, fading out at a radius. To paint them with the mouse, see [`SculptTool`](../tools#sculpttool). Like the [deformers](./deformers), it changes the mesh **in place** and returns it. The mesh's own normals (from an OBJ file) are removed, and the renderers compute new ones.
 
 ```js
 import { sculptMesh, SCULPT_BRUSHES, remeshMesh } from "./trid/index.js";

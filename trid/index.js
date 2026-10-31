@@ -63,8 +63,8 @@ export { screenshot, record, download } from "./export/capture.js";
 // Tools
 export {
   OrbitCamera, FlyCamera, DragObject, HoverHighlight, FpsMeter, ObjUploader,
-  ViewGizmo, TransformGizmo, SelectionOutline,
-  ToolManager, pick, pickHit, isPickable, screenBounds, worldPerPixel,
+  ViewGizmo, TransformGizmo, SelectionOutline, SculptTool,
+  ToolManager, pick, pickHit, isPickable, screenBounds, worldPerPixel, screenRay,
 } from "./tools/index.js";
 
 // Drawing and the frame loop

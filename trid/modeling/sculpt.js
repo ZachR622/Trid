@@ -47,9 +47,9 @@ function mirrored(path, symmetry) {
   return out;
 }
 
-/** The point of a path (a polyline, or one point) nearest to p. */
+/** The point of a path (a polyline, or one point) nearest to p, and the path's direction there (null for a point). */
 function closestOnPath(path, p) {
-  if (path.length === 1) return path[0];
+  if (path.length === 1) return { point: path[0], dir: null };
   let best = null, bestD = Infinity;
   for (let i = 0; i + 1 < path.length; i++) {
     const a = path[i], ab = sub(path[i + 1], a);
@@ -59,7 +59,7 @@ function closestOnPath(path, p) {
     const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2 + (q.z - p.z) ** 2;
     if (d < bestD) {
       bestD = d;
-      best = q;
+      best = { point: q, dir: norm(ab) };
     }
   }
   return best;
@@ -165,18 +165,19 @@ export function sculptMesh(mesh, brush, opts = {}) {
 
   // Each point's weight, and the brush point (and mirror side) nearest to it
   const weight = new Float64Array(n);
-  const near = new Array(n), side = new Array(n);
+  const near = new Array(n), side = new Array(n), dirs = new Array(n);
   let any = false;
   for (const i of cand) {
     if (rep[i] !== i) continue;
     const v = vs[i];
     let bestD = Infinity;
     for (const s of sides) {
-      const q = closestOnPath(s.path, v);
+      const { point: q, dir } = closestOnPath(s.path, v);
       const d = Math.hypot(q.x - v.x, q.y - v.y, q.z - v.z);
       if (d < bestD) {
         bestD = d;
         near[i] = q;
+        dirs[i] = dir;
         side[i] = s.sign;
       }
     }
@@ -191,6 +192,15 @@ export function sculptMesh(mesh, brush, opts = {}) {
   if (!any) return mesh;
 
   const needsNormals = brush !== "grab" && brush !== "smooth";
+  /**
+   * Toward the brush, along the surface. On a path, toward its line only: past
+   * a path's end, points would otherwise bunch up toward that end.
+   */
+  const inward = (i, nv) => {
+    let to = sub(near[i], vs[i]);
+    if (dirs[i]) to = sub(to, mul(dirs[i], dot(to, dirs[i])));
+    return nv ? sub(to, mul(nv, dot(to, nv))) : to;
+  };
   const normals = needsNormals && mesh.faces?.length ? normalsAround(mesh, rep, weight) : null;
   const move = new Array(n).fill(null);
   const strength = (fallback) => (Number.isFinite(opts.strength) ? opts.strength : fallback);
@@ -214,11 +224,7 @@ export function sculptMesh(mesh, brush, opts = {}) {
         }
         d = mul(nv, k * w);
       }
-      if (pinch) {
-        const to = sub(near[i], v);
-        const along = nv ? sub(to, mul(nv, dot(to, nv))) : to;
-        d = add(d, mul(along, Math.min(1, pinch * w)));
-      }
+      if (pinch) d = add(d, mul(inward(i, nv), Math.min(1, pinch * w)));
       move[i] = d;
     }
   } else if (brush === "grab") {
@@ -231,9 +237,7 @@ export function sculptMesh(mesh, brush, opts = {}) {
   } else if (brush === "pinch") {
     const k = strength(0.3);
     for (const i of active) {
-      const to = sub(near[i], vs[i]), nv = normals?.[i];
-      const along = nv ? sub(to, mul(nv, dot(to, nv))) : to;
-      move[i] = mul(along, Math.max(-1, Math.min(1, k * weight[i])));
+      move[i] = mul(inward(i, normals?.[i]), Math.max(-1, Math.min(1, k * weight[i])));
     }
   } else if (brush === "flatten") {
     // The plane: the area's weighted middle, facing its weighted normal

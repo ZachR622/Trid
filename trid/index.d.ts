@@ -1446,6 +1446,69 @@ export class SelectionOutline implements Tool {
   draw(ctx: CanvasRenderingContext2D, scene: Scene): void;
 }
 
+export interface SculptToolOptions {
+  /** Brush painted by a drag (default "inflate"); Shift + drag smooths */
+  brush?: SculptBrush;
+  /** Brush radius in CSS pixels (default 40) */
+  radius?: number;
+  /** 0 to 1, more allowed (default 0.5) */
+  strength?: number;
+  /** Shape of the fade (default "smooth") */
+  falloff?: "smooth" | "sharp" | "linear" | "constant" | ((t: number) => number);
+  /** Mirror strokes across each mesh's own origin on these axes */
+  symmetry?: "x" | "y" | "z" | ("x" | "y" | "z")[];
+  /** Distance between dabs, in brush radii (default 0.15) */
+  spacing?: number;
+  /** Objects that can be sculpted (default: every object with faces), or a function asked on each stroke */
+  targets?: SceneObject[] | (() => SceneObject[]);
+  /** Which of them can be sculpted (default: those without `sculptable: false`) */
+  filter?: (obj: SceneObject) => boolean;
+  /** Mouse button that sculpts (default 0) */
+  button?: number;
+  /** Color of the brush circle (default "#ffffff") */
+  color?: string;
+  /** A stroke starts on this object: save its mesh here, for undo */
+  onStrokeStart?: (obj: SceneObject) => void;
+  /** The object's mesh just changed */
+  onStroke?: (obj: SceneObject) => void;
+  /** The stroke ended */
+  onStrokeEnd?: (obj: SceneObject) => void;
+}
+
+/**
+ * Sculpt meshes with the mouse, like Blender's sculpt mode: drag on a mesh to paint the
+ * brush (Ctrl: the other way; Shift: smooth). Drags that miss every mesh go to the tools
+ * below, so add it after a camera tool.
+ */
+export class SculptTool implements Tool {
+  constructor(opts?: SculptToolOptions);
+  brush: SculptBrush;
+  radius: number;
+  strength: number;
+  falloff: SculptToolOptions["falloff"];
+  symmetry?: SculptToolOptions["symmetry"];
+  spacing: number;
+  targets?: SculptToolOptions["targets"];
+  filter: (obj: SceneObject) => boolean;
+  button: number;
+  color: string;
+  onStrokeStart?: (obj: SceneObject) => void;
+  onStroke?: (obj: SceneObject) => void;
+  onStrokeEnd?: (obj: SceneObject) => void;
+  /** Turn the tool off without removing it */
+  enabled: boolean;
+  /** The object being sculpted during a stroke, or null */
+  readonly sculpting: SceneObject | null;
+  /** Forget prepared meshes, after changing a mesh in code (strokes do this on their own) */
+  refresh(): void;
+  pointerDown(e: ToolPointerEvent, scene: Scene): boolean;
+  pointerMove(e: ToolPointerEvent, scene: Scene): void;
+  pointerUp(e: ToolPointerEvent, scene: Scene): void;
+  pointerLeave(scene: Scene): void;
+  detach(scene: Scene): void;
+  draw(ctx: CanvasRenderingContext2D, scene: Scene): void;
+}
+
 /**
  * Where a `TransformGizmo` puts its handles and turns / scales around:
  * - `"bounds"`: the middle of the targets' bounding box
@@ -1544,6 +1607,9 @@ export function screenBounds(scene: Scene, obj: SceneObject): ScreenBox | null;
 
 /** World units one canvas pixel covers at a distance from the camera. */
 export function worldPerPixel(scene: Scene, depth: number): number;
+
+/** The ray from the camera through a canvas pixel, in world space (the direction is unit length). */
+export function screenRay(scene: Scene, x: number, y: number): { origin: Vec3; direction: Vec3 };
 
 // ---------------------------------------------------------------------------
 // Drawing and the frame loop

@@ -28,7 +28,7 @@ Trid gives you a scene, shapes you can model in code, lights, effects, model loa
 - **OBJ files** — load models from a URL (with their `.mtl` colors and textures), or let users drop their own `.obj` files on the canvas.
 - **Export** — `scene.screenshot()` and `scene.record()` save images and videos of the canvas; `exportOBJ` / `exportModel` write meshes, objects or whole scenes as OBJ files with their MTL materials and textures.
 - **Camera** — position, yaw, pitch and field of view (50° by default), with near-plane clipping.
-- **Tools** — orbit and fly cameras, object dragging, hover highlight, a selection outline, a move / rotate / scale gizmo (with a pivot of your choice), a view axes gizmo, a floor grid, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles, with the hit point and texture coordinates under the mouse. Writing your own is a plain object with a few methods.
+- **Tools** — orbit and fly cameras, object dragging, hover highlight, a selection outline, a sculpting tool (paint the brushes with the mouse), a move / rotate / scale gizmo (with a pivot of your choice), a view axes gizmo, a floor grid, an FPS meter and an OBJ uploader, one line each. Exact picking by triangles, with the hit point and texture coordinates under the mouse. Writing your own is a plain object with a few methods.
 - **Pure math** — every transform and projection step is exported, plus 4×4 matrices and rotations, so you can use the pipeline piece by piece.
 
 ## Install
@@ -157,7 +157,6 @@ Nothing changes for existing scenes: shadows, outlines and the selection outline
 
 Roughly in order:
 
-- **Sculpting tool** — paint the sculpting brushes with the mouse: a brush circle on the surface, strokes, Shift to invert
 - **Lattice deform** — a coarse cage of control points around a mesh: move a few and the whole shape follows smoothly
 - **Modifier stack** — a list of modeling steps (mirror, array, bevel, subdivide, deformers, booleans...) applied in order, kept as data so it can be saved, edited and replayed
 - **More transform options** — local or world axes on the transform gizmo, snapping (grid and angle steps), finer drags, setting an object's origin (center, bottom)
